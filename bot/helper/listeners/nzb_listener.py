@@ -68,6 +68,8 @@ async def _on_download_complete(nzo_id):
         if intervals["stopAll"]:
             return
         await _remove_job(nzo_id, task.listener.mid)
+    else:
+        await _remove_job(nzo_id)
 
 
 @new_task

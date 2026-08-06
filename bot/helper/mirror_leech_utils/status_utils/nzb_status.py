@@ -2,7 +2,6 @@ from asyncio import gather
 from collections import defaultdict
 
 from .... import LOGGER, sabnzbd_client
-from ...listeners.nzb_listener import _remove_job
 from ...ext_utils.status_utils import (
     MirrorStatus,
     EngineStatus,
@@ -10,6 +9,7 @@ from ...ext_utils.status_utils import (
     get_readable_time,
     time_to_seconds,
 )
+from ...listeners.nzb_listener import _remove_job
 
 
 async def get_download(nzo_id, old_info=None):
