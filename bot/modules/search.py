@@ -158,8 +158,8 @@ async def get_result(search_results, key, message, method):
                         msg += f"<b>Quality: </b>{subres['quality']} | <b>Type: </b>{subres['type']} | "
                         msg += f"<b>Size: </b>{subres['size']}<br>"
                         if subres.get("torrent"):
-                            msg += "<a href='{}/api/v1/torrent_file?url={}'>Direct Link</a>".format(
-                                Config.SEARCH_API_LINK, quote(subres["torrent"])
+                            msg += "<a href='{}/api/v1/torrent_file?url={}&name={}'>Direct Link</a>".format(
+                                Config.SEARCH_API_LINK, quote(subres["torrent"]), quote(result.get("name") or "")
                             )
                         if subres.get("torrent") and subres.get("magnet"):
                             msg += " | "
@@ -200,8 +200,8 @@ async def get_result(search_results, key, message, method):
                         if len(files) > 3:
                             msg += f"<i>+{len(files) - 3} more</i><br>"
                     if result.get("torrent"):
-                        msg += "<a href='{}/api/v1/torrent_file?url={}'>Direct Link</a>".format(
-                            Config.SEARCH_API_LINK, quote(result["torrent"])
+                        msg += "<a href='{}/api/v1/torrent_file?url={}&name={}'>Direct Link</a>".format(
+                            Config.SEARCH_API_LINK, quote(result["torrent"]), quote(result.get("name") or "")
                         )
                     if result.get("torrent") and result.get("magnet"):
                         msg += " | "
