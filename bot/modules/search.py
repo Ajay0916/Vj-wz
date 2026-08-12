@@ -25,12 +25,23 @@ async def _refresh_sites():
         async with AsyncSession() as client:
             response = await client.get(f"{Config.SEARCH_API_LINK}/api/v1/sites")
             data = response.json()
-        SITES = {
-            str(site): str(site).capitalize() for site in data["supported_sites"]
+        sites = data.get("sites")
+        if isinstance(sites, list):
+            SITES = {
+                str(item["site"]): str(item["name"])
+                for item in sites
+                if item.get("site") and item.get("name")
+            }
+        else:
+            SITES = {
+                str(site): str(site).capitalize()
+                for site in data["supported_sites"]
         }
         SITES["all"] = "All"
+        return True
     except Exception as e:
         LOGGER.error(f"{e} Can't refresh sites from SEARCH_API_LINK")
+        return False
 
 
 async def initiate_search_tools():
@@ -437,14 +448,20 @@ async def torrent_search(_, message):
     user_id = message.from_user.id
     buttons = ButtonMaker()
     key = message.text.split()
+    api_ready = True
     if SITES is None and Config.SEARCH_API_LINK:
         # API was down at bot start: try to recover the site list now,
         # otherwise the bot would need a restart to ever show buttons.
-        await _refresh_sites()
+        api_ready = await _refresh_sites()
     if SITES is None and not Config.SEARCH_PLUGINS:
-        await send_message(
-            message, "No API link or search PLUGINS added for this function"
-        )
+        if Config.SEARCH_API_LINK and not api_ready:
+            await send_message(
+                message, "Search API is unavailable right now. Try again in a bit."
+            )
+        else:
+            await send_message(
+                message, "No API link or search PLUGINS added for this function"
+            )
     elif len(key) == 1 and SITES is None:
         await send_message(message, "Send a search key along with command")
     elif len(key) == 1:
