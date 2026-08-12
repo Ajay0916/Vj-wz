@@ -14,13 +14,14 @@ from ..helper.telegram_helper.message_utils import edit_message, send_message
 
 PLUGINS = []
 SITES = None
+SITE_STATUS = {}
 TELEGRAPH_LIMIT = 9999999
 
 
 async def _refresh_sites():
     """Fetch the enabled site list from the API so disabled sites disappear
     from the buttons without a bot restart."""
-    global SITES
+    global SITES, SITE_STATUS
     try:
         async with AsyncSession() as client:
             response = await client.get(f"{Config.SEARCH_API_LINK}/api/v1/sites")
@@ -37,6 +38,19 @@ async def _refresh_sites():
                 str(site): str(site).capitalize()
                 for site in data["supported_sites"]
         }
+        SITE_STATUS = {}
+        try:
+            async with AsyncSession() as client:
+                response = await client.get(
+                    f"{Config.SEARCH_API_LINK}/api/v1/sites/status"
+                )
+                status_data = response.json()
+            for item in status_data.get("sites", []):
+                site = item.get("site")
+                if site:
+                    SITE_STATUS[str(site)] = item
+        except Exception as e:
+            LOGGER.warning(f"{e} Can't refresh site status from SEARCH_API_LINK")
         SITES["all"] = "All"
         return True
     except Exception as e:
@@ -63,6 +77,38 @@ async def initiate_search_tools():
                 "Can't fetching sites from SEARCH_API_LINK make sure use latest version of API"
             )
             SITES = None
+
+
+def _site_status(site):
+    return SITE_STATUS.get(site) or {}
+
+
+def _site_display_name(site):
+    if site == "all":
+        return "All"
+    name = SITES.get(site, str(site).capitalize()) if SITES else str(site).capitalize()
+    status = _site_status(site)
+    if status.get("manual_blocked"):
+        return f"⛔ {name}"
+    if status.get("blocked"):
+        return f"⚠️ {name}"
+    if status:
+        return f"✅ {name}"
+    return name
+
+
+def _site_sort_key(item):
+    site, name = item
+    if site == "all":
+        return (0, 0, name.lower())
+    status = _site_status(site)
+    if status.get("manual_blocked"):
+        rank = 3
+    elif status.get("blocked"):
+        rank = 2
+    else:
+        rank = 1
+    return (1, rank, name.lower())
 
 
 async def search(
@@ -109,18 +155,18 @@ async def search(
             if "error" in search_results or search_results["total"] == 0:
                 await edit_message(
                     message,
-                    f"No result found for <i>{key}</i>\nTorrent Site:- <i>{SITES.get(site)}</i>",
+                    f"No result found for <i>{key}</i>\nTorrent Site:- <i>{_site_display_name(site)}</i>",
                 )
                 return
             msg = f"<b>Found {min(search_results['total'], TELEGRAPH_LIMIT)}</b>"
             if method == "apitrend":
-                msg += f" <b>trending result(s)\nTorrent Site:- <i>{SITES.get(site)}</i></b>"
+                msg += f" <b>trending result(s)\nTorrent Site:- <i>{_site_display_name(site)}</i></b>"
             elif method == "apirecent":
                 msg += (
-                    f" <b>recent result(s)\nTorrent Site:- <i>{SITES.get(site)}</i></b>"
+                    f" <b>recent result(s)\nTorrent Site:- <i>{_site_display_name(site)}</i></b>"
                 )
             else:
-                msg += f" <b>result(s) for <i>{key}</i>\nTorrent Site:- <i>{SITES.get(site)}</i></b>"
+                msg += f" <b>result(s) for <i>{key}</i>\nTorrent Site:- <i>{_site_display_name(site)}</i></b>"
             search_results = search_results["data"]
         except Exception as e:
             await edit_message(message, str(e))
@@ -350,7 +396,7 @@ def filter_buttons(user_id, site, category, quality, language, format_):
 def filter_menu_text(key, site, category, quality, language, format_):
     return (
         f"<b>Filter results for <i>{key}</i></b>\n"
-        f"Site:- <i>{SITES.get(site)}</i>\n"
+        f"Site:- <i>{_site_display_name(site)}</i>\n"
         f"Category:- <i>{category.capitalize()}</i>\n"
         f"Filters:- <i>{_filter_summary(quality, language, format_)}</i>"
     )
@@ -403,14 +449,13 @@ async def api_buttons(user_id, method, page=1):
     if not SITES:
         buttons.data_button("Cancel", f"torser {user_id} cancel")
         return buttons.build_menu(1)
-    # Keep "all" first for quick combo search; the rest keep the API's
-    # site order (important sites come first from our API).
-    sites = sorted(SITES.items(), key=lambda kv: kv[0] != "all")
+    # Keep "all" first, then healthy sites, then blocked sites.
+    sites = sorted(SITES.items(), key=_site_sort_key)
     total_pages = max(1, (len(sites) + API_PAGE_SIZE - 1) // API_PAGE_SIZE)
     page = max(1, min(int(page), total_pages))
     start = (page - 1) * API_PAGE_SIZE
     for data, name in sites[start : start + API_PAGE_SIZE]:
-        buttons.data_button(name, f"torser {user_id} {data} {method}")
+        buttons.data_button(_site_display_name(data), f"torser {user_id} {data} {method}")
     nav = []
     if page > 1:
         nav.append(("◀", f"torser {user_id} apipage {page - 1} {method}"))
@@ -592,7 +637,7 @@ async def torrent_search_update(_, query):
         ) or "None"
         await edit_message(
             message,
-            f"<b>Searching for <i>{key}</i>\nTorrent Site:- <i>{SITES.get(site)}</i>\nCategory:- <i>{category.capitalize()}</i>\nFilters:- <i>{summary}</i></b>",
+            f"<b>Searching for <i>{key}</i>\nTorrent Site:- <i>{_site_display_name(site)}</i>\nCategory:- <i>{category.capitalize()}</i>\nFilters:- <i>{summary}</i></b>",
         )
         await search(key, site, message, "apisearch", category, quality, language, format_, size)
         FILTER_STATE.pop(user_id, None)
@@ -620,13 +665,13 @@ async def torrent_search_update(_, query):
                     endpoint = "Trending"
                 await edit_message(
                     message,
-                    f"<b>Listing {endpoint} Items...\nTorrent Site:- <i>{SITES.get(site)}</i></b>",
+                    f"<b>Listing {endpoint} Items...\nTorrent Site:- <i>{_site_display_name(site)}</i></b>",
                 )
                 await search(key, site, message, method)
             else:
                 await edit_message(
                     message,
-                    f"<b>Searching for <i>{key}</i>\nTorrent Site:- <i>{SITES.get(site)}</i></b>",
+                    f"<b>Searching for <i>{key}</i>\nTorrent Site:- <i>{_site_display_name(site)}</i></b>",
                 )
                 await search(key, site, message, method)
         else:
