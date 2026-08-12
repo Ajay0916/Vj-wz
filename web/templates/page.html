@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Torrent File Selector</title>
+    <link rel="icon" href="https://graph.org/file/1a6ad157f55bc42b548df.png" type="image/jpg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Ubuntu:ital,wght@0,300;0,400;0,500;0,700;1,300;1,400;1,500;1,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://pro.fontawesome.com/releases/v5.10.0/css/all.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Ubuntu", sans-serif;
+            list-style: none;
+            text-decoration: none;
+            outline: none !important;
+            color: white;
+        }
+
+        body {
+            background-color: #0D1117;
+            min-height: 100vh;
+        }
+
+        header {
+            margin: 3vh 1vw;
+            padding: 0.5rem 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-radius: 30px;
+            background-color: #161B22;
+            border: 2px solid rgba(255, 255, 255, 0.11);
+        }
+
+        header:hover,
+        section:hover {
+            box-shadow: 0px 0px 15px black;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+        }
+
+        .brand img {
+            width: 2.5rem;
+            height: 2.5rem;
+            border: 2px solid black;
+            border-radius: 50%;
+        }
+
+        .name {
+            margin-left: 1vw;
+            font-size: 1.5rem;
+            color: white;
+        }
+
+        .name a {
+            color: white;
+            text-decoration: none;
+        }
+
+        .social a {
+            font-size: 1.5rem;
+            color: white;
+            padding-left: 1vw;
+            text-decoration: none;
+        }
+
+        .social a:hover,
+        .brand:hover {
+            filter: invert(0.3);
+        }
+
+        #sticks {
+            margin: 0vh 1vw;
+            margin-bottom: 1vh;
+            padding: 1vh 3vw;
+            display: flex;
+            flex-direction: column;
+            border: 2px solid rgba(255, 255, 255, 0.11);
+            border-radius: 20px;
+            background-color: #161B22;
+            align-items: center;
+        }
+
+        #sticks.stick {
+            position: sticky;
+            top: 0;
+            z-index: 10000;
+        }
+
+        #sticks h4 {
+            margin: 0.3rem 0;
+        }
+
+        section {
+            margin: 0vh 1vw;
+            margin-bottom: 10vh;
+            padding: 1vh 3vw;
+            display: flex;
+            flex-direction: column;
+            border: 2px solid rgba(255, 255, 255, 0.11);
+            border-radius: 20px;
+            background-color: #161B22;
+        }
+
+        li:nth-child(1) {
+            padding: 1rem 1rem 0.5rem 1rem;
+        }
+
+        li:nth-child(n+1) {
+            padding-left: 1rem;
+        }
+
+        li label {
+            padding-left: 0.5rem;
+        }
+
+        li {
+            padding-bottom: 0.5rem;
+        }
+
+        span.arrow {
+            margin-right: 0.5rem;
+            cursor: pointer;
+            user-select: none;
+            transition: transform 200ms ease-out;
+        }
+
+        span.arrow.active {
+            transform: rotate(90deg);
+            display: inline-block;
+        }
+
+        ul.tree {
+            margin: 1vh 1vw 1vh 1vw;
+            padding: 0 0 0.5rem 0;
+            border: 2px solid black;
+            border-radius: 20px;
+            background-color: #1c2129;
+            overflow: hidden;
+        }
+
+        input[type="checkbox"] {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        input[type="submit"],
+        input[type="button"],
+        button {
+            border-radius: 20px;
+            margin: 2vh auto 1vh auto;
+            width: 50%;
+            display: block;
+            height: 5.5vh;
+            border: 2px solid rgba(255, 255, 255, 0.11);
+            background-color: #0D1117;
+            color: white;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 200ms ease;
+        }
+
+        input[type="submit"]:hover,
+        input[type="submit"]:focus,
+        input[type="button"]:hover,
+        button:hover {
+            background-color: rgba(255, 255, 255, 0.068);
+        }
+
+        input[type="text"],
+        input[type="password"] {
+            border-radius: 20px;
+            outline: none;
+            width: 50vw;
+            height: 4vh;
+            padding: 1rem;
+            margin: 0.5vh;
+            border: 2px solid rgba(255, 255, 255, 0.11);
+            background-color: #3e475531;
+            box-shadow: inset 0px 0px 10px black;
+            color: white;
+        }
+
+        input[type="text"]:focus,
+        input[type="password"]:focus {
+            border-color: rgba(255, 255, 255, 0.404);
+        }
+
+        .pin-form {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2vh 0;
+        }
+
+        .pin-form label {
+            font-size: larger;
+            font-weight: 500;
+            margin-bottom: 1vh;
+        }
+
+        .pin-form input[type="text"] {
+            width: 50%;
+        }
+
+        .pin-form button {
+            width: 50%;
+        }
+
+        .file-tree-item {
+            display: flex;
+            align-items: center;
+            padding: 0.4rem 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            transition: background-color 0.2s;
+        }
+
+        .file-tree-item:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+
+        .file-tree-item .icon {
+            margin-right: 0.5rem;
+        }
+
+        .file-tree-item .file-info {
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+            min-width: 0;
+        }
+
+        .file-tree-item .file-name {
+            word-break: break-word;
+            cursor: pointer;
+        }
+
+        .file-tree-item.folder .file-name {
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .file-tree-item .size-info {
+            font-size: 0.8em;
+            color: #8b949e;
+        }
+
+        .edit-btn {
+            background: none;
+            border: none;
+            color: inherit;
+            cursor: pointer;
+            font-size: 0.9em;
+            padding: 0;
+            margin-left: 0.5rem;
+        }
+
+        .edit-btn:hover {
+            text-decoration: underline;
+        }
+
+        .checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-content {
+            background-color: #161B22;
+            border: 2px solid rgba(255, 255, 255, 0.11);
+            margin: 15% auto;
+            padding: 20px;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 500px;
+        }
+
+        .modal h2 {
+            margin-bottom: 1rem;
+        }
+
+        .modal p {
+            margin-bottom: 1rem;
+        }
+
+        .edit-name-input {
+            background-color: transparent;
+            border: none;
+            border-bottom: 1px solid white;
+            color: white;
+            font-size: inherit;
+            padding: 2px 4px;
+            margin-right: 8px;
+            width: 100%;
+        }
+
+        .edit-name-input:focus {
+            outline: none;
+            border-bottom: 2px solid white;
+        }
+
+        .pin-entry {
+            animation: fadeIn 0.5s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .pin-entry.fadeOut {
+            animation: fadeOut 0.5s;
+        }
+
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+
+        .modal-footer {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .modal-footer button {
+            margin: 0;
+            width: auto;
+            padding: 0 1.5rem;
+            height: 4vh;
+        }
+
+        @media (max-width: 768px) {
+            input[type="submit"],
+            input[type="button"],
+            button {
+                width: 100%;
+            }
+            .pin-form input[type="text"],
+            .pin-form button {
+                width: calc(100% - 0.3rem);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <div class="brand">
+            <img src="https://graph.org/file/1a6ad157f55bc42b548df.png" alt="logo">
+            <h2 class="name"><a href="https://t.me/WZML_X">Torrent Selector</a></h2>
+        </div>
+        <div class="social">
+            <a href="https://www.github.com/SilentDemonSD/WZML-X"><i class="fab fa-github"></i></a>
+            <a href="https://t.me/WZML_X"><i class="fab fa-telegram"></i></a>
+        </div>
+    </header>
+
+    <div id="sticks">
+        <h4>Selected files: <b id="checked_files">0</b> of <b id="total_files">0</b></h4>
+        <h4>Selected files size: <b id="checked_size">0</b> of <b id="total_size">0</b></h4>
+    </div>
+
+    <section>
+        <div id="pinEntry" class="pin-entry">
+            <form id="pinForm" class="pin-form" onsubmit="return false">
+                <label for="pinInput">Pin Code:</label>
+                <input type="text" id="pinInput"
+                    title="Enter the code that you have got from Telegram to access the Torrent"
+                    placeholder="Enter the code that you have got from Telegram to access the Torrent">
+                <button type="submit" id="submitPin">Submit</button>
+            </form>
+        </div>
+
+        <div id="fileManager" style="display: none;">
+            <div id="fileTree" class="file-tree"></div>
+            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1vh 0;">
+                <button type="button" id="selectAllBtn" style="width: auto; padding: 0 1rem; height: 4vh; margin: 0;">Select All</button>
+                <button type="button" id="invertSelectionBtn" style="width: auto; padding: 0 1rem; height: 4vh; margin: 0;">Invert</button>
+                <button type="button" id="selectEverythingBtn" style="width: auto; padding: 0 1rem; height: 4vh; margin: 0;">Select Everything</button>
+            </div>
+            <button type="button" id="submitBtn">Submit Selection</button>
+        </div>
+    </section>
+
+    <div id="reusableModal" class="modal">
+        <div class="modal-content">
+            <h2 id="modalTitle" style="margin-bottom: 1rem;"></h2>
+            <div id="modalBody"></div>
+            <div id="modalFooter" class="modal-footer"></div>
+        </div>
+    </div>
+
+    <script>
+        const fileTree = document.getElementById('fileTree');
+        const selectAllBtn = document.getElementById('selectAllBtn');
+        const submitBtn = document.getElementById('submitBtn');
+        const pinEntry = document.getElementById('pinEntry');
+        const pinInput = document.getElementById('pinInput');
+        const submitPin = document.getElementById('submitPin');
+        const fileManager = document.getElementById('fileManager');
+        const reusableModal = document.getElementById('reusableModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalBody = document.getElementById('modalBody');
+        const modalFooter = document.getElementById('modalFooter');
+        const checkedFilesEl = document.getElementById('checked_files');
+        const totalFilesEl = document.getElementById('total_files');
+        const checkedSizeEl = document.getElementById('checked_size');
+        const totalSizeEl = document.getElementById('total_size');
+
+        pinInput.focus();
+        const urlParams = new Proxy(new URLSearchParams(window.location.search), {
+            get: (searchParams, prop) => searchParams.get(prop),
+        });
+        if (urlParams.pin) {
+            pinInput.value = urlParams.pin;
+            setTimeout(() => submitPin.click(), 0);
+        }
+        let currentFolder = null;
+        let files = [];
+        let allowEdit = false;
+
+        function formatSize(size) {
+            const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            let i = 0;
+            while (size >= 1024 && i < units.length - 1) {
+                size /= 1024;
+                i++;
+            }
+            return `${size.toFixed(2)} ${units[i]}`;
+        }
+
+        function calculateFolderSize(folder) {
+            let totalSize = 0;
+            const queue = [folder];
+            while (queue.length > 0) {
+                const node = queue.pop();
+                if (node.type === 'file') {
+                    totalSize += node.size;
+                } else if (node.children) {
+                    queue.push(...node.children);
+                }
+            }
+            return totalSize;
+        }
+
+        function renderFileTree(nodes) {
+            fileTree.innerHTML = '';
+            if (currentFolder) {
+                const backButton = document.createElement('div');
+                backButton.className = 'file-tree-item folder';
+                backButton.innerHTML = '<span class="icon">📁</span>...';
+                backButton.addEventListener('click', goBack);
+                fileTree.appendChild(backButton);
+            }
+            nodes.forEach(node => {
+                const div = document.createElement('div');
+                div.className = 'file-tree-item';
+                const checkboxWrapper = document.createElement('div');
+                checkboxWrapper.className = 'checkbox-wrapper';
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.id = node.id;
+                checkbox.checked = node.selected;
+                checkbox.addEventListener('change', () => toggleFile(node));
+
+                checkboxWrapper.appendChild(checkbox);
+
+                const icon = document.createElement('span');
+                icon.className = 'icon';
+                icon.textContent = node.type === 'folder' ? '📁' : '📄';
+
+                const fileInfo = document.createElement('div');
+                fileInfo.className = 'file-info';
+
+                const nameElement = document.createElement('div');
+                nameElement.className = 'file-name cursor-pointer';
+                nameElement.textContent = node.name;
+
+                const sizeInfo = document.createElement('div');
+                sizeInfo.className = 'size-info';
+                const size = node.type === 'folder' ? calculateFolderSize(node) : node.size;
+                sizeInfo.textContent = formatSize(size);
+                if (node.type === 'file') {
+                    if (allowEdit) {
+                        const editBtn = document.createElement('span');
+                        editBtn.textContent = ' | Edit ✏️';
+                        editBtn.className = 'edit-btn';
+                        sizeInfo.appendChild(editBtn);
+                    }
+                    if (node.progress !== undefined) {
+                        const progressText = document.createElement('span');
+                        progressText.textContent = ` | Progress: ${node.progress}%`;
+                        sizeInfo.appendChild(progressText);
+                    }
+                }
+                div.addEventListener('click', (event) => {
+                    if (event.target.className === 'file-name cursor-pointer') {
+                        toggleFile(node);
+                    } else if (event.target.className === 'edit-btn') {
+                        openEditFileNameModal(node);
+                    }
+                });
+
+                fileInfo.appendChild(nameElement);
+                fileInfo.appendChild(sizeInfo);
+
+                div.appendChild(checkboxWrapper);
+                div.appendChild(icon);
+                div.appendChild(fileInfo);
+
+                if (node.type === 'folder') {
+                    div.classList.add('folder');
+                    nameElement.classList.add('folder', 'folder-name');
+                    nameElement.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        openFolder(node);
+                    });
+                    if (areAllChildrenSelected(node)) {
+                        checkbox.checked = true;
+                    } else if (areSomeChildrenSelected(node)) {
+                        checkbox.indeterminate = true;
+                    }
+                }
+
+                fileTree.appendChild(div);
+            });
+            updateSelectAllButtonText();
+            updateSelectEverythingButtonText();
+        }
+
+        function areAllChildrenSelected(folder) {
+            return folder.children.every(child => child.type === 'folder' ? areAllChildrenSelected(child) : child.selected);
+        }
+
+        function areSomeChildrenSelected(folder) {
+            return folder.children.some(child => child.type === 'folder' ? areSomeChildrenSelected(child) : child.selected);
+        }
+
+        function toggleFile(node) {
+            if (node.type === 'folder') {
+                const isSelected = !areAllChildrenSelected(node);
+                toggleFolder(node, isSelected);
+            } else {
+                node.selected = !node.selected;
+            }
+            updateParentFolders(node);
+            updateStats();
+            renderFileTree(currentFolder ? currentFolder.children : files);
+        }
+
+        function toggleFolder(folder, isSelected) {
+            folder.selected = isSelected;
+            const queue = [folder];
+            while (queue.length > 0) {
+                const node = queue.pop();
+                if (node.type === 'file') {
+                    node.selected = isSelected;
+                } else if (node.children) {
+                    node.selected = isSelected;
+                    queue.push(...node.children);
+                }
+            }
+        }
+
+        function updateParentFolders(node) {
+            let parent = findParent(files[0], node.id);
+            while (parent) {
+                parent.selected = areAllChildrenSelected(parent);
+                parent = findParent(files[0], parent.id);
+            }
+        }
+
+        function findParent(root, id) {
+            if (root && root.children) {
+                for (const child of root.children) {
+                    if (child.id === id) {
+                        return root;
+                    }
+                    const found = findParent(child, id);
+                    if (found) return found;
+                }
+            }
+            return null;
+        }
+
+        function updateStats() {
+            const stats = calculateStats(files);
+            checkedFilesEl.textContent = stats.selectedCount;
+            totalFilesEl.textContent = stats.totalCount;
+            checkedSizeEl.textContent = formatSize(stats.selectedSize);
+            totalSizeEl.textContent = formatSize(stats.totalSize);
+        }
+
+        function calculateStats(nodes) {
+            let selectedCount = 0;
+            let totalCount = 0;
+            let selectedSize = 0;
+            let totalSize = 0;
+
+            const queue = [...nodes];
+            while (queue.length > 0) {
+                const node = queue.pop();
+                if (node.type === 'file') {
+                    totalCount++;
+                    totalSize += node.size;
+                    if (node.selected) {
+                        selectedCount++;
+                        selectedSize += node.size;
+                    }
+                }
+                if (node.children) {
+                    queue.push(...node.children);
+                }
+            }
+
+            return { selectedCount, totalCount, selectedSize, totalSize };
+        }
+
+        function openFolder(folder) {
+            currentFolder = folder;
+            renderFileTree(folder.children);
+            updateStats();
+        }
+
+        function goBack() {
+            if (currentFolder) {
+                const parent = findParent(files[0], currentFolder.id);
+                if (parent) {
+                    currentFolder = parent;
+                    renderFileTree(parent.children);
+                } else {
+                    currentFolder = null;
+                    renderFileTree(files);
+                }
+                updateStats();
+            }
+        }
+
+        function selectAll() {
+            const nodes = currentFolder ? currentFolder.children : files;
+            const allSelected = nodes.every(node => node.type === 'folder' ? areAllChildrenSelected(node) : node.selected);
+            nodes.forEach(node => {
+                if (node.type === 'folder') {
+                    toggleFolder(node, !allSelected);
+                } else {
+                    node.selected = !allSelected;
+                }
+            });
+            updateStats();
+            renderFileTree(nodes);
+            updateSelectAllButtonText();
+        }
+
+        function invertSelection() {
+            const nodes = currentFolder ? currentFolder.children : files;
+            nodes.forEach(node => {
+                if (node.type === 'folder') {
+                    invertFolderSelection(node);
+                } else {
+                    node.selected = !node.selected;
+                }
+            });
+            updateStats();
+            renderFileTree(nodes);
+        }
+
+        function invertFolderSelection(folder) {
+            folder.selected = !folder.selected;
+            if (folder.children) {
+                folder.children.forEach(child => {
+                    if (child.type === 'folder') {
+                        invertFolderSelection(child);
+                    } else {
+                        child.selected = !child.selected;
+                    }
+                });
+            }
+        }
+
+        function selectEverything() {
+            const allSelected = files.every(node => node.type === 'folder' ? areAllChildrenSelected(node) : node.selected);
+            function recursiveSelect(nodes, select) {
+                nodes.forEach(node => {
+                    if (node.type === 'folder') {
+                        node.selected = select;
+                        if (node.children) {
+                            recursiveSelect(node.children, select);
+                        }
+                    } else {
+                        node.selected = select;
+                    }
+                });
+            }
+            recursiveSelect(files, !allSelected);
+            updateStats();
+            renderFileTree(currentFolder ? currentFolder.children : files);
+            updateSelectEverythingButtonText();
+        }
+
+        function getFullPath(node) {
+            const path = [];
+            let currentNode = findParent(files[0], node.id);
+            while (currentNode) {
+                path.unshift(currentNode.name);
+                currentNode = findParent(files[0], currentNode.id);
+            }
+            return path.length > 0 ? path.join('/') : '';
+        }
+
+        function openEditFileNameModal(node) {
+            modalTitle.textContent = `Edit ${node.type === 'folder' ? 'Folder' : 'File'} Name`;
+            modalBody.innerHTML = `<input type="text" id="editNameInput" class="edit-name-input" value="${node.name}">`;
+            modalFooter.innerHTML = `<button id="saveNameBtn">Save</button><button id="cancelNameBtn">Cancel</button>`;
+
+            const saveNameBtn = document.getElementById('saveNameBtn');
+            const cancelNameBtn = document.getElementById('cancelNameBtn');
+            const editNameInput = document.getElementById('editNameInput');
+
+            saveNameBtn.addEventListener('click', () => {
+                closeModal();
+                const newName = editNameInput.value.trim();
+                if (newName && newName !== node.name) {
+                    const fullPath = getFullPath(node);
+                    const requestUrl = `/app/files/torrent?gid=${urlParams.gid}&pin=${pinInput.value}&mode=rename`;
+                    const body = {
+                        old_path: fullPath ? `${fullPath}/${node.name}` : node.name,
+                        new_path: fullPath ? `${fullPath}/${newName}` : newName,
+                        type: node.type,
+                    };
+                    fetch(requestUrl, {
+                        'method': 'POST',
+                        'body': JSON.stringify(body),
+                    }).then(response => {
+                        if (response.ok) {
+                            modalTitle.textContent = 'Success!';
+                            modalBody.innerHTML = '<p>Your Rename has been submitted successfully.</p>';
+                            node.name = newName;
+                            renderFileTree(currentFolder ? currentFolder.children : files);
+                        } else {
+                            modalTitle.textContent = 'Error';
+                            modalBody.innerHTML = '<p>There was an error submitting your Rename. Try Again!.</p>';
+                        }
+                        modalFooter.innerHTML = '<button onclick="closeModal()">Okay</button>';
+                        openModal();
+                    });
+                }
+            });
+
+            cancelNameBtn.addEventListener('click', closeModal);
+
+            editNameInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    saveNameBtn.click();
+                }
+            });
+
+            openModal();
+            editNameInput.setSelectionRange(editNameInput.value.length, editNameInput.value.length);
+            editNameInput.focus();
+        }
+
+        function openModal() {
+            reusableModal.style.display = 'block';
+        }
+
+        function closeModal() {
+            reusableModal.style.display = 'none';
+        }
+
+        function submitData() {
+            if (parseInt(checkedFilesEl.innerText) === 0) {
+                modalTitle.textContent = 'Error';
+                modalBody.innerHTML = '<p>No files selected.</p>';
+                modalFooter.innerHTML = '<button onclick="closeModal()">Okay</button>';
+                openModal();
+                return;
+            }
+            modalTitle.textContent = 'Processing...';
+            modalBody.innerHTML = `<p>Submitting, ${checkedFilesEl.innerText} file(s)... </p>`;
+            modalFooter.innerHTML = '';
+            openModal();
+            const requestUrl = `/app/files/torrent?gid=${urlParams.gid}&pin=${pinInput.value}&mode=selection`;
+            fetch(requestUrl, { 'method': 'POST', 'body': JSON.stringify(files) }).then(response => {
+                if (reusableModal.style.display === 'block') {
+                    closeModal();
+                }
+                if (response.ok) {
+                    modalTitle.textContent = 'Success!';
+                    modalBody.innerHTML = '<p>Your selection has been submitted successfully.</p>';
+                } else {
+                    modalTitle.textContent = 'Error';
+                    modalBody.innerHTML = '<p>An error occurred while submitting your selection. Try Again!</p>';
+                }
+                modalFooter.innerHTML = '<button onclick="closeModal()">Okay</button>';
+                openModal();
+            });
+        }
+
+        pinInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                submitPin.click();
+            }
+        });
+        submitPin.addEventListener('click', () => {
+            pinInput.blur();
+            if (pinInput.value === '') {
+                modalTitle.textContent = 'Missing Pin';
+                modalBody.innerHTML = `<p>The pin is missing.</p>`;
+                modalFooter.innerHTML = '<button onclick="closeModal()">Try Again</button>';
+                openModal();
+                return false;
+            }
+            if (urlParams.gid == null || urlParams.gid === '') {
+                modalTitle.textContent = 'Missing parameter';
+                modalBody.innerHTML = `<p>The parameter gid is missing.</p>`;
+                modalFooter.innerHTML = '<button onclick="closeModal()">Try Again</button>';
+                openModal();
+                return false;
+            }
+            const requestUrl = `/app/files/torrent?gid=${urlParams.gid}&pin=${pinInput.value}&mode=get`;
+            fetch(requestUrl).then(function (response) {
+                if (response.ok) {
+                    return response.json().then(data => {
+                        if (data.error) {
+                            modalTitle.textContent = data.error;
+                            modalBody.innerHTML = `<p>${data.message}. Try Again!</p>`;
+                            modalFooter.innerHTML = '<button onclick="closeModal()">Retry</button>';
+                            openModal();
+                        } else {
+                            files = data.files;
+                            allowEdit = data.engine === "qbittorrent";
+                            pinEntry.classList.add('fadeOut');
+                            setTimeout(() => {
+                                pinEntry.style.display = 'none';
+                                fileManager.style.display = 'block';
+                                renderFileTree(files);
+                                updateStats();
+                                updateSelectAllButtonText();
+                                updateSelectEverythingButtonText();
+                            }, 500);
+                        }
+                    });
+                } else {
+                    modalTitle.textContent = 'Something Went Wrong!';
+                    modalBody.innerHTML = '<p>Check console. Status Code: ' + response.status + '</p>';
+                    modalFooter.innerHTML = '<button onclick="closeModal()">Retry</button>';
+                    openModal();
+                }
+            }).catch(error => {
+                modalTitle.textContent = 'Server Error';
+                modalBody.innerHTML = '<p>There was an error connecting to the server. Try Again!</p><br>' + error.message;
+                modalFooter.innerHTML = '<button onclick="closeModal()">Retry</button>';
+                openModal();
+            });
+        });
+
+        const invertSelectionBtn = document.getElementById('invertSelectionBtn');
+        const selectEverythingBtn = document.getElementById('selectEverythingBtn');
+
+        invertSelectionBtn.addEventListener('click', invertSelection);
+        selectEverythingBtn.addEventListener('click', selectEverything);
+
+        selectAllBtn.addEventListener('click', selectAll);
+        selectEverythingBtn.addEventListener('click', selectEverything);
+        submitBtn.addEventListener('click', submitData);
+
+        reusableModal.addEventListener('click', (event) => {
+            if (event.target === reusableModal) {
+                event.stopPropagation();
+            }
+        });
+
+        function updateSelectAllButtonText() {
+            const nodes = currentFolder ? currentFolder.children : files;
+            if (nodes.length === 0) {
+                selectAllBtn.textContent = 'Select All';
+                return;
+            }
+            const allSelected = nodes.every(node => node.type === 'folder' ? areAllChildrenSelected(node) : node.selected);
+            selectAllBtn.textContent = allSelected ? 'Deselect All' : 'Select All';
+        }
+
+        function updateSelectEverythingButtonText() {
+            if (files.length === 0) {
+                selectEverythingBtn.textContent = 'Select Everything';
+                return;
+            }
+            const allSelected = files.every(node => node.type === 'folder' ? areAllChildrenSelected(node) : node.selected);
+            selectEverythingBtn.textContent = allSelected ? 'Deselect Everything' : 'Select Everything';
+        }
+
+        function sticking() {
+            var window_top = window.scrollY;
+            var div_top = document.querySelector('.brand').offsetTop;
+            if (window_top > div_top) {
+                document.getElementById('sticks').classList.add('stick');
+            } else {
+                document.getElementById('sticks').classList.remove('stick');
+            }
+        }
+        window.addEventListener('scroll', sticking);
+        sticking();
+    </script>
+</body>
+
+</html>
