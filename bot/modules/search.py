@@ -478,6 +478,7 @@ async def torrent_search_update(_, query):
         await query.answer()
         site = data[3] if len(data) > 3 else "all"
         category = data[4] if len(data) > 4 else "all"
+        FILTER_STATE.pop(user_id, None)
         button = filter_buttons(user_id, site, category, "all", "all", "all")
         await edit_message(
             message,
@@ -561,6 +562,7 @@ async def torrent_search_update(_, query):
             f"<b>Searching for <i>{key}</i>\nTorrent Site:- <i>{SITES.get(site)}</i>\nCategory:- <i>{category.capitalize()}</i>\nFilters:- <i>{summary}</i></b>",
         )
         await search(key, site, message, "apisearch", category, quality, language, format_, size)
+        FILTER_STATE.pop(user_id, None)
     elif data[2] == "filtback":
         await query.answer()
         site = data[3] if len(data) > 3 else "all"
@@ -602,4 +604,5 @@ async def torrent_search_update(_, query):
             await search(key, site, message, method)
     else:
         await query.answer()
+        FILTER_STATE.pop(user_id, None)
         await edit_message(message, "Search has been canceled!")
