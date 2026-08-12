@@ -17,6 +17,22 @@ SITES = None
 TELEGRAPH_LIMIT = 9999999
 
 
+async def _refresh_sites():
+    """Fetch the enabled site list from the API so disabled sites disappear
+    from the buttons without a bot restart."""
+    global SITES
+    try:
+        async with AsyncSession() as client:
+            response = await client.get(f"{Config.SEARCH_API_LINK}/api/v1/sites")
+            data = response.json()
+        SITES = {
+            str(site): str(site).capitalize() for site in data["supported_sites"]
+        }
+        SITES["all"] = "All"
+    except Exception as e:
+        LOGGER.error(f"{e} Can't refresh sites from SEARCH_API_LINK")
+
+
 async def initiate_search_tools():
     if Config.DISABLE_TORRENTS or Config.DISABLE_SEARCH:
         LOGGER.warning("Torrents are disabled. Skipping search plugin initialization.")
@@ -30,18 +46,10 @@ async def initiate_search_tools():
         await TorrentManager.qbittorrent.search.install_plugin(Config.SEARCH_PLUGINS)
 
     if Config.SEARCH_API_LINK:
-        global SITES
-        try:
-            async with AsyncSession() as client:
-                response = await client.get(f"{Config.SEARCH_API_LINK}/api/v1/sites")
-                data = response.json()
-            SITES = {
-                str(site): str(site).capitalize() for site in data["supported_sites"]
-            }
-            SITES["all"] = "All"
-        except Exception as e:
+        await _refresh_sites()
+        if SITES is None:
             LOGGER.error(
-                f"{e} Can't fetching sites from SEARCH_API_LINK make sure use latest version of API"
+                "Can't fetching sites from SEARCH_API_LINK make sure use latest version of API"
             )
             SITES = None
 
@@ -378,8 +386,12 @@ def api_categories(user_id, site):
     return buttons.build_menu(2)
 
 
-def api_buttons(user_id, method, page=1):
+async def api_buttons(user_id, method, page=1):
+    await _refresh_sites()
     buttons = ButtonMaker()
+    if not SITES:
+        buttons.data_button("Cancel", f"torser {user_id} cancel")
+        return buttons.build_menu(1)
     # Keep "all" first for quick combo search; the rest keep the API's
     # site order (important sites come first from our API).
     sites = sorted(SITES.items(), key=lambda kv: kv[0] != "all")
@@ -425,6 +437,10 @@ async def torrent_search(_, message):
     user_id = message.from_user.id
     buttons = ButtonMaker()
     key = message.text.split()
+    if SITES is None and Config.SEARCH_API_LINK:
+        # API was down at bot start: try to recover the site list now,
+        # otherwise the bot would need a restart to ever show buttons.
+        await _refresh_sites()
     if SITES is None and not Config.SEARCH_PLUGINS:
         await send_message(
             message, "No API link or search PLUGINS added for this function"
@@ -444,7 +460,7 @@ async def torrent_search(_, message):
         button = buttons.build_menu(2)
         await send_message(message, "Choose tool to search:", button)
     elif SITES is not None:
-        button = api_buttons(user_id, "apisearch")
+        button = await api_buttons(user_id, "apisearch")
         await send_message(message, "Choose site to search | API:", button)
     else:
         button = await plugin_buttons(user_id)
@@ -464,11 +480,11 @@ async def torrent_search_update(_, query):
         await query.answer()
         page = int(data[3]) if len(data) > 3 and data[3].isdigit() else 1
         method = data[4] if len(data) > 4 else "apisearch"
-        button = api_buttons(user_id, method, page)
+        button = await api_buttons(user_id, method, page)
         await edit_message(message, "Choose site:", button)
     elif data[2].startswith("api"):
         await query.answer()
-        button = api_buttons(user_id, data[2])
+        button = await api_buttons(user_id, data[2])
         await edit_message(message, "Choose site:", button)
     elif data[2] == "plugin":
         await query.answer()
@@ -520,7 +536,7 @@ async def torrent_search_update(_, query):
         await query.answer()
         state = FILTER_STATE.get(user_id)
         if not state:
-            button = api_buttons(user_id, "apisearch")
+            button = await api_buttons(user_id, "apisearch")
             await edit_message(message, "Choose site:", button)
             return
         state["size"] = data[3] if len(data) > 3 else "all"
@@ -540,7 +556,7 @@ async def torrent_search_update(_, query):
         await query.answer()
         state = FILTER_STATE.get(user_id)
         if not state:
-            button = api_buttons(user_id, "apisearch")
+            button = await api_buttons(user_id, "apisearch")
             await edit_message(message, "Choose site:", button)
             return
         site = state["site"]
@@ -570,7 +586,7 @@ async def torrent_search_update(_, query):
         await edit_message(message, "Choose category:", button)
     elif data[2] == "backcat":
         await query.answer()
-        button = api_buttons(user_id, "apisearch")
+        button = await api_buttons(user_id, "apisearch")
         await edit_message(message, "Choose site:", button)
     elif data[2] != "cancel":
         await query.answer()
