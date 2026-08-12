@@ -48,7 +48,7 @@ async def initiate_search_tools():
 
 async def search(
     key, site, message, method, category="all", quality="", language="", format_="",
-    size="all", exclude="none",
+    size="all",
 ):
     if method.startswith("api"):
         if method == "apisearch":
@@ -71,8 +71,6 @@ async def search(
                 api += "&min_size=1GB&max_size=3GB"
             elif size == "large":
                 api += "&min_size=3GB"
-            if site == "all" and exclude and exclude != "none":
-                api += f"&exclude={quote(exclude)}"
         elif method == "apitrend":
             LOGGER.info(f"API Trending from {site}")
             if site == "all":
@@ -264,7 +262,6 @@ FILTER_QUALITY = ["all", "480", "720", "1080", "4k"]
 FILTER_LANGUAGE = ["all", "hindi", "english", "tamil", "telugu", "dual"]
 FILTER_FORMAT = ["all", "pdf", "epub", "mobi"]
 FILTER_SIZES = ["all", "small", "medium", "large"]
-FILTER_EXCLUDE = ["none", "piratebay", "torrentdownload", "ybt", "bitsearch"]
 
 # In-memory filter state (user_id -> dict) so the second filter page can use
 # short callbacks (Telegram callback_data is limited to 64 bytes).
@@ -346,40 +343,29 @@ def _size_label(value):
     )
 
 
-def _exclude_label(value):
-    return "None" if value == "none" else value.capitalize()
-
-
-def _size_ex_summary(size, exclude):
+def _size_summary(size):
     parts = []
     if size and size != "all":
         parts.append(f"Size: {_size_label(size)}")
-    if exclude and exclude != "none":
-        parts.append(f"Exclude: {exclude.capitalize()}")
     return " | ".join(parts) if parts else "None"
 
 
-def filter_size_buttons(user_id, size, exclude):
+def filter_size_buttons(user_id, size):
     buttons = ButtonMaker()
     for v in FILTER_SIZES:
         name = _size_label(v)
         if v == size:
             name = f"✅ {name}"
         buttons.data_button(name, f"torser {user_id} sz {v}")
-    for v in FILTER_EXCLUDE:
-        name = _exclude_label(v)
-        if v == exclude:
-            name = f"✅ {name}"
-        buttons.data_button(name, f"torser {user_id} ex {v}", position="header")
     buttons.data_button("✅ Search", f"torser {user_id} fgs", position="footer")
     buttons.data_button("◀ Back", f"torser {user_id} fback1", position="footer")
-    return buttons.build_menu(b_cols=4, h_cols=5, f_cols=2)
+    return buttons.build_menu(b_cols=4, f_cols=2)
 
 
-def filter_size_text(key, size, exclude):
+def filter_size_text(key, size):
     return (
         f"<b>More filters for <i>{key}</i></b>\n"
-        f"Filters:- <i>{_size_ex_summary(size, exclude)}</i>"
+        f"Filters:- <i>{_size_summary(size)}</i>"
     )
 
 
@@ -522,27 +508,23 @@ async def torrent_search_update(_, query):
             "language": language,
             "format": format_,
             "size": prev.get("size", "all"),
-            "exclude": prev.get("exclude", "none"),
         }
-        button = filter_size_buttons(user_id, FILTER_STATE[user_id]["size"], FILTER_STATE[user_id]["exclude"])
+        button = filter_size_buttons(user_id, FILTER_STATE[user_id]["size"])
         await edit_message(
             message,
-            filter_size_text(key, FILTER_STATE[user_id]["size"], FILTER_STATE[user_id]["exclude"]),
+            filter_size_text(key, FILTER_STATE[user_id]["size"]),
             button,
         )
-    elif data[2] in ("sz", "ex"):
+    elif data[2] == "sz":
         await query.answer()
         state = FILTER_STATE.get(user_id)
         if not state:
             button = api_buttons(user_id, "apisearch")
             await edit_message(message, "Choose site:", button)
             return
-        if data[2] == "sz":
-            state["size"] = data[3] if len(data) > 3 else "all"
-        else:
-            state["exclude"] = data[3] if len(data) > 3 else "none"
-        button = filter_size_buttons(user_id, state["size"], state["exclude"])
-        await edit_message(message, filter_size_text(key, state["size"], state["exclude"]), button)
+        state["size"] = data[3] if len(data) > 3 else "all"
+        button = filter_size_buttons(user_id, state["size"])
+        await edit_message(message, filter_size_text(key, state["size"]), button)
     elif data[2] == "fback1":
         await query.answer()
         state = FILTER_STATE.get(user_id) or {}
@@ -566,12 +548,11 @@ async def torrent_search_update(_, query):
         language = state["language"]
         format_ = state["format"]
         size = state["size"]
-        exclude = state["exclude"]
         summary = " | ".join(
             p
             for p in (
                 _filter_summary(quality, language, format_),
-                _size_ex_summary(size, exclude),
+                _size_summary(size),
             )
             if p and p != "None"
         ) or "None"
@@ -579,7 +560,7 @@ async def torrent_search_update(_, query):
             message,
             f"<b>Searching for <i>{key}</i>\nTorrent Site:- <i>{SITES.get(site)}</i>\nCategory:- <i>{category.capitalize()}</i>\nFilters:- <i>{summary}</i></b>",
         )
-        await search(key, site, message, "apisearch", category, quality, language, format_, size, exclude)
+        await search(key, site, message, "apisearch", category, quality, language, format_, size)
     elif data[2] == "filtback":
         await query.answer()
         site = data[3] if len(data) > 3 else "all"
