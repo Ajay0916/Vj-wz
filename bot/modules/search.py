@@ -46,7 +46,9 @@ async def initiate_search_tools():
             SITES = None
 
 
-async def search(key, site, message, method, category="all"):
+async def search(
+    key, site, message, method, category="all", quality="", language="", format_=""
+):
     if method.startswith("api"):
         if method == "apisearch":
             LOGGER.info(f"API Searching: {key} from {site}")
@@ -56,6 +58,12 @@ async def search(key, site, message, method, category="all"):
                 api = f"{Config.SEARCH_API_LINK}/api/v1/search?site={quote(site)}&query={quote(key)}&limit={Config.SEARCH_LIMIT}"
             if category and category != "all":
                 api += f"&category={quote(category)}"
+            if quality and quality != "all":
+                api += f"&quality={quote(quality)}"
+            if language and language != "all":
+                api += f"&language={quote(language)}"
+            if format_ and format_ != "all":
+                api += f"&format={quote(format_)}"
         elif method == "apitrend":
             LOGGER.info(f"API Trending from {site}")
             if site == "all":
@@ -165,6 +173,12 @@ async def get_result(search_results, key, message, method):
                         tags.append(f"Site: {escape(str(result['site']))}")
                     if result.get("category"):
                         tags.append(f"Category: {escape(str(result['category']))}")
+                    if result.get("quality"):
+                        tags.append(f"Quality: {escape(str(result['quality']))}")
+                    if result.get("language"):
+                        tags.append(f"Language: {escape(str(result['language']))}")
+                    if result.get("format"):
+                        tags.append(f"Format: {escape(str(result['format']))}")
                     if result.get("date"):
                         tags.append(f"Date: {escape(str(result['date']))}")
                     if result.get("uploader"):
@@ -236,6 +250,79 @@ API_PAGE_SIZE = 13
 
 
 SEARCH_CATEGORIES = ["all", "movies", "tv", "anime", "books", "courses", "apps", "games", "music"]
+
+FILTER_QUALITY = ["all", "480", "720", "1080", "4k"]
+FILTER_LANGUAGE = ["all", "hindi", "english", "tamil", "telugu", "dual"]
+FILTER_FORMAT = ["all", "pdf", "epub", "mobi"]
+
+
+def _filter_label(value, kind):
+    if not value or value == "all":
+        return "All"
+    if kind == "quality":
+        return "4K" if value == "4k" else f"{value}p"
+    return value.capitalize()
+
+
+def _filter_summary(quality, language, format_):
+    parts = []
+    if quality and quality != "all":
+        parts.append(f"Quality: {_filter_label(quality, 'quality')}")
+    if language and language != "all":
+        parts.append(f"Language: {_filter_label(language, 'language')}")
+    if format_ and format_ != "all":
+        parts.append(f"Format: {_filter_label(format_, 'format')}")
+    return " | ".join(parts) if parts else "None"
+
+
+def filter_buttons(user_id, site, category, quality, language, format_):
+    buttons = ButtonMaker()
+    for v in FILTER_QUALITY:
+        name = _filter_label(v, "quality")
+        if v == quality:
+            name = f"✅ {name}"
+        buttons.data_button(
+            name,
+            f"torser {user_id} fq {site} {category} {v} {language} {format_}",
+        )
+    for v in FILTER_LANGUAGE:
+        name = _filter_label(v, "language")
+        if v == language:
+            name = f"✅ {name}"
+        buttons.data_button(
+            name,
+            f"torser {user_id} fl {site} {category} {quality} {v} {format_}",
+            position="header",
+        )
+    for v in FILTER_FORMAT:
+        name = _filter_label(v, "format")
+        if v == format_:
+            name = f"✅ {name}"
+        buttons.data_button(
+            name,
+            f"torser {user_id} ff {site} {category} {quality} {language} {v}",
+            position="f_body",
+        )
+    buttons.data_button(
+        "✅ Search",
+        f"torser {user_id} fg {site} {category} {quality} {language} {format_}",
+        position="footer",
+    )
+    buttons.data_button(
+        "◀ Back",
+        f"torser {user_id} filtback {site} {category}",
+        position="footer",
+    )
+    return buttons.build_menu(b_cols=5, h_cols=6, fb_cols=4, f_cols=2)
+
+
+def filter_menu_text(key, site, category, quality, language, format_):
+    return (
+        f"<b>Filter results for <i>{key}</i></b>\n"
+        f"Site:- <i>{SITES.get(site)}</i>\n"
+        f"Category:- <i>{category.capitalize()}</i>\n"
+        f"Filters:- <i>{_filter_summary(quality, language, format_)}</i>"
+    )
 
 
 def api_categories(user_id, site):
@@ -347,11 +434,39 @@ async def torrent_search_update(_, query):
         await query.answer()
         site = data[3] if len(data) > 3 else "all"
         category = data[4] if len(data) > 4 else "all"
+        button = filter_buttons(user_id, site, category, "all", "all", "all")
         await edit_message(
             message,
-            f"<b>Searching for <i>{key}</i>\nTorrent Site:- <i>{SITES.get(site)}</i>\nCategory:- <i>{category.capitalize()}</i></b>",
+            filter_menu_text(key, site, category, "all", "all", "all"),
+            button,
         )
-        await search(key, site, message, "apisearch", category)
+    elif data[2] in ("fq", "fl", "ff"):
+        await query.answer()
+        site = data[3] if len(data) > 3 else "all"
+        category = data[4] if len(data) > 4 else "all"
+        quality = data[5] if len(data) > 5 else "all"
+        language = data[6] if len(data) > 6 else "all"
+        format_ = data[7] if len(data) > 7 else "all"
+        button = filter_buttons(user_id, site, category, quality, language, format_)
+        await edit_message(message, filter_menu_text(key, site, category, quality, language, format_), button)
+    elif data[2] == "fg":
+        await query.answer()
+        site = data[3] if len(data) > 3 else "all"
+        category = data[4] if len(data) > 4 else "all"
+        quality = data[5] if len(data) > 5 else "all"
+        language = data[6] if len(data) > 6 else "all"
+        format_ = data[7] if len(data) > 7 else "all"
+        summary = _filter_summary(quality, language, format_)
+        await edit_message(
+            message,
+            f"<b>Searching for <i>{key}</i>\nTorrent Site:- <i>{SITES.get(site)}</i>\nCategory:- <i>{category.capitalize()}</i>\nFilters:- <i>{summary}</i></b>",
+        )
+        await search(key, site, message, "apisearch", category, quality, language, format_)
+    elif data[2] == "filtback":
+        await query.answer()
+        site = data[3] if len(data) > 3 else "all"
+        button = api_categories(user_id, site)
+        await edit_message(message, "Choose category:", button)
     elif data[2] == "backcat":
         await query.answer()
         button = api_buttons(user_id, "apisearch")
