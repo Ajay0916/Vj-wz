@@ -152,7 +152,15 @@ async def search(
             async with AsyncSession() as client:
                 response = await client.get(api)
                 search_results = response.json()
-            if "error" in search_results or search_results["total"] == 0:
+            if isinstance(search_results, dict):
+                api_error = search_results.get("error") or search_results.get("detail")
+                if api_error:
+                    await edit_message(
+                        message,
+                        f"{escape(str(api_error))}\nTorrent Site:- <i>{_site_display_name(site)}</i>",
+                    )
+                    return
+            if search_results["total"] == 0:
                 await edit_message(
                     message,
                     f"No result found for <i>{key}</i>\nTorrent Site:- <i>{_site_display_name(site)}</i>",
