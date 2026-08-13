@@ -176,7 +176,7 @@ async def search(
             if search_results["total"] == 0:
                 await edit_message(
                     message,
-                    f"No result found for <i>{key}</i>\nTorrent Site:- <i>{_site_display_name(site)}</i>",
+                    f"No result found for <i>{key or 'results'}</i>\nTorrent Site:- <i>{_site_display_name(site)}</i>",
                 )
                 return
             msg = f"<b>Found {min(search_results['total'], TELEGRAPH_LIMIT)}</b>"
@@ -188,6 +188,8 @@ async def search(
                 )
             else:
                 msg += f" <b>result(s) for <i>{key}</i>\nTorrent Site:- <i>{_site_display_name(site)}</i></b>"
+            if search_results.get("relaxed_filters"):
+                msg += " <i>(filters relaxed)</i>"
             search_results = search_results["data"]
         except Exception as e:
             await edit_message(message, str(e))
