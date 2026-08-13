@@ -100,9 +100,8 @@ async def initiate_search_tools():
         await _refresh_sites()
         if SITES is None:
             LOGGER.error(
-                "Can't fetching sites from SEARCH_API_LINK make sure use latest version of API"
+                "Can't fetch sites from SEARCH_API_LINK, make sure it uses the latest API version"
             )
-            SITES = None
 
 
 def _site_status(site):
