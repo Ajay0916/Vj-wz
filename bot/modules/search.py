@@ -109,8 +109,8 @@ def _site_status(site):
 
 
 def _site_display_name(site):
-    if site == "all":
-        return "All"
+    if site in GROUP_NAMES:
+        return GROUP_NAMES[site]
     name = SITES.get(site, str(site).capitalize()) if SITES else str(site).capitalize()
     status = _site_status(site)
     if status.get("manual_blocked"):
@@ -120,33 +120,14 @@ def _site_display_name(site):
     return name
 
 
-# Site button ordering: page 1 = all + important general + course sites,
-# page 2 = anime/movie/book sites. Any site not listed here stays on page 1.
-PAGE2_SITES = {
-    "nyaasi",
-    "yts",
-    "annasarchive",
-    "hindibooks",
-    "hindiaudio",
-    "archivebooks",
-    "audiobookbay",
-    "libgen",
-}
-
-
-def _site_sort_key(item):
-    site, name = item
-    if site == "all":
-        return (0, 0, name.lower())
-    page = 2 if site in PAGE2_SITES else 1
-    status = _site_status(site)
-    if status.get("manual_blocked"):
-        rank = 3
-    elif status.get("blocked"):
-        rank = 2
-    else:
-        rank = 1
-    return (page, rank, name.lower())
+def _group_sites_param(group):
+    """Comma-separated enabled site ids for a group button, or "" for All."""
+    if group == "all" or not SITES:
+        return ""
+    members = GROUP_SITES.get(group)
+    if members is None:
+        members = set(SITES) - COURSE_SITES - BOOK_GROUP_SITES
+    return ",".join(s for s in SITES if s in members and s != "all")
 
 
 async def search(
@@ -156,8 +137,11 @@ async def search(
     if method.startswith("api"):
         if method == "apisearch":
             LOGGER.info(f"API Searching: {key} from {site}")
-            if site == "all":
+            if site in GROUP_NAMES:
                 api = f"{Config.SEARCH_API_LINK}/api/v1/all/search?query={quote(key)}&limit={Config.SEARCH_LIMIT}"
+                group_sites = _group_sites_param(site)
+                if group_sites:
+                    api += f"&sites={quote(group_sites)}"
             else:
                 api = f"{Config.SEARCH_API_LINK}/api/v1/search?site={quote(site)}&query={quote(key)}&limit={Config.SEARCH_LIMIT}"
             if category and category != "all":
@@ -176,14 +160,20 @@ async def search(
                 api += "&min_size=3GB"
         elif method == "apitrend":
             LOGGER.info(f"API Trending from {site}")
-            if site == "all":
+            if site in GROUP_NAMES:
                 api = f"{Config.SEARCH_API_LINK}/api/v1/all/trending?limit={Config.SEARCH_LIMIT}"
+                group_sites = _group_sites_param(site)
+                if group_sites:
+                    api += f"&sites={quote(group_sites)}"
             else:
                 api = f"{Config.SEARCH_API_LINK}/api/v1/trending?site={site}&limit={Config.SEARCH_LIMIT}"
         elif method == "apirecent":
             LOGGER.info(f"API Recent from {site}")
-            if site == "all":
+            if site in GROUP_NAMES:
                 api = f"{Config.SEARCH_API_LINK}/api/v1/all/recent?limit={Config.SEARCH_LIMIT}"
+                group_sites = _group_sites_param(site)
+                if group_sites:
+                    api += f"&sites={quote(group_sites)}"
             else:
                 api = f"{Config.SEARCH_API_LINK}/api/v1/recent?site={site}&limit={Config.SEARCH_LIMIT}"
         try:
@@ -377,9 +367,6 @@ async def get_result(search_results, key, message, method):
     return f"https://telegra.ph/{path[0]}"
 
 
-API_PAGE_SIZE = 18
-
-
 SEARCH_CATEGORIES = ["all", "movies", "tv", "anime", "books", "courses", "apps", "games", "music"]
 
 FILTER_QUALITY = ["all", "480", "720", "1080", "4k"]
@@ -503,6 +490,37 @@ BOOK_SITES = {
     "archivebooks",
 }
 
+# Category-group buttons: the per-site list is replaced by 4 buttons
+# (General / All / Courses / Books). Groups are built from the sites the
+# API currently has enabled, so dead sites never appear.
+COURSE_SITES = {
+    "downarchive",
+    "rutracker",
+    "pimpmymind",
+}
+BOOK_GROUP_SITES = BOOK_SITES | {
+    "hindiaudio",
+    "audiobookbay",
+    "oceanofpdf",
+}
+GROUP_SITES = {
+    "general": None,  # computed: every enabled site minus courses/books
+    "courses": COURSE_SITES,
+    "books": BOOK_GROUP_SITES,
+}
+GROUP_NAMES = {
+    "general": "General Sites",
+    "all": "All",
+    "courses": "Courses",
+    "books": "Books",
+}
+GROUP_BUTTONS = [
+    ("general", "🌐 General Sites"),
+    ("all", "⚡ All"),
+    ("courses", "🎓 Courses"),
+    ("books", "📚 Books"),
+]
+
 
 def filter_format_buttons(user_id, site, format_):
     buttons = ButtonMaker()
@@ -541,21 +559,8 @@ async def api_buttons(user_id, method, page=1):
     if not SITES:
         buttons.data_button("Cancel", f"torser {user_id} cancel")
         return buttons.build_menu(1)
-    # Keep "all" first, then healthy sites, then blocked sites.
-    sites = sorted(SITES.items(), key=_site_sort_key)
-    total_pages = max(1, (len(sites) + API_PAGE_SIZE - 1) // API_PAGE_SIZE)
-    page = max(1, min(int(page), total_pages))
-    start = (page - 1) * API_PAGE_SIZE
-    for data, name in sites[start : start + API_PAGE_SIZE]:
-        buttons.data_button(_site_display_name(data), f"torser {user_id} {data} {method}")
-    nav = []
-    if page > 1:
-        nav.append(("◀", f"torser {user_id} apipage {page - 1} {method}"))
-    nav.append((f"{page}/{total_pages}", f"torser {user_id} apipage {page} {method}"))
-    if page < total_pages:
-        nav.append(("▶", f"torser {user_id} apipage {page + 1} {method}"))
-    for text, callback in nav:
-        buttons.data_button(text, callback, position="footer")
+    for group, name in GROUP_BUTTONS:
+        buttons.data_button(name, f"torser {user_id} grp {group} {method}")
     buttons.data_button("Cancel", f"torser {user_id} cancel", position="footer")
     return buttons.build_menu(2)
 
@@ -615,7 +620,7 @@ async def torrent_search(_, message):
         await send_message(message, "Choose tool to search:", button)
     elif SITES is not None:
         button = await api_buttons(user_id, "apisearch")
-        await send_message(message, "Choose site to search | API:", button)
+        await send_message(message, "Choose category to search | API:", button)
     else:
         button = await plugin_buttons(user_id)
         await send_message(message, "Choose site to search | Plugins:", button)
@@ -635,11 +640,11 @@ async def torrent_search_update(_, query):
         page = int(data[3]) if len(data) > 3 and data[3].isdigit() else 1
         method = data[4] if len(data) > 4 else "apisearch"
         button = await api_buttons(user_id, method, page)
-        await edit_message(message, "Choose site:", button)
+        await edit_message(message, "Choose category:", button)
     elif data[2].startswith("api"):
         await query.answer()
         button = await api_buttons(user_id, data[2])
-        await edit_message(message, "Choose site:", button)
+        await edit_message(message, "Choose category:", button)
     elif data[2] == "plugin":
         await query.answer()
         button = await plugin_buttons(user_id)
@@ -691,7 +696,7 @@ async def torrent_search_update(_, query):
         state = FILTER_STATE.get(user_id)
         if not state:
             button = await api_buttons(user_id, "apisearch")
-            await edit_message(message, "Choose site:", button)
+            await edit_message(message, "Choose category:", button)
             return
         state["size"] = data[3] if len(data) > 3 else "all"
         button = filter_size_buttons(user_id, state["size"])
@@ -730,7 +735,7 @@ async def torrent_search_update(_, query):
         state = FILTER_STATE.get(user_id)
         if not state:
             button = await api_buttons(user_id, "apisearch")
-            await edit_message(message, "Choose site:", button)
+            await edit_message(message, "Choose category:", button)
             return
         site = state["site"]
         category = state["category"]
@@ -760,7 +765,21 @@ async def torrent_search_update(_, query):
     elif data[2] == "backcat":
         await query.answer()
         button = await api_buttons(user_id, "apisearch")
-        await edit_message(message, "Choose site:", button)
+        await edit_message(message, "Choose category:", button)
+    elif data[2] == "grp":
+        await query.answer()
+        group = data[3] if len(data) > 3 else "all"
+        method = data[4] if len(data) > 4 else "apisearch"
+        if method == "apisearch":
+            button = api_categories(user_id, group)
+            await edit_message(message, "Choose category:", button)
+        else:
+            endpoint = "Trending" if method == "apitrend" else "Recent"
+            await edit_message(
+                message,
+                f"<b>Listing {endpoint} Items...\nTorrent Site:- <i>{_site_display_name(group)}</i></b>",
+            )
+            await search(key, group, message, method)
     elif data[2] != "cancel":
         await query.answer()
         site = data[2]
