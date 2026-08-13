@@ -92,8 +92,6 @@ def _site_display_name(site):
         return f"⛔ {name}"
     if status.get("blocked"):
         return f"⚠️ {name}"
-    if status:
-        return f"✅ {name}"
     return name
 
 
@@ -442,6 +440,40 @@ def filter_size_text(key, size):
     )
 
 
+# Book-only sites get a format picker (pdf/epub/mobi) before searching;
+# every other site searches directly with one click.
+BOOK_SITES = {
+    "hindibooks",
+    "hindiaudio",
+    "annasarchive",
+    "libgen",
+    "archivebooks",
+    "audiobookbay",
+}
+
+
+def filter_format_buttons(user_id, site, format_):
+    buttons = ButtonMaker()
+    for v in FILTER_FORMAT:
+        name = _filter_label(v, "format")
+        if v == format_:
+            name = f"✅ {name}"
+        buttons.data_button(name, f"torser {user_id} bf {site} {v}")
+    buttons.data_button(
+        "✅ Search", f"torser {user_id} bfgo {site} {format_}", position="footer"
+    )
+    buttons.data_button("◀ Back", f"torser {user_id} backcat", position="footer")
+    return buttons.build_menu(b_cols=4, f_cols=2)
+
+
+def filter_format_text(key, site, format_):
+    return (
+        f"<b>Select format for <i>{key}</i></b>\n"
+        f"Site:- <i>{_site_display_name(site)}</i>\n"
+        f"Format:- <i>{_filter_label(format_, 'format')}</i>"
+    )
+
+
 def api_categories(user_id, site):
     buttons = ButtonMaker()
     for cat in SEARCH_CATEGORIES:
@@ -622,6 +654,17 @@ async def torrent_search_update(_, query):
         format_ = state.get("format", "all")
         button = filter_buttons(user_id, site, category, quality, language, format_)
         await edit_message(message, filter_menu_text(key, site, category, quality, language, format_), button)
+    elif data[2] == "bf":
+        await query.answer()
+        site = data[3] if len(data) > 3 else "all"
+        format_ = data[4] if len(data) > 4 else "all"
+        button = filter_format_buttons(user_id, site, format_)
+        await edit_message(message, filter_format_text(key, site, format_), button)
+    elif data[2] == "bfgo":
+        await query.answer()
+        site = data[3] if len(data) > 3 else "all"
+        format_ = data[4] if len(data) > 4 else "all"
+        await search(key, site, message, "apisearch", "all", "all", "all", format_)
     elif data[2] == "fgs":
         await query.answer()
         state = FILTER_STATE.get(user_id)
@@ -663,8 +706,22 @@ async def torrent_search_update(_, query):
         site = data[2]
         method = data[3]
         if method == "apisearch":
-            button = api_categories(user_id, site)
-            await edit_message(message, "Choose category:", button)
+            if site == "all":
+                button = api_categories(user_id, site)
+                await edit_message(message, "Choose category:", button)
+            elif site in BOOK_SITES:
+                button = filter_format_buttons(user_id, site, "all")
+                await edit_message(
+                    message,
+                    filter_format_text(key, site, "all"),
+                    button,
+                )
+            else:
+                await edit_message(
+                    message,
+                    f"<b>Searching for <i>{key}</i>\nTorrent Site:- <i>{_site_display_name(site)}</i></b>",
+                )
+                await search(key, site, message, "apisearch")
         elif method.startswith("api"):
             if key is None:
                 if method == "apirecent":
