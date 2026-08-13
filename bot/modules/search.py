@@ -95,10 +95,25 @@ def _site_display_name(site):
     return name
 
 
+# Site button ordering: page 1 = all + important general + course sites,
+# page 2 = anime/movie/book sites. Any site not listed here stays on page 1.
+PAGE2_SITES = {
+    "nyaasi",
+    "yts",
+    "annasarchive",
+    "hindibooks",
+    "hindiaudio",
+    "archivebooks",
+    "audiobookbay",
+    "libgen",
+}
+
+
 def _site_sort_key(item):
     site, name = item
     if site == "all":
         return (0, 0, name.lower())
+    page = 2 if site in PAGE2_SITES else 1
     status = _site_status(site)
     if status.get("manual_blocked"):
         rank = 3
@@ -106,7 +121,7 @@ def _site_sort_key(item):
         rank = 2
     else:
         rank = 1
-    return (1, rank, name.lower())
+    return (page, rank, name.lower())
 
 
 async def search(
@@ -324,7 +339,7 @@ async def get_result(search_results, key, message, method):
     return f"https://telegra.ph/{path[0]}"
 
 
-API_PAGE_SIZE = 13
+API_PAGE_SIZE = 18
 
 
 SEARCH_CATEGORIES = ["all", "movies", "tv", "anime", "books", "courses", "apps", "games", "music"]
