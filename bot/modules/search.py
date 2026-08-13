@@ -464,15 +464,14 @@ def filter_size_text(key, size):
     )
 
 
-# Book-only sites get a format picker (pdf/epub/mobi) before searching;
-# every other site searches directly with one click.
+# E-book sites get a format picker (pdf/epub/mobi) before searching;
+# audiobook sites (hindiaudio/audiobookbay) and every other site search
+# directly with one click - audio formats are not pdf/epub/mobi.
 BOOK_SITES = {
     "hindibooks",
-    "hindiaudio",
     "annasarchive",
     "libgen",
     "archivebooks",
-    "audiobookbay",
 }
 
 
@@ -688,6 +687,14 @@ async def torrent_search_update(_, query):
         await query.answer()
         site = data[3] if len(data) > 3 else "all"
         format_ = data[4] if len(data) > 4 else "all"
+        fmt = (
+            f"\nFormat:- <i>{_filter_label(format_, 'format')}</i>"
+            if format_ != "all" else ""
+        )
+        await edit_message(
+            message,
+            f"<b>Searching for <i>{key}</i>\nTorrent Site:- <i>{_site_display_name(site)}</i>{fmt}</b>",
+        )
         await search(key, site, message, "apisearch", "all", "all", "all", format_)
     elif data[2] == "fgs":
         await query.answer()
