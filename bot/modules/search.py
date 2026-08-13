@@ -298,6 +298,10 @@ async def get_result(search_results, key, message, method):
                         msg += "<a href='{}/api/v1/torrent_file?url={}&name={}'>Direct Link</a>".format(
                             Config.SEARCH_API_LINK, quote(result["torrent"]), quote(result.get("name") or "")
                         )
+                    if result.get("download"):
+                        msg += " | <a href='{}/api/v1/torrent_file?url={}&name={}'>Alt Link</a>".format(
+                            Config.SEARCH_API_LINK, quote(result["download"]), quote(result.get("name") or "")
+                        )
                     if result.get("torrent") and result.get("magnet"):
                         msg += " | "
                     if result.get("magnet"):
