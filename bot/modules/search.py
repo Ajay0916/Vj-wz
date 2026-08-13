@@ -1,3 +1,4 @@
+import re
 from niquests import AsyncSession
 from html import escape
 from urllib.parse import quote
@@ -11,6 +12,31 @@ from ..helper.ext_utils.status_utils import get_readable_file_size
 from ..helper.ext_utils.telegraph_helper import telegraph
 from ..helper.telegram_helper.button_build import ButtonMaker
 from ..helper.telegram_helper.message_utils import edit_message, send_message
+
+def _dl_link(url, name, ext=""):
+    """Build a download link for a result. Google Drive URLs are linked
+    directly so WZML-X can resolve the Drive ID natively (its extractor
+    fails on proxied drive URLs); everything else goes through the API
+    proxy with a filename slug so browsers that ignore Content-Disposition
+    still save the file with a real name, not "torrent_file.pdf"."""
+    if "drive.usercontent.google.com" in url or "drive.google.com" in url:
+        return url
+    slug = re.sub(r"[^a-zA-Z0-9._-]", "_", str(name or "download"))[:80] or "download"
+    slug = slug.strip("._-")
+    if not re.search(r"\.[a-z0-9]{2,5}$", slug, re.I):
+        if re.fullmatch(r"[a-z0-9]{2,5}", str(ext), re.I):
+            slug = slug.rstrip("._-") + "." + str(ext).lower()
+        else:
+            m = re.search(
+                r"(?<![a-z0-9])(pdf|epub|mobi|azw3|djvu|fb2|zip|rar|mp3|m4b|torrent)(?![a-z0-9])",
+                slug,
+                re.I,
+            )
+            slug = slug.rstrip("._-") + ("." + m.group(1).lower() if m else ".dl")
+    return "{}/api/v1/torrent_file/{}?url={}&name={}".format(
+        Config.SEARCH_API_LINK, quote(slug), quote(url), quote(str(name or ""))
+    )
+
 
 PLUGINS = []
 SITES = None
@@ -246,8 +272,8 @@ async def get_result(search_results, key, message, method):
                         msg += f"<b>Quality: </b>{subres['quality']} | <b>Type: </b>{subres['type']} | "
                         msg += f"<b>Size: </b>{subres['size']}<br>"
                         if subres.get("torrent"):
-                            msg += "<a href='{}/api/v1/torrent_file?url={}&name={}'>Direct Link</a>".format(
-                                Config.SEARCH_API_LINK, quote(subres["torrent"]), quote(result.get("name") or "")
+                            msg += "<a href='{}'>Direct Link</a>".format(
+                                _dl_link(subres["torrent"], result.get("name") or "", subres.get("extension") or "")
                             )
                         if subres.get("torrent") and subres.get("magnet"):
                             msg += " | "
@@ -295,12 +321,12 @@ async def get_result(search_results, key, message, method):
                         if len(files) > 3:
                             msg += f"<i>+{len(files) - 3} more</i><br>"
                     if result.get("torrent"):
-                        msg += "<a href='{}/api/v1/torrent_file?url={}&name={}'>Direct Link</a>".format(
-                            Config.SEARCH_API_LINK, quote(result["torrent"]), quote(result.get("name") or "")
+                        msg += "<a href='{}'>Direct Link</a>".format(
+                            _dl_link(result["torrent"], result.get("name") or "", result.get("extension") or "")
                         )
                     if result.get("download"):
-                        msg += " | <a href='{}/api/v1/torrent_file?url={}&name={}'>Alt Link</a>".format(
-                            Config.SEARCH_API_LINK, quote(result["download"]), quote(result.get("name") or "")
+                        msg += " | <a href='{}'>Alt Link</a>".format(
+                            _dl_link(result["download"], result.get("name") or "", result.get("extension") or "")
                         )
                     if result.get("torrent") and result.get("magnet"):
                         msg += " | "
