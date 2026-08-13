@@ -274,6 +274,13 @@ async def get_result(search_results, key, message, method):
                         tags.append(f"Language: {escape(str(result['language']))}")
                     if result.get("format"):
                         tags.append(f"Format: {escape(str(result['format']))}")
+                    authors = result.get("authors") or (
+                        [result["author"]] if result.get("author") else None
+                    )
+                    if authors:
+                        tags.append(
+                            "Author: " + escape(", ".join(str(a) for a in authors))
+                        )
                     if result.get("date"):
                         tags.append(f"Date: {escape(str(result['date']))}")
                     if result.get("uploader"):
