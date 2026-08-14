@@ -358,6 +358,7 @@ async def update_variables():
 
 
 async def load_configurations():
+    LOGGER.info("DBG load_configurations: begin")
     if not await aiopath.exists(".netrc"):
         async with aiopen(".netrc", "w"):
             pass
@@ -367,7 +368,9 @@ async def load_configurations():
     cmd = f'chmod 600 .netrc && cp .netrc /root/.netrc && chmod +x setpkgs.sh && ./setpkgs.sh {BinConfig.ARIA2_NAME} "{service_cores}" {Config.CPU_LIMIT}'
     if not Config.DISABLE_NZB:
         cmd += f" {BinConfig.SABNZBD_NAME}"
+    LOGGER.info("DBG load_configurations: running setpkgs.sh")
     await (await create_subprocess_shell(cmd)).wait()
+    LOGGER.info("DBG load_configurations: setpkgs.sh done")
 
     if await aiopath.exists("cfg.zip"):
         if await aiopath.exists("/JDownloader/cfg"):
@@ -384,7 +387,9 @@ async def load_configurations():
     if not await aiopath.exists("accounts"):
         Config.USE_SERVICE_ACCOUNTS = False
 
+    LOGGER.info("DBG load_configurations: TorrentManager.initiate begin")
     await TorrentManager.initiate()
+    LOGGER.info("DBG load_configurations: TorrentManager.initiate done")
 
     if Config.DISABLE_TORRENTS:
         LOGGER.info("Torrents are disabled. Skipping qBittorrent initialization.")
@@ -412,4 +417,6 @@ async def load_configurations():
 
     from ..helper.ext_utils.tunnel_monitor import apply_tunnel_url_once
 
+    LOGGER.info("DBG load_configurations: apply_tunnel_url_once")
     await apply_tunnel_url_once()
+    LOGGER.info("DBG load_configurations: done")

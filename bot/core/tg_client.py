@@ -249,7 +249,9 @@ class TgClient:
                     sleep_threshold=60,
                     no_updates=True,
                 )
+                LOGGER.info("DBG start_user: before user.start()")
                 await cls.user.start()
+                LOGGER.info("DBG start_user: after user.start()")
                 cls.IS_PREMIUM_USER = cls.user.me.is_premium
                 if cls.IS_PREMIUM_USER:
                     cls.MAX_SPLIT_SIZE = 4194304000
