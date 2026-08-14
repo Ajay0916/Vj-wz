@@ -544,6 +544,7 @@ _DIGIT_FLAGS = {
     "-y": "year",
     "-se": "season",
     "-ep": "episode",
+    "-to": "timeout",
 }
 _WORD_FLAGS = {
     "-x": "include",
@@ -699,6 +700,8 @@ def _api_extra_params(opts, method):
     """Query-string params for the search API from command-line args."""
     params = []
     if method == "apisearch":
+        if opts.get("timeout"):
+            params.append(f"timeout={opts['timeout']}")
         if opts.get("seeders"):
             params.append(f"min_seeders={opts['seeders']}")
         if opts.get("fresh"):
@@ -905,6 +908,7 @@ SEARCH_HELP_TEXT = (
     "• <code>-l &lt;n&gt;</code> → result limit\n"
     "• <code>-s &lt;n&gt;</code> → min seeders\n"
     "• <code>-p &lt;n&gt;</code> → pehle N pages merge: <code>-p 3</code> = page 1+2+3\n"
+    "• <code>-to &lt;sec&gt;</code> → speed: slow sites skip (<code>-to 10</code> = max 10s)\n"
     "• <code>-f</code> → fresh (cache skip)\n"
     "• <code>-du</code> → duplicate protection ON\n"
     "• <code>-x &lt;word&gt;</code> → sirf us word wale results\n"
