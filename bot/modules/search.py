@@ -158,9 +158,11 @@ async def search(
     size="all",
 ):
     if method.startswith("api"):
+        opts = _search_opts(message)
         limit = _search_limit(message)
         if method == "apisearch":
-            LOGGER.info(f"API Searching: {key} from {site} (limit={limit})")
+            extra = f" opts={opts}" if opts else ""
+            LOGGER.info(f"API Searching: {key} from {site} (limit={limit}){extra}")
             if site in GROUP_NAMES:
                 api = f"{Config.SEARCH_API_LINK}/api/v1/all/search?query={quote(key)}&limit={limit}"
                 group_sites = _group_sites_param(site)
@@ -200,6 +202,7 @@ async def search(
                     api += f"&sites={quote(group_sites)}"
             else:
                 api = f"{Config.SEARCH_API_LINK}/api/v1/recent?site={site}&limit={limit}"
+        api += _api_extra_params(opts, method)
         try:
             async with AsyncSession(timeout=60) as client:
                 response = await client.get(api)
@@ -403,49 +406,80 @@ FILTER_SIZES = ["all", "small", "medium", "large"]
 # short callbacks (Telegram callback_data is limited to 64 bytes).
 FILTER_STATE = {}
 
-# Per-command search limit set with /search -l <N> (keyed by (user_id, msg_id)
-# because callbacks only carry the original command message id).
-SEARCH_LIMITS = {}
+# Per-command search options set with /search -l <N> -s <S> -p <P> -f
+# (keyed by (user_id, msg_id) because callbacks only carry the original
+# command message id).
+SEARCH_OPTS = {}
 
 
 def _parse_search_cmd(text):
-    """Split '/search -l 15 data science' into ('data science', 15)."""
+    """Split '/search -l 15 -s 50 -p 2 -f data science' into
+    ('data science', {'limit': 15, 'seeders': 50, 'page': 2, 'fresh': True})."""
     parts = (text or "").split()
-    limit = None
+    opts = {}
     out = []
     i = 0
     while i < len(parts):
-        if parts[i] == "-l":
+        part = parts[i]
+        if part in ("-l", "-s", "-p"):
             if i + 1 < len(parts) and parts[i + 1].isdigit():
-                limit = int(parts[i + 1])
+                value = int(parts[i + 1])
+                if part == "-l":
+                    opts["limit"] = value
+                elif part == "-s":
+                    opts["seeders"] = value
+                else:
+                    opts["page"] = value
                 i += 2
                 continue
             i += 1
             continue
-        out.append(parts[i])
+        if part == "-f":
+            opts["fresh"] = True
+            i += 1
+            continue
+        out.append(part)
         i += 1
     key = " ".join(out[1:]).strip()
-    return key, limit
+    return key, opts
 
 
-def _search_limit(message):
-    """Limit set on the original /search command, else SEARCH_LIMIT.
+def _search_opts(message):
+    """Options set on the original /search command, else {}.
 
     Callbacks arrive on a message sent by the bot, so from_user is not the
     clicking user; the reply chain to the original /search command is the
     reliable lookup key."""
     src = message.reply_to_message or message
-    limit = SEARCH_LIMITS.get(src.id)
-    if limit is None:
+    opts = SEARCH_OPTS.get(src.id)
+    if not opts:
         try:
             uid = message.from_user.id
         except AttributeError:
             uid = None
         if uid is not None:
-            limit = SEARCH_LIMITS.get((uid, src.id))
-            if limit is None:
-                limit = SEARCH_LIMITS.get(uid)
-    return limit or Config.SEARCH_LIMIT
+            opts = SEARCH_OPTS.get((uid, src.id))
+            if not opts:
+                opts = SEARCH_OPTS.get(uid)
+    return opts or {}
+
+
+def _search_limit(message):
+    """Result limit: -l value if given, else SEARCH_LIMIT."""
+    return _search_opts(message).get("limit") or Config.SEARCH_LIMIT
+
+
+def _api_extra_params(opts, method):
+    """Query-string params for the search API from command-line args."""
+    params = []
+    if opts.get("page"):
+        params.append(f"page={opts['page']}")
+    if method == "apisearch":
+        if opts.get("seeders"):
+            params.append(f"min_seeders={opts['seeders']}")
+        if opts.get("fresh"):
+            params.append("fresh=1")
+    return ("&" + "&".join(params)) if params else ""
 
 
 def _filter_label(value, kind):
@@ -720,14 +754,14 @@ async def torrent_search(_, message):
         return
     user_id = message.from_user.id
     buttons = ButtonMaker()
-    key, limit = _parse_search_cmd(message.text)
-    if limit:
-        SEARCH_LIMITS[(user_id, message.id)] = limit
-        SEARCH_LIMITS[user_id] = limit
-        SEARCH_LIMITS[message.id] = limit
+    key, opts = _parse_search_cmd(message.text)
+    if opts:
+        SEARCH_OPTS[(user_id, message.id)] = opts
+        SEARCH_OPTS[user_id] = opts
+        SEARCH_OPTS[message.id] = opts
     else:
-        SEARCH_LIMITS.pop(user_id, None)
-        SEARCH_LIMITS.pop(message.id, None)
+        SEARCH_OPTS.pop(user_id, None)
+        SEARCH_OPTS.pop(message.id, None)
     # Bare "/search" (or "/search -l 5" with no key) keeps the old
     # Trending/Recent menu; single-word keys stay normal search keys.
     key = key.split() if key else []
@@ -755,7 +789,7 @@ async def torrent_search(_, message):
         await send_message(
             message,
             "Send a search key along with command\n"
-            "Usage: /search <key> [-l <limit>]",
+            "Usage: /search <key> [-l <limit>] [-s <seeders>] [-p <page>] [-f]",
             button,
         )
     elif SITES is not None and Config.SEARCH_PLUGINS:
