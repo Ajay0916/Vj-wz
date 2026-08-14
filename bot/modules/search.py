@@ -397,7 +397,7 @@ async def get_result(search_results, key, message, method):
 
 
 API_PAGE_SIZE = 18
-SEARCH_CATEGORIES = ["all", "movies", "tv", "anime", "books", "courses", "apps", "games", "music"]
+SEARCH_CATEGORIES = ["all", "movies", "tv", "anime", "audiobook", "books", "courses", "apps", "games", "music"]
 
 FILTER_QUALITY = ["all", "480", "720", "1080", "4k"]
 FILTER_LANGUAGE = ["all", "hindi", "english", "tamil", "telugu", "dual"]
@@ -550,7 +550,7 @@ SEARCH_HELP_TEXT = (
     "&nbsp;&nbsp;&nbsp;&nbsp;Multiple: <code>1337x,tgx,yts</code>\n"
     "• <code>-q &lt;quality&gt;</code> → <code>480</code>, <code>720</code>, <code>1080</code>, <code>4k</code>\n"
     "• <code>-lng &lt;lang&gt;</code> → <code>hindi</code>, <code>english</code>, <code>tamil</code>, <code>telugu</code>, <code>dual</code>\n"
-    "• <code>-c &lt;cat&gt;</code> → <code>movies</code>, <code>tv</code>, <code>music</code>, <code>anime</code>, <code>course</code>, <code>book</code>, <code>game</code>, <code>app</code>\n"
+    "• <code>-c &lt;cat&gt;</code> → <code>movies</code>, <code>tv</code>, <code>music</code>, <code>anime</code>, <code>audiobook</code>, <code>course</code>, <code>book</code>, <code>game</code>, <code>app</code>\n"
     "• <code>-z &lt;size&gt;</code> → <code>&lt;1GB</code>, <code>&gt;3GB</code>, <code>1GB-3GB</code>\n"
     "• <code>-S &lt;sort&gt;</code> → <code>seeders</code>, <code>size</code>, <code>date</code>\n"
     "• <code>-o &lt;order&gt;</code> → <code>asc</code>, <code>desc</code>\n\n"
