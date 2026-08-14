@@ -175,8 +175,30 @@ async def search(
                     group_sites = ",".join(
                         s for s in SITES if s != "all"
                     )
+                hide = opts.get("hide_sites")
+                if hide:
+                    hidden = {
+                        s.strip().lower()
+                        for s in str(hide).split(",")
+                        if s.strip()
+                    }
+                    if not group_sites and SITES:
+                        # All-button / default combo: honour -hs by searching
+                        # every enabled site except the hidden ones.
+                        group_sites = ",".join(s for s in SITES if s != "all")
+                    group_sites = ",".join(
+                        s
+                        for s in group_sites.split(",")
+                        if s.strip().lower() not in hidden
+                    )
                 if group_sites:
                     api += f"&sites={quote(group_sites)}"
+                elif hide:
+                    await edit_message(
+                        message,
+                        "Saari sites hide ho gayi hain — <code>-hs</code> list check karo.",
+                    )
+                    return
             else:
                 api = f"{Config.SEARCH_API_LINK}/api/v1/search?site={quote(site)}&query={quote(key)}&limit={limit}"
             if category and category != "all":
@@ -443,16 +465,19 @@ _DIGIT_FLAGS = {
 _WORD_FLAGS = {
     "-x": "include",
     "-g": "site",
+    "-hs": "hide_sites",
     "-q": "quality",
     "-lng": "language",
     "-c": "category",
     "-t": "category",
     "-z": "size",
+    "-mn": "min_size",
     "-S": "sort",
     "-o": "order",
     "-y": "year",
     "-e": "exclude",
     "-mx": "max_size",
+    "-k": "keywords",
 }
 _FLAG_ONLY = {"-f": "fresh", "-du": "dedup", "-v": "verbose", "--help": "help"}
 
@@ -551,10 +576,12 @@ def _api_extra_params(opts, method):
             params.append("dedup=1")
         if opts.get("include"):
             params.append(f"include={quote(opts['include'])}")
-        if opts.get("quality"):
-            params.append(f"quality={quote(opts['quality'])}")
-        if opts.get("language"):
-            params.append(f"language={quote(opts['language'])}")
+        quality = opts.get("quality")
+        if quality and "," not in str(quality):
+            params.append(f"quality={quote(quality)}")
+        language = opts.get("language")
+        if language and "," not in str(language):
+            params.append(f"language={quote(language)}")
         if opts.get("category"):
             params.append(f"category={quote(opts['category'])}")
         if opts.get("sort"):
@@ -571,10 +598,30 @@ def _api_extra_params(opts, method):
             params.append(
                 "max_size={}".format(quote(str(opts["max_size"]).replace(" ", "").lower()))
             )
+        if opts.get("min_size"):
+            params.append(
+                "min_size={}".format(quote(str(opts["min_size"]).replace(" ", "").lower()))
+            )
     return ("&" + "&".join(params)) if params else ""
 
 
 _YEAR_RE = re.compile(r"\b(19|20)\d{2}\b")
+_RES_RE = re.compile(r"\b(\d{3,4})p\b", re.I)
+_LANG_PATTERNS = {
+    "hindi": re.compile(r"(?<![a-z0-9])(?:hindi|hin)", re.I),
+    "english": re.compile(r"(?<![a-z0-9])(?:english|eng)", re.I),
+    "tamil": re.compile(r"(?<![a-z0-9])(?:tamil|tam)", re.I),
+    "telugu": re.compile(r"(?<![a-z0-9])(?:telugu|tel)", re.I),
+    "malayalam": re.compile(r"(?<![a-z0-9])(?:malayalam|mal)", re.I),
+    "kannada": re.compile(r"(?<![a-z0-9])(?:kannada|kan)", re.I),
+    "bengali": re.compile(r"(?<![a-z0-9])bengali", re.I),
+    "punjabi": re.compile(r"(?<![a-z0-9])punjabi", re.I),
+    "marathi": re.compile(r"(?<![a-z0-9])marathi", re.I),
+    "gujarati": re.compile(r"(?<![a-z0-9])gujarati", re.I),
+    "dubbed": re.compile(r"(?<![a-z0-9])(?:dubbed|dub)", re.I),
+    "dual": re.compile(r"(?<![a-z0-9])dual", re.I),
+    "multi": re.compile(r"(?<![a-z0-9])multi", re.I),
+}
 
 
 def _year_bounds(value):
@@ -612,13 +659,68 @@ def _parse_date(value):
         return None
 
 
+def _quality_matches(item, quality):
+    """Match a result by resolution (480/720/1080/4k) - mirrors t-api."""
+    q = str(quality or "").lower().strip().replace("p", "")
+    if not q:
+        return True
+    name = str(item.get("name") or "")
+    res = set(int(m.group(1)) for m in _RES_RE.finditer(name))
+    if re.search(r"\b(4k|uhd|2160p)\b", name, re.I):
+        res.add(2160)
+    if not res:
+        return False
+    if q in ("4k", "2160"):
+        return max(res) >= 2160
+    try:
+        return int(q) in res
+    except ValueError:
+        return False
+
+
+def _language_matches(item, language):
+    """Match a result by language - mirrors t-api (_LANG_PATTERNS)."""
+    lang = str(language or "").lower().strip()
+    if not lang:
+        return True
+    text = (
+        str(item.get("name") or "") + " " + str(item.get("category") or "")
+        + " " + str(item.get("language") or "") + " "
+        + str(item.get("languages") or "")
+    ).lower()
+    pattern = _LANG_PATTERNS.get(lang)
+    if pattern is not None:
+        return pattern.search(text) is not None
+    return re.search(r"(?<![a-z0-9])" + re.escape(lang), text) is not None
+
+
 def _apply_client_filters(results, opts):
-    """Client-side filters for args t-api has no query param for (-y, -e, -n).
+    """Client-side filters for args t-api has no query param for (-y, -e, -n,
+    -k) plus multi-value -q/-lng (t-api takes a single value per param).
 
     Applied after the API returns so the site adapters stay untouched.
     Results without a parseable year/date are kept (filter only drops what
     it can positively reject)."""
     out = results
+    quality = opts.get("quality")
+    if quality and "," in str(quality):
+        quals = [x.strip().lower() for x in str(quality).split(",") if x.strip()]
+        if quals:
+            out = [r for r in out if any(_quality_matches(r, q) for q in quals)]
+    language = opts.get("language")
+    if language and "," in str(language):
+        langs = [x.strip().lower() for x in str(language).split(",") if x.strip()]
+        if langs:
+            out = [r for r in out if any(_language_matches(r, l) for l in langs)]
+    keywords = opts.get("keywords")
+    if keywords:
+        words = [w.strip().lower() for w in str(keywords).split(",") if w.strip()]
+        if words:
+            out = [
+                r
+                for r in out
+                if all(w in str(r.get("name") or "").lower() for w in words)
+            ]
     bounds = _year_bounds(opts.get("year"))
     if bounds:
         lo, hi = bounds
@@ -676,16 +778,21 @@ SEARCH_HELP_TEXT = (
     "• <code>-f</code> → fresh (cache skip)\n"
     "• <code>-du</code> → duplicate protection ON\n"
     "• <code>-x &lt;word&gt;</code> → sirf us word wale results\n"
+    "• <code>-k &lt;words&gt;</code> → title me SAB words match (strict): <code>complete,course</code>\n"
     "• <code>-e &lt;words&gt;</code> → exclude words: <code>hindi,audible</code>\n"
     "• <code>-g &lt;site&gt;</code> → direct search, buttons skip\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Groups: <code>all</code> (17 sites), <code>books</code>, <code>courses</code>\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Multiple: <code>1337x,tgx,yts</code>\n"
+    "&nbsp;&nbsp;&nbsp;&nbsp;Hide sites: <code>-hs 1337x,tgx</code> (ulta <code>-g</code>)\n"
     "• <code>-a</code> → SAB sites ek sath (29: general + books + courses)\n"
     "• <code>-q &lt;quality&gt;</code> → <code>480</code>, <code>720</code>, <code>1080</code>, <code>4k</code>\n"
+    "&nbsp;&nbsp;&nbsp;&nbsp;Multi: <code>-q 1080p,4k</code>\n"
     "• <code>-lng &lt;lang&gt;</code> → <code>hindi</code>, <code>english</code>, <code>tamil</code>, <code>telugu</code>, <code>dual</code>\n"
+    "&nbsp;&nbsp;&nbsp;&nbsp;Multi: <code>-lng hindi,english</code>\n"
     "• <code>-c &lt;cat&gt;</code> → <code>movies</code>, <code>tv</code>, <code>music</code>, <code>anime</code>, <code>audiobook</code>, <code>course</code>, <code>book</code>, <code>game</code>, <code>app</code>\n"
     "• <code>-z &lt;size&gt;</code> → <code>&lt;1GB</code>, <code>&gt;3GB</code>, <code>1GB-3GB</code>\n"
     "• <code>-mx &lt;size&gt;</code> → max size cap: <code>2GB</code>\n"
+    "• <code>-mn &lt;size&gt;</code> → min size: <code>2GB</code>\n"
     "• <code>-S &lt;sort&gt;</code> → <code>seeders</code>, <code>size</code>, <code>date</code>\n"
     "• <code>-o &lt;order&gt;</code> → <code>asc</code>, <code>desc</code>\n"
     "• <code>-y &lt;year&gt;</code> → saal filter: <code>2023</code> ya <code>1977-2005</code>\n"
@@ -697,7 +804,9 @@ SEARCH_HELP_TEXT = (
     "<code>/s ikigai -g books -lng hindi -x pdf</code>\n"
     "<code>/s python -c course -z 1GB-3GB</code>\n"
     "<code>/s oppenheimer -y 2023 -mx 4GB -v</code>\n"
-    "<code>/s star wars -y 1977-2005 -e hindi -sd 5</code>"
+    "<code>/s star wars -y 1977-2005 -e hindi -sd 5</code>\n"
+    "<code>/s oppenheimer -hs 1337x,tgx -q 1080p,4k -mn 2GB</code>\n"
+    "<code>/s python -k complete,course -lng hindi,english</code>"
 )
 
 
