@@ -1,6 +1,4 @@
 import re
-import time
-from datetime import datetime
 from niquests import AsyncSession
 from html import escape
 from urllib.parse import quote
@@ -330,8 +328,6 @@ async def search(
     buttons = ButtonMaker()
     buttons.url_button("🔎 VIEW", link, style=ButtonStyle.PRIMARY)
     button = buttons.build_menu(1)
-    if method.startswith("api") and opts.get("verbose") and search_results:
-        msg = _verbose_preview(search_results, msg)
     await edit_message(message, msg, button)
     if method.startswith("api") and search_results and opts.get("auto_leech"):
         links = _leech_links(search_results)
@@ -534,9 +530,7 @@ SEARCH_OPTS = {}
 _DIGIT_FLAGS = {
     "-l": "limit",
     "-s": "seeders",
-    "-sd": "seeders",
     "-p": "page",
-    "-n": "days",
     "-y": "year",
 }
 _WORD_FLAGS = {
@@ -546,9 +540,7 @@ _WORD_FLAGS = {
     "-q": "quality",
     "-lng": "language",
     "-c": "category",
-    "-t": "category",
     "-z": "size",
-    "-mn": "min_size",
     "-S": "sort",
     "-o": "order",
     "-y": "year",
@@ -559,7 +551,6 @@ _WORD_FLAGS = {
 _FLAG_ONLY = {
     "-f": "fresh",
     "-du": "dedup",
-    "-v": "verbose",
     "-auto": "auto_leech",
     "--help": "help",
 }
@@ -679,10 +670,6 @@ def _api_extra_params(opts, method):
             params.append(
                 "max_size={}".format(quote(str(opts["max_size"]).replace(" ", "").lower()))
             )
-        if opts.get("min_size"):
-            params.append(
-                "min_size={}".format(quote(str(opts["min_size"]).replace(" ", "").lower()))
-            )
     return ("&" + "&".join(params)) if params else ""
 
 
@@ -727,17 +714,6 @@ def _result_year(item):
         "{} {}".format(str(item.get("name") or ""), str(item.get("date") or ""))
     )
     return int(m.group(0)) if m else None
-
-
-def _parse_date(value):
-    """Parse an ISO-ish date (YYYY-MM-DD) into a unix timestamp."""
-    m = re.search(r"\d{4}-\d{1,2}-\d{1,2}", str(value or ""))
-    if not m:
-        return None
-    try:
-        return datetime.strptime(m.group(0), "%Y-%m-%d").timestamp()
-    except ValueError:
-        return None
 
 
 def _quality_matches(item, quality):
@@ -815,38 +791,7 @@ def _apply_client_filters(results, opts):
                 for r in out
                 if not any(w in str(r.get("name") or "").lower() for w in words)
             ]
-    days = opts.get("days")
-    if days:
-        try:
-            cutoff = time.time() - int(days) * 86400
-        except (TypeError, ValueError):
-            cutoff = None
-        if cutoff is not None:
-            kept = []
-            for r in out:
-                ts = _parse_date(r.get("date"))
-                if ts is None or ts >= cutoff:
-                    kept.append(r)
-            out = kept
     return out
-
-
-def _verbose_preview(results, msg):
-    """Inline preview (name + size + seeders + site) for the -v flag."""
-    lines = [msg, ""]
-    for r in results[:5]:
-        name = escape(str(r.get("name") or ""))[:70]
-        extra = []
-        size = r.get("size")
-        if size:
-            extra.append("📦 {}".format(escape(str(size))))
-        if r.get("seeders") is not None:
-            extra.append("👤 {}".format(r.get("seeders")))
-        if r.get("site"):
-            extra.append("🌐 {}".format(escape(str(r["site"]))))
-        suffix = (" | " + " | ".join(extra)) if extra else ""
-        lines.append("• <code>{}</code>{}".format(name, suffix))
-    return "<br>".join(lines)
 
 
 SEARCH_HELP_TEXT = (
@@ -854,7 +799,6 @@ SEARCH_HELP_TEXT = (
     "Format: <code>/s &lt;key&gt; [args]</code> — args hamesha <b>key ke baad</b>\n\n"
     "• <code>-l &lt;n&gt;</code> → result limit\n"
     "• <code>-s &lt;n&gt;</code> → min seeders\n"
-    "&nbsp;&nbsp;&nbsp;&nbsp;Short: <code>-sd &lt;n&gt;</code>\n"
     "• <code>-p &lt;n&gt;</code> → pehle N pages merge: <code>-p 3</code> = page 1+2+3\n"
     "• <code>-f</code> → fresh (cache skip)\n"
     "• <code>-du</code> → duplicate protection ON\n"
@@ -873,21 +817,17 @@ SEARCH_HELP_TEXT = (
     "• <code>-c &lt;cat&gt;</code> → <code>movies</code>, <code>tv</code>, <code>music</code>, <code>anime</code>, <code>audiobook</code>, <code>course</code>, <code>book</code>, <code>game</code>, <code>app</code>\n"
     "• <code>-z &lt;size&gt;</code> → <code>&lt;1GB</code>, <code>&gt;3GB</code>, <code>1GB-3GB</code>\n"
     "• <code>-mx &lt;size&gt;</code> → max size cap: <code>2GB</code>\n"
-    "• <code>-mn &lt;size&gt;</code> → min size: <code>2GB</code>\n"
     "• <code>-S &lt;sort&gt;</code> → <code>seeders</code>, <code>size</code>, <code>date</code>\n"
     "• <code>-o &lt;order&gt;</code> → <code>asc</code>, <code>desc</code>\n"
     "• <code>-y &lt;year&gt;</code> → saal filter: <code>2023</code> ya <code>1977-2005</code>\n"
-    "• <code>-n &lt;days&gt;</code> → sirf last N din ke results\n"
-    "• <code>-t &lt;type&gt;</code> → category short (<code>-c</code> jaisa)\n"
-    "• <code>-v</code> → chat me hi preview (size + seeders + site)\n\n"
     "• <code>-auto</code> → best (top seeders) result DIRECT leech\n\n"
     "Examples:\n"
     "<code>/s oppenheimer -g 1337x,tgx -l 10 -f</code>\n"
     "<code>/s ikigai -g books -lng hindi -x pdf</code>\n"
     "<code>/s python -c course -z 1GB-3GB</code>\n"
-    "<code>/s oppenheimer -y 2023 -mx 4GB -v</code>\n"
-    "<code>/s star wars -y 1977-2005 -e hindi -sd 5</code>\n"
-    "<code>/s oppenheimer -hs 1337x,tgx -q 1080p,4k -mn 2GB</code>\n"
+    "<code>/s oppenheimer -y 2023 -mx 4GB</code>\n"
+    "<code>/s star wars -y 1977-2005 -e hindi -s 5</code>\n"
+    "<code>/s oppenheimer -hs 1337x,tgx -q 1080p,4k</code>\n"
     "<code>/s python -k complete,course -lng hindi,english</code>\n"
     "<code>/s oppenheimer -auto</code>"
 )
