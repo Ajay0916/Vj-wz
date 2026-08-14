@@ -13,7 +13,13 @@ else
     SAB_CMD="cpulimit -l $CPU_LIMIT -- $SABNZBDPLUS"
 fi
 
-tracker_list=$(curl -Ns https://cdn.jsdelivr.net/gh/ngosang/trackerslist@master/trackers_all.txt | awk '$0' | tr '\n\n' ',')
+# Tracker list is optional - never let a slow/unreachable CDN block startup.
+tracker_list=$(curl -Ns --connect-timeout 10 --max-time 15 https://cdn.jsdelivr.net/gh/ngosang/trackerslist@master/trackers_all.txt 2>/dev/null | awk '$0' | tr '\n\n' ',' || true)
+if [ -n "$tracker_list" ]; then
+    TRACKER_ARG="--bt-tracker=[$tracker_list]"
+else
+    TRACKER_ARG=""
+fi
 $ARIA2_CMD \
     --daemon=true \
     --rpc-listen-all=true \
@@ -58,7 +64,7 @@ $ARIA2_CMD \
     --summary-interval=0 \
     --save-session= \
     --save-session-interval=0 \
-    --bt-tracker="[$tracker_list]"
+    $TRACKER_ARG
 
 if [ -n "$SABNZBDPLUS" ]; then
     $SAB_CMD -f configs/sabnzbd/SABnzbd.ini -s :::8070 -b 0 -d -c -l 0 --console
