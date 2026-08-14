@@ -234,25 +234,30 @@ async def search(
         api += _api_extra_params(opts, method)
         try:
             pages = max(1, min(int(opts.get("page") or 1), 5))
+            queries = [q.strip() for q in str(key).split(",") if q.strip()][:3]
+            multi_query = method == "apisearch" and len(queries) > 1
             async with AsyncSession(timeout=60) as client:
-                if method == "apisearch" and pages > 1:
-                    # -p N => fetch pages 1..N and merge (dedup by hash/name).
+                if method == "apisearch" and (pages > 1 or multi_query):
+                    # -p N => fetch pages 1..N; comma key => each query.
+                    # Merged with dedup by hash/name.
                     merged, seen = [], set()
                     search_results = {}
-                    for pg in range(1, pages + 1):
-                        resp = await client.get(f"{api}&page={pg}")
-                        data = resp.json()
-                        if not isinstance(data, dict):
-                            continue
-                        search_results = data
-                        if data.get("error") or data.get("detail"):
-                            continue
-                        for it in (data.get("data") or []):
-                            k = it.get("hash") or it.get("name")
-                            if not k or k in seen:
+                    for q in queries:
+                        qapi = api.replace(quote(key), quote(q)) if multi_query else api
+                        for pg in range(1, (1 if multi_query else pages) + 1):
+                            resp = await client.get(f"{qapi}&page={pg}")
+                            data = resp.json()
+                            if not isinstance(data, dict):
                                 continue
-                            seen.add(k)
-                            merged.append(it)
+                            search_results = data
+                            if data.get("error") or data.get("detail"):
+                                continue
+                            for it in (data.get("data") or []):
+                                k = it.get("hash") or it.get("name")
+                                if not k or k in seen:
+                                    continue
+                                seen.add(k)
+                                merged.append(it)
                     search_results = dict(search_results)
                     search_results["data"] = merged
                     search_results["total"] = len(merged)
@@ -337,7 +342,7 @@ async def search(
                 "Kisi result me leech karne layak link (magnet/torrent) nahi mila.",
             )
             return
-        await _start_leech(message, links)
+        await _start_leech(message, links, opts)
 
 
 def _leech_links(results):
@@ -354,7 +359,7 @@ def _leech_links(results):
     return []
 
 
-async def _start_leech(message, links):
+async def _start_leech(message, links, opts=None):
     """Kick off leech for the -auto result.
 
     Reuses the bot's own leech command path (Mirror) so qbittorrent/aria2
@@ -366,7 +371,8 @@ async def _start_leech(message, links):
         await edit_message(message, "Leech command is disabled.")
         return
     cmd = "/{}".format(BotCommands.LeechCommand[0])
-    txt = "{} {}".format(cmd, links[0])
+    args = (opts or {}).get("leech_args") or []
+    txt = "{} {} {}".format(cmd, links[0], " ".join(args)).strip()
     nextmsg = await send_message(message, txt)
     if not nextmsg or not getattr(nextmsg, "id", None):
         return
@@ -532,6 +538,8 @@ _DIGIT_FLAGS = {
     "-s": "seeders",
     "-p": "page",
     "-y": "year",
+    "-se": "season",
+    "-ep": "episode",
 }
 _WORD_FLAGS = {
     "-x": "include",
@@ -553,6 +561,29 @@ _FLAG_ONLY = {
     "-du": "dedup",
     "-auto": "auto_leech",
     "--help": "help",
+}
+
+_PRESETS = {
+    "-hd": {"language": "hindi", "quality": "1080"},
+    "-4k": {"quality": "4k"},
+    "-480": {"quality": "480"},
+    "-720": {"quality": "720"},
+    "-1080": {"quality": "1080"},
+    "-bd": {"source": "bluray"},
+    "-wr": {"source": "webrip,web-dl,webdl"},
+}
+
+# Mirror/leech args forwarded to the leech task when combined with -auto
+# (e.g. /s oppenheimer -auto -sp 2GB -n Oppy). Search flags win on conflict.
+_LEECH_FLAGS = {
+    "-doc", "-med", "-d", "-j", "-b", "-sv", "-ss", "-fd", "-fu",
+    "-hl", "-bt", "-ut", "-yt", "-i", "-sp", "-n", "-m", "-meta",
+    "-up", "-gc", "-rcf", "-au", "-ap", "-h", "-t", "-ca", "-cv",
+    "-ns", "-tl", "-ff",
+}
+_LEECH_FLAGS_WITH_VALUE = {
+    "-i", "-sp", "-n", "-m", "-meta", "-up", "-gc", "-rcf",
+    "-au", "-ap", "-h", "-t", "-ca", "-cv", "-ns", "-tl",
 }
 
 
@@ -583,6 +614,30 @@ def _parse_search_cmd(text):
         if part == "-a":
             opts["site"] = "all"
             opts["all_sites"] = True
+            i -= 1
+            continue
+        if part in _PRESETS:
+            opts.update(_PRESETS[part])
+            i -= 1
+            continue
+        if part in _LEECH_FLAGS:
+            opts.setdefault("leech_args", [])
+            value = (
+                parts[i + 1]
+                if i + 1 < len(parts) and not parts[i + 1].startswith("-")
+                else None
+            )
+            if value is not None and part in _LEECH_FLAGS_WITH_VALUE:
+                opts["leech_args"].insert(0, value)
+            opts["leech_args"].insert(0, part)
+            i -= 1
+            continue
+        if (
+            i - 1 > 0
+            and parts[i - 1] in _LEECH_FLAGS_WITH_VALUE
+        ):
+            # Current token is the value of a leech flag - skip it, the flag
+            # itself is handled on the next iteration.
             i -= 1
             continue
         break
@@ -717,6 +772,26 @@ def _result_year(item):
     return int(m.group(0)) if m else None
 
 
+def _season_episode_matches(item, season, episode):
+    """Match a series result by season/episode (S05E03, S5E3, Season 5...)."""
+    name = str(item.get("name") or "").lower()
+    if season is not None:
+        s = int(season)
+        if episode is not None:
+            e = int(episode)
+            pat = re.compile(r"s0?{0}e0?{1}(?![a-z0-9])".format(s, e))
+        else:
+            pat = re.compile(
+                r"(?:s0?{0}(?![a-z0-9])|season\s*0?{0}(?!\d))".format(s)
+            )
+    else:
+        e = int(episode)
+        pat = re.compile(
+            r"(?:e0?{0}(?![a-z0-9])|episode\s*0?{0}(?!\d))".format(e)
+        )
+    return pat.search(name) is not None
+
+
 def _quality_matches(item, quality):
     """Match a result by resolution (480/720/1080/4k) - mirrors t-api."""
     q = str(quality or "").lower().strip().replace("p", "")
@@ -792,6 +867,22 @@ def _apply_client_filters(results, opts):
     if bounds:
         lo, hi = bounds
         out = [r for r in out if lo <= (_result_year(r) or -1) <= hi]
+    season = opts.get("season")
+    episode = opts.get("episode")
+    if season is not None or episode is not None:
+        out = [
+            r for r in out
+            if _season_episode_matches(r, season, episode)
+        ]
+    source = opts.get("source")
+    if source:
+        words = [w.strip().lower() for w in str(source).split(",") if w.strip()]
+        if words:
+            out = [
+                r
+                for r in out
+                if any(w in str(r.get("name") or "").lower() for w in words)
+            ]
     exclude = opts.get("exclude")
     if exclude:
         words = [w.strip().lower() for w in str(exclude).split(",") if w.strip()]
@@ -829,9 +920,17 @@ SEARCH_HELP_TEXT = (
     "• <code>-z &lt;size&gt;</code> → <code>&lt;1GB</code>, <code>&gt;3GB</code>, <code>1GB-3GB</code>\n"
     "• <code>-mx &lt;size&gt;</code> → max size cap: <code>2GB</code>\n"
     "• <code>-S &lt;sort&gt;</code> → <code>seeders</code>, <code>size</code>, <code>date</code>\n"
+    "&nbsp;&nbsp;&nbsp;&nbsp;<code>quality</code> bhi: <code>-S quality</code>\n"
     "• <code>-o &lt;order&gt;</code> → <code>asc</code>, <code>desc</code>\n"
     "• <code>-y &lt;year&gt;</code> → saal filter: <code>2023</code> ya <code>1977-2005</code>\n"
-    "• <code>-auto</code> → best (top seeders) result DIRECT leech\n\n"
+    "• <code>-se &lt;n&gt;</code> → season filter: <code>-se 5</code> (S05)\n"
+    "• <code>-ep &lt;n&gt;</code> → episode filter: <code>-ep 3</code> (S01E03 ke sath best)\n"
+    "• <code>-auto</code> → best (top seeders) result DIRECT leech\n"
+    "&nbsp;&nbsp;&nbsp;&nbsp;Leech args passthrough: <code>-sp 2GB -n Name -d</code>\n\n"
+    "Presets (Hindi movies):\n"
+    "• <code>-hd</code> → hindi + 1080p | <code>-4k</code> → 4K\n"
+    "• <code>-480</code>/<code>-720</code>/<code>-1080</code> → resolution\n"
+    "• <code>-bd</code> → bluray | <code>-wr</code> → webrip\n\n"
     "Examples:\n"
     "<code>/s oppenheimer -g 1337x,tgx -l 10 -f</code>\n"
     "<code>/s ikigai -g books -lng hindi -x pdf</code>\n"
@@ -840,7 +939,10 @@ SEARCH_HELP_TEXT = (
     "<code>/s star wars -y 1977-2005 -e hindi -s 5</code>\n"
     "<code>/s oppenheimer -hs 1337x,tgx -q 1080p,4k</code>\n"
     "<code>/s python -k complete,course -lng hindi,english</code>\n"
-    "<code>/s oppenheimer -auto</code>"
+    "<code>/s oppenheimer -hd -bd</code>\n"
+    "<code>/s breaking bad -se 5 -hd</code>\n"
+    "<code>/s oppenheimer,interstellar -4k</code>\n"
+    "<code>/s oppenheimer -auto -sp 2GB -n Oppy</code>"
 )
 
 
