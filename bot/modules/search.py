@@ -1,4 +1,6 @@
 import re
+import time
+from datetime import datetime
 from niquests import AsyncSession
 from html import escape
 from urllib.parse import quote
@@ -157,6 +159,7 @@ async def search(
     key, site, message, method, category="all", quality="", language="", format_="",
     size="all",
 ):
+    opts = {}
     if method.startswith("api"):
         opts = _search_opts(message)
         limit = _search_limit(message)
@@ -227,7 +230,17 @@ async def search(
                     f"No result found for <i>{key or 'results'}</i>\nTorrent Site:- <i>{_site_display_name(site)}</i>",
                 )
                 return
-            msg = f"<b>Found {min(search_results['total'], TELEGRAPH_LIMIT)}</b>"
+            relaxed_filters = search_results.get("relaxed_filters")
+            search_results = search_results["data"]
+            if method == "apisearch":
+                search_results = _apply_client_filters(search_results, opts)
+            if not search_results:
+                await edit_message(
+                    message,
+                    f"No result found for <i>{key or 'results'}</i> with the applied filters\nTorrent Site:- <i>{_site_display_name(site)}</i>",
+                )
+                return
+            msg = f"<b>Found {min(len(search_results), TELEGRAPH_LIMIT)}</b>"
             if method == "apitrend":
                 msg += f" <b>trending result(s)\nTorrent Site:- <i>{_site_display_name(site)}</i></b>"
             elif method == "apirecent":
@@ -236,9 +249,8 @@ async def search(
                 )
             else:
                 msg += f" <b>result(s) for <i>{key}</i>\nTorrent Site:- <i>{_site_display_name(site)}</i></b>"
-            if search_results.get("relaxed_filters"):
+            if relaxed_filters:
                 msg += " <i>(filters relaxed)</i>"
-            search_results = search_results["data"]
         except Exception as e:
             await edit_message(message, str(e))
             return
@@ -271,6 +283,8 @@ async def search(
     buttons = ButtonMaker()
     buttons.url_button("🔎 VIEW", link, style=ButtonStyle.PRIMARY)
     button = buttons.build_menu(1)
+    if method.startswith("api") and opts.get("verbose") and search_results:
+        msg = _verbose_preview(search_results, msg)
     await edit_message(message, msg, button)
 
 
@@ -418,18 +432,29 @@ FILTER_STATE = {}
 SEARCH_OPTS = {}
 
 
-_DIGIT_FLAGS = {"-l": "limit", "-s": "seeders", "-p": "page"}
+_DIGIT_FLAGS = {
+    "-l": "limit",
+    "-s": "seeders",
+    "-sd": "seeders",
+    "-p": "page",
+    "-n": "days",
+    "-y": "year",
+}
 _WORD_FLAGS = {
     "-x": "include",
     "-g": "site",
     "-q": "quality",
     "-lng": "language",
     "-c": "category",
+    "-t": "category",
     "-z": "size",
     "-S": "sort",
     "-o": "order",
+    "-y": "year",
+    "-e": "exclude",
+    "-mx": "max_size",
 }
-_FLAG_ONLY = {"-f": "fresh", "-du": "dedup", "--help": "help"}
+_FLAG_ONLY = {"-f": "fresh", "-du": "dedup", "-v": "verbose", "--help": "help"}
 
 
 def _parse_search_cmd(text):
@@ -542,7 +567,103 @@ def _api_extra_params(opts, method):
                 params.append(f"min_size={quote(min_size)}")
             if max_size:
                 params.append(f"max_size={quote(max_size)}")
+        if opts.get("max_size"):
+            params.append(
+                "max_size={}".format(quote(str(opts["max_size"]).replace(" ", "").lower()))
+            )
     return ("&" + "&".join(params)) if params else ""
+
+
+_YEAR_RE = re.compile(r"\b(19|20)\d{2}\b")
+
+
+def _year_bounds(value):
+    """Turn '-y 2023' / '-y 1977-2005' into (lo, hi) or None."""
+    value = str(value or "").strip()
+    if not value:
+        return None
+    if "-" in value:
+        lo, _, hi = value.partition("-")
+        if lo.isdigit() and hi.isdigit():
+            return int(lo), int(hi)
+        return None
+    if value.isdigit():
+        y = int(value)
+        return y, y
+    return None
+
+
+def _result_year(item):
+    """First 19xx/20xx year found in the result name or date."""
+    m = _YEAR_RE.search(
+        "{} {}".format(str(item.get("name") or ""), str(item.get("date") or ""))
+    )
+    return int(m.group(0)) if m else None
+
+
+def _parse_date(value):
+    """Parse an ISO-ish date (YYYY-MM-DD) into a unix timestamp."""
+    m = re.search(r"\d{4}-\d{1,2}-\d{1,2}", str(value or ""))
+    if not m:
+        return None
+    try:
+        return datetime.strptime(m.group(0), "%Y-%m-%d").timestamp()
+    except ValueError:
+        return None
+
+
+def _apply_client_filters(results, opts):
+    """Client-side filters for args t-api has no query param for (-y, -e, -n).
+
+    Applied after the API returns so the site adapters stay untouched.
+    Results without a parseable year/date are kept (filter only drops what
+    it can positively reject)."""
+    out = results
+    bounds = _year_bounds(opts.get("year"))
+    if bounds:
+        lo, hi = bounds
+        out = [r for r in out if lo <= (_result_year(r) or -1) <= hi]
+    exclude = opts.get("exclude")
+    if exclude:
+        words = [w.strip().lower() for w in str(exclude).split(",") if w.strip()]
+        if words:
+            out = [
+                r
+                for r in out
+                if not any(w in str(r.get("name") or "").lower() for w in words)
+            ]
+    days = opts.get("days")
+    if days:
+        try:
+            cutoff = time.time() - int(days) * 86400
+        except (TypeError, ValueError):
+            cutoff = None
+        if cutoff is not None:
+            kept = []
+            for r in out:
+                ts = _parse_date(r.get("date"))
+                if ts is None or ts >= cutoff:
+                    kept.append(r)
+            out = kept
+    return out
+
+
+def _verbose_preview(results, msg):
+    """Inline preview (name + size + seeders + site) for the -v flag."""
+    lines = [msg, ""]
+    for r in results[:5]:
+        name = escape(str(r.get("name") or ""))[:70]
+        extra = []
+        size = r.get("size")
+        if size:
+            extra.append("📦 {}".format(escape(str(size))))
+        if r.get("seeders") is not None:
+            extra.append("👤 {}".format(r.get("seeders")))
+        if r.get("site"):
+            extra.append("🌐 {}".format(escape(str(r["site"]))))
+        suffix = (" | " + " | ".join(extra)) if extra else ""
+        lines.append("• <code>{}</code>{}".format(name, suffix))
+    return "<br>".join(lines)
 
 
 SEARCH_HELP_TEXT = (
@@ -550,10 +671,12 @@ SEARCH_HELP_TEXT = (
     "Format: <code>/s &lt;key&gt; [args]</code> — args hamesha <b>key ke baad</b>\n\n"
     "• <code>-l &lt;n&gt;</code> → result limit\n"
     "• <code>-s &lt;n&gt;</code> → min seeders\n"
+    "&nbsp;&nbsp;&nbsp;&nbsp;Short: <code>-sd &lt;n&gt;</code>\n"
     "• <code>-p &lt;n&gt;</code> → page number\n"
     "• <code>-f</code> → fresh (cache skip)\n"
     "• <code>-du</code> → duplicate protection ON\n"
     "• <code>-x &lt;word&gt;</code> → sirf us word wale results\n"
+    "• <code>-e &lt;words&gt;</code> → exclude words: <code>hindi,audible</code>\n"
     "• <code>-g &lt;site&gt;</code> → direct search, buttons skip\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Groups: <code>all</code> (17 sites), <code>books</code>, <code>courses</code>\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Multiple: <code>1337x,tgx,yts</code>\n"
@@ -562,12 +685,19 @@ SEARCH_HELP_TEXT = (
     "• <code>-lng &lt;lang&gt;</code> → <code>hindi</code>, <code>english</code>, <code>tamil</code>, <code>telugu</code>, <code>dual</code>\n"
     "• <code>-c &lt;cat&gt;</code> → <code>movies</code>, <code>tv</code>, <code>music</code>, <code>anime</code>, <code>audiobook</code>, <code>course</code>, <code>book</code>, <code>game</code>, <code>app</code>\n"
     "• <code>-z &lt;size&gt;</code> → <code>&lt;1GB</code>, <code>&gt;3GB</code>, <code>1GB-3GB</code>\n"
+    "• <code>-mx &lt;size&gt;</code> → max size cap: <code>2GB</code>\n"
     "• <code>-S &lt;sort&gt;</code> → <code>seeders</code>, <code>size</code>, <code>date</code>\n"
-    "• <code>-o &lt;order&gt;</code> → <code>asc</code>, <code>desc</code>\n\n"
+    "• <code>-o &lt;order&gt;</code> → <code>asc</code>, <code>desc</code>\n"
+    "• <code>-y &lt;year&gt;</code> → saal filter: <code>2023</code> ya <code>1977-2005</code>\n"
+    "• <code>-n &lt;days&gt;</code> → sirf last N din ke results\n"
+    "• <code>-t &lt;type&gt;</code> → category short (<code>-c</code> jaisa)\n"
+    "• <code>-v</code> → chat me hi preview (size + seeders + site)\n\n"
     "Examples:\n"
     "<code>/s oppenheimer -g 1337x,tgx -l 10 -f</code>\n"
     "<code>/s ikigai -g books -lng hindi -x pdf</code>\n"
-    "<code>/s python -c course -z 1GB-3GB</code>"
+    "<code>/s python -c course -z 1GB-3GB</code>\n"
+    "<code>/s oppenheimer -y 2023 -mx 4GB -v</code>\n"
+    "<code>/s star wars -y 1977-2005 -e hindi -sd 5</code>"
 )
 
 
