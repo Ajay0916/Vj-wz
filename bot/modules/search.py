@@ -158,15 +158,16 @@ async def search(
     size="all",
 ):
     if method.startswith("api"):
+        limit = _search_limit(message)
         if method == "apisearch":
             LOGGER.info(f"API Searching: {key} from {site}")
             if site in GROUP_NAMES:
-                api = f"{Config.SEARCH_API_LINK}/api/v1/all/search?query={quote(key)}&limit={Config.SEARCH_LIMIT}"
+                api = f"{Config.SEARCH_API_LINK}/api/v1/all/search?query={quote(key)}&limit={limit}"
                 group_sites = _group_sites_param(site)
                 if group_sites:
                     api += f"&sites={quote(group_sites)}"
             else:
-                api = f"{Config.SEARCH_API_LINK}/api/v1/search?site={quote(site)}&query={quote(key)}&limit={Config.SEARCH_LIMIT}"
+                api = f"{Config.SEARCH_API_LINK}/api/v1/search?site={quote(site)}&query={quote(key)}&limit={limit}"
             if category and category != "all":
                 api += f"&category={quote(category)}"
             if quality and quality != "all":
@@ -184,21 +185,21 @@ async def search(
         elif method == "apitrend":
             LOGGER.info(f"API Trending from {site}")
             if site in GROUP_NAMES:
-                api = f"{Config.SEARCH_API_LINK}/api/v1/all/trending?limit={Config.SEARCH_LIMIT}"
+                api = f"{Config.SEARCH_API_LINK}/api/v1/all/trending?limit={limit}"
                 group_sites = _group_sites_param(site)
                 if group_sites:
                     api += f"&sites={quote(group_sites)}"
             else:
-                api = f"{Config.SEARCH_API_LINK}/api/v1/trending?site={site}&limit={Config.SEARCH_LIMIT}"
+                api = f"{Config.SEARCH_API_LINK}/api/v1/trending?site={site}&limit={limit}"
         elif method == "apirecent":
             LOGGER.info(f"API Recent from {site}")
             if site in GROUP_NAMES:
-                api = f"{Config.SEARCH_API_LINK}/api/v1/all/recent?limit={Config.SEARCH_LIMIT}"
+                api = f"{Config.SEARCH_API_LINK}/api/v1/all/recent?limit={limit}"
                 group_sites = _group_sites_param(site)
                 if group_sites:
                     api += f"&sites={quote(group_sites)}"
             else:
-                api = f"{Config.SEARCH_API_LINK}/api/v1/recent?site={site}&limit={Config.SEARCH_LIMIT}"
+                api = f"{Config.SEARCH_API_LINK}/api/v1/recent?site={site}&limit={limit}"
         try:
             async with AsyncSession(timeout=60) as client:
                 response = await client.get(api)
@@ -401,6 +402,40 @@ FILTER_SIZES = ["all", "small", "medium", "large"]
 # In-memory filter state (user_id -> dict) so the second filter page can use
 # short callbacks (Telegram callback_data is limited to 64 bytes).
 FILTER_STATE = {}
+
+# Per-command search limit set with /search -l <N> (keyed by (user_id, msg_id)
+# because callbacks only carry the original command message id).
+SEARCH_LIMITS = {}
+
+
+def _parse_search_cmd(text):
+    """Split '/search -l 15 data science' into ('data science', 15)."""
+    parts = (text or "").split()
+    limit = None
+    out = []
+    i = 0
+    while i < len(parts):
+        if parts[i] in ("-l", "--limit"):
+            if i + 1 < len(parts) and parts[i + 1].isdigit():
+                limit = int(parts[i + 1])
+                i += 2
+                continue
+            i += 1
+            continue
+        out.append(parts[i])
+        i += 1
+    key = " ".join(out[1:]).strip()
+    return key, limit
+
+
+def _search_limit(message):
+    """Limit set on the original /search command, else SEARCH_LIMIT."""
+    src = message.reply_to_message or message
+    try:
+        uid = message.from_user.id
+    except AttributeError:
+        uid = None
+    return SEARCH_LIMITS.get((uid, src.id)) or Config.SEARCH_LIMIT
 
 
 def _filter_label(value, kind):
@@ -675,7 +710,12 @@ async def torrent_search(_, message):
         return
     user_id = message.from_user.id
     buttons = ButtonMaker()
-    key = message.text.split()
+    key, limit = _parse_search_cmd(message.text)
+    if limit:
+        SEARCH_LIMITS[(user_id, message.id)] = limit
+    # Bare "/search" (or "/search -l 5" with no key) keeps the old
+    # Trending/Recent menu; otherwise use the parsed key for the length check.
+    key = key.split() if key else message.text.split()[:1]
     api_ready = True
     if SITES is None and Config.SEARCH_API_LINK:
         # API was down at bot start: try to recover the site list now,
@@ -697,7 +737,12 @@ async def torrent_search(_, message):
         buttons.data_button("Recent", f"torser {user_id} apirecent")
         buttons.data_button("Cancel", f"torser {user_id} cancel")
         button = buttons.build_menu(2)
-        await send_message(message, "Send a search key along with command", button)
+        await send_message(
+            message,
+            "Send a search key along with command\n"
+            "Usage: /search <key> [-l <limit>]",
+            button,
+        )
     elif SITES is not None and Config.SEARCH_PLUGINS:
         buttons.data_button("Api", f"torser {user_id} apisearch")
         buttons.data_button("Plugins", f"torser {user_id} plugin")
@@ -716,8 +761,8 @@ async def torrent_search(_, message):
 async def torrent_search_update(_, query):
     user_id = query.from_user.id
     message = query.message
-    key = message.reply_to_message.text.split(maxsplit=1)
-    key = key[1].strip() if len(key) > 1 else None
+    key, _ = _parse_search_cmd(message.reply_to_message.text)
+    key = key or None
     data = query.data.split()
     if user_id != int(data[1]):
         await query.answer("Not Yours!", show_alert=True)
