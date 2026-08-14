@@ -561,6 +561,7 @@ _WORD_FLAGS = {
     "-mx": "max_size",
     "-k": "keywords",
     "-w": "format",
+    "-au": "author",
 }
 _FLAG_ONLY = {
     "-f": "fresh",
@@ -707,8 +708,9 @@ def _api_extra_params(opts, method):
     if method == "apisearch":
         if opts.get("timeout"):
             params.append(f"timeout={opts['timeout']}")
-        if opts.get("format"):
-            params.append(f"format={quote(opts['format'])}")
+        fmt = opts.get("format")
+        if fmt and "," not in str(fmt):
+            params.append(f"format={quote(fmt)}")
         if opts.get("seeders"):
             params.append(f"min_seeders={opts['seeders']}")
         if opts.get("fresh"):
@@ -841,6 +843,36 @@ def _language_matches(item, language):
     return re.search(r"(?<![a-z0-9])" + re.escape(lang), text) is not None
 
 
+def _format_matches(item, fmt):
+    """Match a result by file format (mkv/pdf/epub...) - mirrors t-api."""
+    f = str(fmt or "").lower().strip().lstrip(".")
+    if not f:
+        return True
+    text = (
+        str(item.get("name") or "") + " " + str(item.get("category") or "")
+        + " " + str(item.get("extension") or "") + " "
+        + str(item.get("torrent") or "") + " " + str(item.get("download") or "")
+    ).lower()
+    return (
+        re.search(r"(?<![a-z0-9])\.?" + re.escape(f) + r"(?![a-z0-9])", text)
+        is not None
+    )
+
+
+def _author_matches(item, author):
+    """Match a book result by author (authors field + author + name fallback)."""
+    a = str(author or "").lower().replace("_", " ").strip()
+    if not a:
+        return True
+    text = " ".join(
+        str(x) for x in (item.get("authors") or [])
+    )
+    if item.get("author"):
+        text += " " + str(item["author"])
+    text += " " + str(item.get("name") or "")
+    return a in text.lower().replace("_", " ")
+
+
 def _apply_client_filters(results, opts):
     """Client-side filters for args t-api has no query param for (-y, -e, -n,
     -k) plus multi-value -q/-lng (t-api takes a single value per param).
@@ -863,6 +895,20 @@ def _apply_client_filters(results, opts):
         quals = [x.strip().lower() for x in str(quality).split(",") if x.strip()]
         if quals:
             out = [r for r in out if any(_quality_matches(r, q) for q in quals)]
+    fmt = opts.get("format")
+    if fmt and "," in str(fmt):
+        formats = [x.strip().lower().lstrip(".") for x in str(fmt).split(",") if x.strip()]
+        if formats:
+            out = [r for r in out if any(_format_matches(r, f) for f in formats)]
+    author = opts.get("author")
+    if author:
+        words = [
+            w.strip().lower().replace("_", " ")
+            for w in str(author).split(",")
+            if w.strip()
+        ]
+        if words:
+            out = [r for r in out if any(_author_matches(r, w) for w in words)]
     language = opts.get("language")
     if language and "," in str(language):
         langs = [x.strip().lower() for x in str(language).split(",") if x.strip()]
@@ -935,6 +981,8 @@ SEARCH_HELP_TEXT = (
     "• <code>-z &lt;size&gt;</code> → <code>&lt;1GB</code>, <code>&gt;3GB</code>, <code>1GB-3GB</code>\n"
     "• <code>-mx &lt;size&gt;</code> → max size cap: <code>2GB</code>\n"
     "• <code>-w &lt;format&gt;</code> → file type: <code>mkv</code>, <code>mp4</code>, <code>pdf</code>\n"
+    "&nbsp;&nbsp;&nbsp;&nbsp;Multi: <code>-w pdf,epub,mobi</code>\n"
+    "• <code>-au &lt;author&gt;</code> → author filter (books): <code>-au james</code>, multi-word: <code>-au james_clear</code>\n"
     "• <code>-S &lt;sort&gt;</code> → <code>seeders</code>, <code>size</code>, <code>date</code>\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;<code>quality</code> bhi: <code>-S quality</code>\n"
     "• <code>-o &lt;order&gt;</code> → <code>asc</code>, <code>desc</code>\n"
@@ -964,7 +1012,8 @@ SEARCH_HELP_TEXT = (
     "<code>/s oppenheimer -w mkv</code>\n"
     "<code>/s oppenheimer -auto -sp 2GB -n Oppy</code>\n"
     "<code>/s ikigai -g books -epub</code>\n"
-    "<code>/s atomic habits -ab</code>"
+    "<code>/s atomic habits -ab</code>\n"
+    "<code>/s ikigai -au ikigai -w pdf,epub -g books</code>"
 )
 
 
