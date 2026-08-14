@@ -714,8 +714,8 @@ async def torrent_search(_, message):
     if limit:
         SEARCH_LIMITS[(user_id, message.id)] = limit
     # Bare "/search" (or "/search -l 5" with no key) keeps the old
-    # Trending/Recent menu; otherwise use the parsed key for the length check.
-    key = key.split() if key else message.text.split()[:1]
+    # Trending/Recent menu; single-word keys stay normal search keys.
+    key = key.split() if key else []
     api_ready = True
     if SITES is None and Config.SEARCH_API_LINK:
         # API was down at bot start: try to recover the site list now,
@@ -730,9 +730,9 @@ async def torrent_search(_, message):
             await send_message(
                 message, "No API link or search PLUGINS added for this function"
             )
-    elif len(key) == 1 and SITES is None:
+    elif not key and SITES is None:
         await send_message(message, "Send a search key along with command")
-    elif len(key) == 1:
+    elif not key:
         buttons.data_button("Trending", f"torser {user_id} apitrend")
         buttons.data_button("Recent", f"torser {user_id} apirecent")
         buttons.data_button("Cancel", f"torser {user_id} cancel")
