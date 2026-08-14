@@ -413,39 +413,32 @@ SEARCH_OPTS = {}
 
 
 def _parse_search_cmd(text):
-    """Split '/search -l 15 -s 50 -p 2 -f -du data science' into
+    """Split '/search data science -l 15 -s 50 -p 2 -f -du -x 480p' into
     ('data science', {'limit': 15, 'seeders': 50, 'page': 2,
-    'fresh': True, 'dedup': True})."""
+    'fresh': True, 'dedup': True, 'include': '480p'}).
+
+    Args are only recognised at the END, after the key - putting them
+    before the key would be confusing."""
     parts = (text or "").split()
     opts = {}
-    out = []
-    i = 0
-    while i < len(parts):
+    i = len(parts) - 1
+    while i > 0:
         part = parts[i]
-        if part in ("-l", "-s", "-p"):
-            if i + 1 < len(parts) and parts[i + 1].isdigit():
-                value = int(parts[i + 1])
-                if part == "-l":
-                    opts["limit"] = value
-                elif part == "-s":
-                    opts["seeders"] = value
-                else:
-                    opts["page"] = value
-                i += 2
-                continue
-            i += 1
+        if part.isdigit() and i - 1 > 0 and parts[i - 1] in ("-l", "-s", "-p"):
+            flag = parts[i - 1]
+            opts[{"-l": "limit", "-s": "seeders", "-p": "page"}[flag]] = int(part)
+            i -= 2
             continue
-        if part == "-f":
-            opts["fresh"] = True
-            i += 1
+        if i - 1 > 0 and parts[i - 1] == "-x" and not part.startswith("-"):
+            opts["include"] = part
+            i -= 2
             continue
-        if part == "-du":
-            opts["dedup"] = True
-            i += 1
+        if part in ("-f", "-du", "--help"):
+            opts[{"-f": "fresh", "-du": "dedup", "--help": "help"}[part]] = True
+            i -= 1
             continue
-        out.append(part)
-        i += 1
-    key = " ".join(out[1:]).strip()
+        break
+    key = " ".join(parts[1 : i + 1]).strip()
     return key, opts
 
 
@@ -486,7 +479,24 @@ def _api_extra_params(opts, method):
             params.append("fresh=1")
         if opts.get("dedup"):
             params.append("dedup=1")
+        if opts.get("include"):
+            params.append(f"include={quote(opts['include'])}")
     return ("&" + "&".join(params)) if params else ""
+
+
+SEARCH_HELP_TEXT = (
+    "<b>🔍 Torrent Search Args</b>\n\n"
+    "Format: <code>/s &lt;key&gt; [args]</code> — args hamesha <b>key ke baad</b>\n\n"
+    "• <code>-l &lt;n&gt;</code> → result limit\n"
+    "• <code>-s &lt;n&gt;</code> → min seeders\n"
+    "• <code>-p &lt;n&gt;</code> → page number\n"
+    "• <code>-f</code> → fresh (cache skip)\n"
+    "• <code>-du</code> → duplicate protection ON\n"
+    "• <code>-x &lt;word&gt;</code> → sirf us word wale results\n\n"
+    "Examples:\n"
+    "<code>/s oppenheimer -l 10 -f -du</code>\n"
+    "<code>/s ikigai -x hindi</code>"
+)
 
 
 def _filter_label(value, kind):
@@ -762,6 +772,18 @@ async def torrent_search(_, message):
     user_id = message.from_user.id
     buttons = ButtonMaker()
     key, opts = _parse_search_cmd(message.text)
+    if opts.get("help"):
+        await send_message(message, SEARCH_HELP_TEXT)
+        return
+    first_tok = (message.text or "").split()
+    if len(first_tok) > 1 and first_tok[1].startswith("-"):
+        await send_message(
+            message,
+            "❌ Args ko <b>key ke baad</b> rakho!\n\n"
+            "Example: <code>/s oppenheimer -l 10 -f -du</code>\n"
+            "<code>/s --help</code> se saare args dekho",
+        )
+        return
     if opts:
         SEARCH_OPTS[(user_id, message.id)] = opts
         SEARCH_OPTS[user_id] = opts
@@ -796,7 +818,7 @@ async def torrent_search(_, message):
         await send_message(
             message,
             "Send a search key along with command\n"
-            "Usage: /search <key> [-l <limit>] [-s <seeders>] [-p <page>] [-f] [-du]",
+            "Usage: /search <key> [-l <limit>] [-s <seeders>] [-p <page>] [-f] [-du] [-x <word>]\n/s --help for all args",
             button,
         )
     elif SITES is not None and Config.SEARCH_PLUGINS:
