@@ -415,7 +415,7 @@ def _parse_search_cmd(text):
     out = []
     i = 0
     while i < len(parts):
-        if parts[i] in ("-l", "--limit"):
+        if parts[i] == "-l":
             if i + 1 < len(parts) and parts[i + 1].isdigit():
                 limit = int(parts[i + 1])
                 i += 2
