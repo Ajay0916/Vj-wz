@@ -257,12 +257,10 @@ async def search(
         msg = f"<b>Found {min(total_results, TELEGRAPH_LIMIT)}</b>"
         msg += f" <b>result(s) for <i>{key}</i>\nTorrent Site:- <i>{site.capitalize()}</i></b>"
         await TorrentManager.qbittorrent.search.delete(search_id)
-    links = await get_result(search_results, key, message, method)
+    link = await get_result(search_results, key, message, method)
     buttons = ButtonMaker()
-    for i, link in enumerate(links, start=1):
-        label = "🔎 VIEW" if i == 1 else f"📄 Page {i}"
-        buttons.url_button(label, link, style=ButtonStyle.PRIMARY)
-    button = buttons.build_menu(min(len(links), 4))
+    buttons.url_button("🔎 VIEW", link, style=ButtonStyle.PRIMARY)
+    button = buttons.build_menu(1)
     await edit_message(message, msg, button)
 
 
@@ -389,7 +387,7 @@ async def get_result(search_results, key, message, method):
             message, f"<b>Editing</b> {len(telegraph_content)} <b>Telegraph pages.</b>"
         )
         await telegraph.edit_telegraph(path, telegraph_content)
-    return [f"https://telegra.ph/{page}" for page in path]
+    return f"https://telegra.ph/{path[0]}"
 
 
 API_PAGE_SIZE = 18
