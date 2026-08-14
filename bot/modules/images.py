@@ -48,9 +48,15 @@ async def picture_add(_, message):
     resm = message.reply_to_message
     editable = await send_message(message, "<i>Fetching Input ...</i>")
     if "-b" in message.command:
+        b_idx = message.command.index("-b")
+        count = 0
+        if len(message.command) > b_idx + 1 and message.command[b_idx + 1].isdigit():
+            count = int(message.command[b_idx + 1])
         links = _extract_http_links(
             " ".join(message.command[1:]), resm.text if resm else ""
         )
+        if count:
+            links = links[:count]
         if links:
             return await _save_images(editable, links)
         if resm and resm.photo:
@@ -67,10 +73,13 @@ async def picture_add(_, message):
                 return await edit_message(
                     editable, "<i>Media is Not Supported! Only Photos!!</i>"
                 )
+            if count:
+                pics = pics[:count]
             return await _save_images(editable, pics)
         return await edit_message(
             editable,
-            "<b>Bulk (-b):</b> reply karo multiple links wale message (ek line pe ek) ya album photo ko.",
+            "<b>Bulk (-b):</b> reply karo multiple links wale message ya album photo ko. "
+            "<code>-b &lt;n&gt;</code> = sirf pehle N items.",
         )
     if len(message.command) > 1 or resm and resm.text:
         msg_text = resm.text if resm else message.command[1]
