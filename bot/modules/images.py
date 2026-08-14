@@ -1,3 +1,5 @@
+import re
+
 from ..core.config_manager import Config
 from ..helper.ext_utils.bot_utils import handleIndex, new_task
 from ..helper.ext_utils.db_handler import database
@@ -10,10 +12,66 @@ from ..helper.telegram_helper.message_utils import (
 )
 
 
+def _extract_http_links(*texts):
+    """All http(s) links found across the given texts (line/space separated)."""
+    links = []
+    for text in texts:
+        if not text:
+            continue
+        links.extend(
+            part.strip()
+            for part in re.split(r"\s+", text)
+            if part.strip().startswith("http")
+        )
+    return links
+
+
+async def _save_images(editable, items):
+    """Append new images (dedup) and persist the gallery."""
+    existing = set(Config.IMAGES)
+    new = [item for item in items if item not in existing]
+    if not new:
+        await edit_message(editable, "<b>Images already exist in the gallery.</b>")
+        return
+    Config.IMAGES.extend(new)
+    if Config.DATABASE_URL:
+        await database.update_config({"IMAGES": Config.IMAGES})
+    label = "Image Added" if len(new) == 1 else "Images Added"
+    await edit_message(
+        editable,
+        f"⌬ <b><u>{label}</u></b>\n│\n┖ <b>Total Images :</b> <code>{len(Config.IMAGES)}</code>",
+    )
+
+
 @new_task
 async def picture_add(_, message):
     resm = message.reply_to_message
     editable = await send_message(message, "<i>Fetching Input ...</i>")
+    if "-b" in message.command:
+        links = _extract_http_links(
+            " ".join(message.command[1:]), resm.text if resm else ""
+        )
+        if links:
+            return await _save_images(editable, links)
+        if resm and resm.photo:
+            try:
+                group = await message.get_media_group(resm.id)
+            except Exception:
+                group = [resm]
+            pics = [
+                m.photo.file_id
+                for m in group
+                if m.photo and m.photo.file_size <= 5242880 * 2
+            ]
+            if not pics:
+                return await edit_message(
+                    editable, "<i>Media is Not Supported! Only Photos!!</i>"
+                )
+            return await _save_images(editable, pics)
+        return await edit_message(
+            editable,
+            "<b>Bulk (-b):</b> reply karo multiple links wale message (ek line pe ek) ya album photo ko.",
+        )
     if len(message.command) > 1 or resm and resm.text:
         msg_text = resm.text if resm else message.command[1]
         if not msg_text.startswith("http"):
@@ -21,26 +79,22 @@ async def picture_add(_, message):
                 editable, "<b>Not a Valid Link, Must Start with 'http'</b>"
             )
         pic_add = msg_text.strip()
+        return await _save_images(editable, [pic_add])
     elif resm and resm.photo:
         if resm.photo.file_size > 5242880 * 2:
             return await edit_message(
                 editable, "<i>Media is Not Supported! Only Photos!!</i>"
             )
         pic_add = resm.photo.file_id
+        return await _save_images(editable, [pic_add])
     else:
         help_msg = f"""⌬ <b><u>Add Image Usage</u></b>
 │
 ┠ <b>Reply to Link:</b> <code>/{BotCommands.AddImageCommand} {{link}}</code>
 ┠ <b>Reply to Photo:</b> <code>/{BotCommands.AddImageCommand}</code>
+┠ <b>Bulk (-b):</b> <code>/{BotCommands.AddImageCommand} -b</code> reply to multi-link message / album
 ┖ <b>Supported:</b> <i>Telegra.ph, DDL links, Telegram photos</i>"""
         return await edit_message(editable, help_msg)
-    Config.IMAGES.append(pic_add)
-    if Config.DATABASE_URL:
-        await database.update_config({"IMAGES": Config.IMAGES})
-    await edit_message(
-        editable,
-        f"⌬ <b><u>Image Added</u></b>\n│\n┖ <b>Total Images :</b> <code>{len(Config.IMAGES)}</code>",
-    )
 
 
 @new_task

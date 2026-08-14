@@ -537,7 +537,7 @@ def get_help_string():
             )
         elif key == "AddImage":
             help_lines.append(
-                f"{cmd_str}: Add an image to the gallery by reply to photo or link."
+                f"{cmd_str}: Add image(s) to the gallery - reply to photo/link, or -b for bulk (multi-link message / album)."
             )
         elif key == "Images":
             help_lines.append(f"{cmd_str}: View and manage the image gallery.")
