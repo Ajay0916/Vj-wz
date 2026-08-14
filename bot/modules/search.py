@@ -160,7 +160,7 @@ async def search(
     if method.startswith("api"):
         limit = _search_limit(message)
         if method == "apisearch":
-            LOGGER.info(f"API Searching: {key} from {site}")
+            LOGGER.info(f"API Searching: {key} from {site} (limit={limit})")
             if site in GROUP_NAMES:
                 api = f"{Config.SEARCH_API_LINK}/api/v1/all/search?query={quote(key)}&limit={limit}"
                 group_sites = _group_sites_param(site)
@@ -429,15 +429,22 @@ def _parse_search_cmd(text):
 
 
 def _search_limit(message):
-    """Limit set on the original /search command, else SEARCH_LIMIT."""
+    """Limit set on the original /search command, else SEARCH_LIMIT.
+
+    Callbacks arrive on a message sent by the bot, so from_user is not the
+    clicking user; the reply chain to the original /search command is the
+    reliable lookup key."""
     src = message.reply_to_message or message
-    try:
-        uid = message.from_user.id
-    except AttributeError:
-        uid = None
-    limit = SEARCH_LIMITS.get((uid, src.id))
-    if limit is None and uid is not None:
-        limit = SEARCH_LIMITS.get(uid)
+    limit = SEARCH_LIMITS.get(src.id)
+    if limit is None:
+        try:
+            uid = message.from_user.id
+        except AttributeError:
+            uid = None
+        if uid is not None:
+            limit = SEARCH_LIMITS.get((uid, src.id))
+            if limit is None:
+                limit = SEARCH_LIMITS.get(uid)
     return limit or Config.SEARCH_LIMIT
 
 
@@ -717,8 +724,10 @@ async def torrent_search(_, message):
     if limit:
         SEARCH_LIMITS[(user_id, message.id)] = limit
         SEARCH_LIMITS[user_id] = limit
+        SEARCH_LIMITS[message.id] = limit
     else:
         SEARCH_LIMITS.pop(user_id, None)
+        SEARCH_LIMITS.pop(message.id, None)
     # Bare "/search" (or "/search -l 5" with no key) keeps the old
     # Trending/Recent menu; single-word keys stay normal search keys.
     key = key.split() if key else []
