@@ -125,9 +125,32 @@ def _group_sites_param(group):
     if group == "all" or not SITES:
         return ""
     members = GROUP_SITES.get(group)
-    if members is None:
-        members = set(SITES) - COURSE_SITES - BOOK_GROUP_SITES
+    if not members:
+        return ""
     return ",".join(s for s in SITES if s in members and s != "all")
+
+
+# Site button ordering: page 1 = all + important general + course sites,
+# page 2 = anime/movie/book sites. Any site not listed here stays on page 1.
+PAGE2_SITES = {
+    "nyaasi",
+    "yts",
+}
+
+
+def _site_sort_key(item):
+    site, name = item
+    if site == "all":
+        return (0, 0, name.lower())
+    page = 2 if site in PAGE2_SITES else 1
+    status = _site_status(site)
+    if status.get("manual_blocked"):
+        rank = 3
+    elif status.get("blocked"):
+        rank = 2
+    else:
+        rank = 1
+    return (page, rank, name.lower())
 
 
 async def search(
@@ -367,6 +390,7 @@ async def get_result(search_results, key, message, method):
     return f"https://telegra.ph/{path[0]}"
 
 
+API_PAGE_SIZE = 18
 SEARCH_CATEGORIES = ["all", "movies", "tv", "anime", "books", "courses", "apps", "games", "music"]
 
 FILTER_QUALITY = ["all", "480", "720", "1080", "4k"]
@@ -480,6 +504,51 @@ def filter_size_text(key, size):
     )
 
 
+def filter_group_buttons(user_id, group, language, format_, size):
+    """Group filter menu: Courses gets size only, Books gets language+format."""
+    buttons = ButtonMaker()
+    if group == "courses":
+        for v in FILTER_SIZES:
+            name = _size_label(v)
+            if v == size:
+                name = f"✅ {name}"
+            buttons.data_button(name, f"torser {user_id} gsz {v}")
+    else:
+        for v in FILTER_LANGUAGE:
+            name = _filter_label(v, "language")
+            if v == language:
+                name = f"✅ {name}"
+            buttons.data_button(name, f"torser {user_id} gl {v} {format_}")
+        for v in FILTER_FORMAT:
+            name = _filter_label(v, "format")
+            if v == format_:
+                name = f"✅ {name}"
+            buttons.data_button(name, f"torser {user_id} gf {language} {v}")
+    buttons.data_button(
+        "✅ Search",
+        f"torser {user_id} ggo {language} {format_} {size}",
+        position="footer",
+    )
+    buttons.data_button("◀ Back", f"torser {user_id} backcat", position="footer")
+    return buttons.build_menu(b_cols=4, f_cols=2)
+
+
+def filter_group_text(key, group, language, format_, size):
+    parts = []
+    if language and language != "all":
+        parts.append(f"Language: {_filter_label(language, 'language')}")
+    if format_ and format_ != "all":
+        parts.append(f"Format: {_filter_label(format_, 'format')}")
+    if size and size != "all":
+        parts.append(f"Size: {_size_label(size)}")
+    summary = " | ".join(parts) if parts else "None"
+    return (
+        f"<b>Filter results for <i>{key}</i></b>\n"
+        f"Category:- <i>{_site_display_name(group)}</i>\n"
+        f"Filters:- <i>{summary}</i>"
+    )
+
+
 # E-book sites get a format picker (pdf/epub/mobi) before searching;
 # audiobook sites (hindiaudio/audiobookbay) and every other site search
 # directly with one click - audio formats are not pdf/epub/mobi.
@@ -490,9 +559,9 @@ BOOK_SITES = {
     "archivebooks",
 }
 
-# Category-group buttons: the per-site list is replaced by 4 buttons
-# (General / All / Courses / Books). Groups are built from the sites the
-# API currently has enabled, so dead sites never appear.
+# Category-group buttons: Courses and Books search their whole group at
+# once; every other site keeps its own button. Groups are built from the
+# sites the API currently has enabled, so dead sites never appear.
 COURSE_SITES = {
     "downarchive",
     "rutracker",
@@ -504,22 +573,14 @@ BOOK_GROUP_SITES = BOOK_SITES | {
     "oceanofpdf",
 }
 GROUP_SITES = {
-    "general": None,  # computed: every enabled site minus courses/books
     "courses": COURSE_SITES,
     "books": BOOK_GROUP_SITES,
 }
 GROUP_NAMES = {
-    "general": "General Sites",
     "all": "All",
     "courses": "Courses",
     "books": "Books",
 }
-GROUP_BUTTONS = [
-    ("general", "🌐 General Sites"),
-    ("all", "⚡ All"),
-    ("courses", "🎓 Courses"),
-    ("books", "📚 Books"),
-]
 
 
 def filter_format_buttons(user_id, site, format_):
@@ -559,8 +620,32 @@ async def api_buttons(user_id, method, page=1):
     if not SITES:
         buttons.data_button("Cancel", f"torser {user_id} cancel")
         return buttons.build_menu(1)
-    for group, name in GROUP_BUTTONS:
+    # Fixed group buttons on top, then the per-site list (minus the sites
+    # that already live inside the Courses/Books groups).
+    for group, name in [("courses", "🎓 Courses"), ("books", "📚 Books")]:
         buttons.data_button(name, f"torser {user_id} grp {group} {method}")
+    grouped = COURSE_SITES | BOOK_GROUP_SITES
+    sites = sorted(
+        (
+            (s, n)
+            for s, n in SITES.items()
+            if s == "all" or s not in grouped
+        ),
+        key=_site_sort_key,
+    )
+    total_pages = max(1, (len(sites) + API_PAGE_SIZE - 1) // API_PAGE_SIZE)
+    page = max(1, min(int(page), total_pages))
+    start = (page - 1) * API_PAGE_SIZE
+    for data, name in sites[start : start + API_PAGE_SIZE]:
+        buttons.data_button(_site_display_name(data), f"torser {user_id} {data} {method}")
+    nav = []
+    if page > 1:
+        nav.append(("◀", f"torser {user_id} apipage {page - 1} {method}"))
+    nav.append((f"{page}/{total_pages}", f"torser {user_id} apipage {page} {method}"))
+    if page < total_pages:
+        nav.append(("▶", f"torser {user_id} apipage {page + 1} {method}"))
+    for text, callback in nav:
+        buttons.data_button(text, callback, position="footer")
     buttons.data_button("Cancel", f"torser {user_id} cancel", position="footer")
     return buttons.build_menu(2)
 
@@ -620,7 +705,7 @@ async def torrent_search(_, message):
         await send_message(message, "Choose tool to search:", button)
     elif SITES is not None:
         button = await api_buttons(user_id, "apisearch")
-        await send_message(message, "Choose category to search | API:", button)
+        await send_message(message, "Choose site to search | API:", button)
     else:
         button = await plugin_buttons(user_id)
         await send_message(message, "Choose site to search | Plugins:", button)
@@ -640,11 +725,11 @@ async def torrent_search_update(_, query):
         page = int(data[3]) if len(data) > 3 and data[3].isdigit() else 1
         method = data[4] if len(data) > 4 else "apisearch"
         button = await api_buttons(user_id, method, page)
-        await edit_message(message, "Choose category:", button)
+        await edit_message(message, "Choose site:", button)
     elif data[2].startswith("api"):
         await query.answer()
         button = await api_buttons(user_id, data[2])
-        await edit_message(message, "Choose category:", button)
+        await edit_message(message, "Choose site:", button)
     elif data[2] == "plugin":
         await query.answer()
         button = await plugin_buttons(user_id)
@@ -696,7 +781,7 @@ async def torrent_search_update(_, query):
         state = FILTER_STATE.get(user_id)
         if not state:
             button = await api_buttons(user_id, "apisearch")
-            await edit_message(message, "Choose category:", button)
+            await edit_message(message, "Choose site:", button)
             return
         state["size"] = data[3] if len(data) > 3 else "all"
         button = filter_size_buttons(user_id, state["size"])
@@ -735,7 +820,7 @@ async def torrent_search_update(_, query):
         state = FILTER_STATE.get(user_id)
         if not state:
             button = await api_buttons(user_id, "apisearch")
-            await edit_message(message, "Choose category:", button)
+            await edit_message(message, "Choose site:", button)
             return
         site = state["site"]
         category = state["category"]
@@ -761,18 +846,30 @@ async def torrent_search_update(_, query):
         await query.answer()
         site = data[3] if len(data) > 3 else "all"
         button = api_categories(user_id, site)
-        await edit_message(message, "Choose category:", button)
+        await edit_message(message, "Choose site:", button)
     elif data[2] == "backcat":
         await query.answer()
         button = await api_buttons(user_id, "apisearch")
-        await edit_message(message, "Choose category:", button)
+        await edit_message(message, "Choose site:", button)
     elif data[2] == "grp":
         await query.answer()
         group = data[3] if len(data) > 3 else "all"
         method = data[4] if len(data) > 4 else "apisearch"
         if method == "apisearch":
-            button = api_categories(user_id, group)
-            await edit_message(message, "Choose category:", button)
+            FILTER_STATE[user_id] = {
+                "site": group,
+                "category": "all",
+                "quality": "all",
+                "language": "all",
+                "format": "all",
+                "size": "all",
+            }
+            button = filter_group_buttons(user_id, group, "all", "all", "all")
+            await edit_message(
+                message,
+                filter_group_text(key, group, "all", "all", "all"),
+                button,
+            )
         else:
             endpoint = "Trending" if method == "apitrend" else "Recent"
             await edit_message(
@@ -780,6 +877,84 @@ async def torrent_search_update(_, query):
                 f"<b>Listing {endpoint} Items...\nTorrent Site:- <i>{_site_display_name(group)}</i></b>",
             )
             await search(key, group, message, method)
+    elif data[2] == "gsz":
+        await query.answer()
+        state = FILTER_STATE.get(user_id)
+        if not state or state.get("site") != "courses":
+            button = await api_buttons(user_id, "apisearch")
+            await edit_message(message, "Choose site:", button)
+            return
+        state["size"] = data[3] if len(data) > 3 else "all"
+        button = filter_group_buttons(user_id, "courses", "all", "all", state["size"])
+        await edit_message(
+            message,
+            filter_group_text(key, "courses", "all", "all", state["size"]),
+            button,
+        )
+    elif data[2] == "gl":
+        await query.answer()
+        state = FILTER_STATE.get(user_id)
+        if not state or state.get("site") != "books":
+            button = await api_buttons(user_id, "apisearch")
+            await edit_message(message, "Choose site:", button)
+            return
+        state["language"] = data[3] if len(data) > 3 else "all"
+        format_ = data[4] if len(data) > 4 else state.get("format", "all")
+        button = filter_group_buttons(
+            user_id, "books", state["language"], format_, state.get("size", "all")
+        )
+        await edit_message(
+            message,
+            filter_group_text(
+                key, "books", state["language"], format_, state.get("size", "all")
+            ),
+            button,
+        )
+    elif data[2] == "gf":
+        await query.answer()
+        state = FILTER_STATE.get(user_id)
+        if not state or state.get("site") != "books":
+            button = await api_buttons(user_id, "apisearch")
+            await edit_message(message, "Choose site:", button)
+            return
+        language = data[3] if len(data) > 3 else state.get("language", "all")
+        state["format"] = data[4] if len(data) > 4 else "all"
+        button = filter_group_buttons(
+            user_id, "books", language, state["format"], state.get("size", "all")
+        )
+        await edit_message(
+            message,
+            filter_group_text(
+                key, "books", language, state["format"], state.get("size", "all")
+            ),
+            button,
+        )
+    elif data[2] == "ggo":
+        await query.answer()
+        state = FILTER_STATE.get(user_id)
+        if not state:
+            button = await api_buttons(user_id, "apisearch")
+            await edit_message(message, "Choose site:", button)
+            return
+        language = data[3] if len(data) > 3 else "all"
+        format_ = data[4] if len(data) > 4 else "all"
+        size = data[5] if len(data) > 5 else "all"
+        site = state["site"]
+        summary = " | ".join(
+            p
+            for p in (
+                f"Language: {_filter_label(language, 'language')}" if language != "all" else "",
+                f"Format: {_filter_label(format_, 'format')}" if format_ != "all" else "",
+                f"Size: {_size_label(size)}" if size != "all" else "",
+            )
+            if p
+        ) or "None"
+        await edit_message(
+            message,
+            f"<b>Searching for <i>{key}</i>\nTorrent Site:- <i>{_site_display_name(site)}</i>\nFilters:- <i>{summary}</i></b>",
+        )
+        await search(key, site, message, "apisearch", "all", "all", language, format_, size)
+        FILTER_STATE.pop(user_id, None)
     elif data[2] != "cancel":
         await query.answer()
         site = data[2]
@@ -787,7 +962,7 @@ async def torrent_search_update(_, query):
         if method == "apisearch":
             if site == "all":
                 button = api_categories(user_id, site)
-                await edit_message(message, "Choose category:", button)
+                await edit_message(message, "Choose site:", button)
             elif site in BOOK_SITES:
                 button = filter_format_buttons(user_id, site, "all")
                 await edit_message(
