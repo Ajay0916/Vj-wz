@@ -200,7 +200,7 @@ async def search(
             else:
                 api = f"{Config.SEARCH_API_LINK}/api/v1/recent?site={site}&limit={Config.SEARCH_LIMIT}"
         try:
-            async with AsyncSession() as client:
+            async with AsyncSession(timeout=60) as client:
                 response = await client.get(api)
                 search_results = response.json()
             if isinstance(search_results, dict):
