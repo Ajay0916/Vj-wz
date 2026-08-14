@@ -577,6 +577,10 @@ _PRESETS = {
     "-1080": {"quality": "1080"},
     "-bd": {"source": "bluray"},
     "-wr": {"source": "webrip,web-dl,webdl"},
+    "-pdf": {"format": "pdf"},
+    "-epub": {"format": "epub"},
+    "-mobi": {"format": "mobi"},
+    "-ab": {"category": "audiobook"},
 }
 
 # Mirror/leech args forwarded to the leech task when combined with -auto
@@ -942,7 +946,10 @@ SEARCH_HELP_TEXT = (
     "Presets (Hindi movies):\n"
     "• <code>-hd</code> → hindi + 1080p | <code>-4k</code> → 4K\n"
     "• <code>-480</code>/<code>-720</code>/<code>-1080</code> → resolution\n"
-    "• <code>-bd</code> → bluray | <code>-wr</code> → webrip\n\n"
+    "• <code>-bd</code> → bluray | <code>-wr</code> → webrip\n"
+    "Books presets:\n"
+    "• <code>-pdf</code>/<code>-epub</code>/<code>-mobi</code> → format\n"
+    "• <code>-ab</code> → audiobook category\n\n"
     "Examples:\n"
     "<code>/s oppenheimer -g 1337x,tgx -l 10 -f</code>\n"
     "<code>/s ikigai -g books -lng hindi -x pdf</code>\n"
@@ -955,7 +962,9 @@ SEARCH_HELP_TEXT = (
     "<code>/s breaking bad -se 5 -hd</code>\n"
     "<code>/s oppenheimer,interstellar -4k</code>\n"
     "<code>/s oppenheimer -w mkv</code>\n"
-    "<code>/s oppenheimer -auto -sp 2GB -n Oppy</code>"
+    "<code>/s oppenheimer -auto -sp 2GB -n Oppy</code>\n"
+    "<code>/s ikigai -g books -epub</code>\n"
+    "<code>/s atomic habits -ab</code>"
 )
 
 
