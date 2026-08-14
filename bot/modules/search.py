@@ -6,7 +6,7 @@ from html import escape
 from urllib.parse import quote
 from pyrogram.enums import ButtonStyle
 
-from .. import LOGGER
+from .. import LOGGER, bot_loop
 from ..core.config_manager import Config
 from ..core.torrent_manager import TorrentManager
 from ..helper.ext_utils.bot_utils import new_task
@@ -235,9 +235,34 @@ async def search(
                 api = f"{Config.SEARCH_API_LINK}/api/v1/recent?site={site}&limit={limit}"
         api += _api_extra_params(opts, method)
         try:
+            pages = max(1, min(int(opts.get("page") or 1), 5))
             async with AsyncSession(timeout=60) as client:
-                response = await client.get(api)
-                search_results = response.json()
+                if method == "apisearch" and pages > 1:
+                    # -p N => fetch pages 1..N and merge (dedup by hash/name).
+                    merged, seen = [], set()
+                    search_results = {}
+                    for pg in range(1, pages + 1):
+                        resp = await client.get(f"{api}&page={pg}")
+                        data = resp.json()
+                        if not isinstance(data, dict):
+                            continue
+                        search_results = data
+                        if data.get("error") or data.get("detail"):
+                            continue
+                        for it in (data.get("data") or []):
+                            k = it.get("hash") or it.get("name")
+                            if not k or k in seen:
+                                continue
+                            seen.add(k)
+                            merged.append(it)
+                    search_results = dict(search_results)
+                    search_results["data"] = merged
+                    search_results["total"] = len(merged)
+                else:
+                    if method != "apisearch" and pages > 1:
+                        api += f"&page={pages}"
+                    response = await client.get(api)
+                    search_results = response.json()
             if isinstance(search_results, dict):
                 api_error = search_results.get("error") or search_results.get("detail")
                 if api_error:
@@ -308,6 +333,72 @@ async def search(
     if method.startswith("api") and opts.get("verbose") and search_results:
         msg = _verbose_preview(search_results, msg)
     await edit_message(message, msg, button)
+    if method.startswith("api") and search_results and (
+        opts.get("auto_leech") or opts.get("leech_multi")
+    ):
+        links = _leech_links(search_results, opts)
+        if not links:
+            await edit_message(
+                message,
+                "Kisi result me leech karne layak link (magnet/torrent) nahi mila.",
+            )
+            return
+        await _start_leech(
+            message,
+            links,
+            multi=bool(opts.get("leech_multi") and not opts.get("auto_leech")),
+        )
+
+
+def _leech_links(results, opts):
+    """Links to auto-leech: -auto top result, -m N top N results."""
+    links, seen = [], set()
+    want = 1 if opts.get("auto_leech") else int(opts.get("leech_multi") or 1)
+    for r in results:
+        link = (
+            r.get("magnet")
+            or r.get("torrent")
+            or r.get("download")
+            or r.get("url")
+        )
+        if link and link not in seen:
+            seen.add(link)
+            links.append(link)
+        if len(links) >= want:
+            break
+    return links
+
+
+async def _start_leech(message, links, multi):
+    """Kick off leech for one (-auto) or many (-m N) links.
+
+    Reuses the bot's own leech command path (Mirror) so qbittorrent/aria2
+    selection, options and status tracking behave exactly like /leech."""
+    from .mirror_leech import Mirror
+    from ..helper.telegram_helper.bot_commands import BotCommands
+
+    if Config.DISABLE_LEECH:
+        await edit_message(message, "Leech command is disabled.")
+        return
+    cmd = "/{}".format(BotCommands.LeechCommand[0])
+    if multi:
+        txt = "{} -b\n{}".format(cmd, "\n".join(links))
+    else:
+        txt = "{} {}".format(cmd, links[0])
+    nextmsg = await send_message(message, txt)
+    if not nextmsg or not getattr(nextmsg, "id", None):
+        return
+    try:
+        nextmsg = await message._client.get_messages(
+            chat_id=message.chat.id, message_ids=nextmsg.id
+        )
+    except Exception:
+        return
+    if message.from_user:
+        nextmsg.from_user = message.from_user
+    else:
+        nextmsg.sender_chat = message.sender_chat
+    bot_loop.create_task(Mirror(message._client, nextmsg, is_leech=True).new_event())
 
 
 async def get_result(search_results, key, message, method):
@@ -461,6 +552,7 @@ _DIGIT_FLAGS = {
     "-p": "page",
     "-n": "days",
     "-y": "year",
+    "-m": "leech_multi",
 }
 _WORD_FLAGS = {
     "-x": "include",
@@ -479,7 +571,13 @@ _WORD_FLAGS = {
     "-mx": "max_size",
     "-k": "keywords",
 }
-_FLAG_ONLY = {"-f": "fresh", "-du": "dedup", "-v": "verbose", "--help": "help"}
+_FLAG_ONLY = {
+    "-f": "fresh",
+    "-du": "dedup",
+    "-v": "verbose",
+    "-auto": "auto_leech",
+    "--help": "help",
+}
 
 
 def _parse_search_cmd(text):
@@ -565,8 +663,6 @@ def _size_bounds(value):
 def _api_extra_params(opts, method):
     """Query-string params for the search API from command-line args."""
     params = []
-    if opts.get("page"):
-        params.append(f"page={opts['page']}")
     if method == "apisearch":
         if opts.get("seeders"):
             params.append(f"min_seeders={opts['seeders']}")
@@ -774,7 +870,7 @@ SEARCH_HELP_TEXT = (
     "• <code>-l &lt;n&gt;</code> → result limit\n"
     "• <code>-s &lt;n&gt;</code> → min seeders\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Short: <code>-sd &lt;n&gt;</code>\n"
-    "• <code>-p &lt;n&gt;</code> → page number\n"
+    "• <code>-p &lt;n&gt;</code> → pehle N pages merge: <code>-p 3</code> = page 1+2+3\n"
     "• <code>-f</code> → fresh (cache skip)\n"
     "• <code>-du</code> → duplicate protection ON\n"
     "• <code>-x &lt;word&gt;</code> → sirf us word wale results\n"
@@ -799,6 +895,8 @@ SEARCH_HELP_TEXT = (
     "• <code>-n &lt;days&gt;</code> → sirf last N din ke results\n"
     "• <code>-t &lt;type&gt;</code> → category short (<code>-c</code> jaisa)\n"
     "• <code>-v</code> → chat me hi preview (size + seeders + site)\n\n"
+    "• <code>-m &lt;n&gt;</code> → top N results DIRECT leech: <code>-m 5</code>\n"
+    "• <code>-auto</code> → best (top seeders) result DIRECT leech\n\n"
     "Examples:\n"
     "<code>/s oppenheimer -g 1337x,tgx -l 10 -f</code>\n"
     "<code>/s ikigai -g books -lng hindi -x pdf</code>\n"
@@ -806,7 +904,9 @@ SEARCH_HELP_TEXT = (
     "<code>/s oppenheimer -y 2023 -mx 4GB -v</code>\n"
     "<code>/s star wars -y 1977-2005 -e hindi -sd 5</code>\n"
     "<code>/s oppenheimer -hs 1337x,tgx -q 1080p,4k -mn 2GB</code>\n"
-    "<code>/s python -k complete,course -lng hindi,english</code>"
+    "<code>/s python -k complete,course -lng hindi,english</code>\n"
+    "<code>/s python -p 3 -m 5</code>\n"
+    "<code>/s oppenheimer -auto</code>"
 )
 
 
