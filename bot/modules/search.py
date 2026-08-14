@@ -435,7 +435,10 @@ def _search_limit(message):
         uid = message.from_user.id
     except AttributeError:
         uid = None
-    return SEARCH_LIMITS.get((uid, src.id)) or Config.SEARCH_LIMIT
+    limit = SEARCH_LIMITS.get((uid, src.id))
+    if limit is None and uid is not None:
+        limit = SEARCH_LIMITS.get(uid)
+    return limit or Config.SEARCH_LIMIT
 
 
 def _filter_label(value, kind):
@@ -713,6 +716,9 @@ async def torrent_search(_, message):
     key, limit = _parse_search_cmd(message.text)
     if limit:
         SEARCH_LIMITS[(user_id, message.id)] = limit
+        SEARCH_LIMITS[user_id] = limit
+    else:
+        SEARCH_LIMITS.pop(user_id, None)
     # Bare "/search" (or "/search -l 5" with no key) keeps the old
     # Trending/Recent menu; single-word keys stay normal search keys.
     key = key.split() if key else []
