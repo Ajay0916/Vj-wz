@@ -413,8 +413,9 @@ SEARCH_OPTS = {}
 
 
 def _parse_search_cmd(text):
-    """Split '/search -l 15 -s 50 -p 2 -f data science' into
-    ('data science', {'limit': 15, 'seeders': 50, 'page': 2, 'fresh': True})."""
+    """Split '/search -l 15 -s 50 -p 2 -f -du data science' into
+    ('data science', {'limit': 15, 'seeders': 50, 'page': 2,
+    'fresh': True, 'dedup': True})."""
     parts = (text or "").split()
     opts = {}
     out = []
@@ -436,6 +437,10 @@ def _parse_search_cmd(text):
             continue
         if part == "-f":
             opts["fresh"] = True
+            i += 1
+            continue
+        if part == "-du":
+            opts["dedup"] = True
             i += 1
             continue
         out.append(part)
@@ -479,6 +484,8 @@ def _api_extra_params(opts, method):
             params.append(f"min_seeders={opts['seeders']}")
         if opts.get("fresh"):
             params.append("fresh=1")
+        if opts.get("dedup"):
+            params.append("dedup=1")
     return ("&" + "&".join(params)) if params else ""
 
 
@@ -789,7 +796,7 @@ async def torrent_search(_, message):
         await send_message(
             message,
             "Send a search key along with command\n"
-            "Usage: /search <key> [-l <limit>] [-s <seeders>] [-p <page>] [-f]",
+            "Usage: /search <key> [-l <limit>] [-s <seeders>] [-p <page>] [-f] [-du]",
             button,
         )
     elif SITES is not None and Config.SEARCH_PLUGINS:
