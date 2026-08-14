@@ -895,7 +895,13 @@ async def torrent_search(_, message):
             f"<b>Searching for <i>{escape(key)}</i>\n"
             f"Torrent Site:- <i>{_site_display_name(direct_site)}</i></b>",
         )
-        await search(key, direct_site, searching, "apisearch")
+        if searching is not None:
+            # The direct-search message's reply_to_message is not reliable
+            # (Pyrogram may drop it), so also key the options by this
+            # message id - _search_opts falls back to src.id.
+            SEARCH_OPTS[searching.id] = opts
+            SEARCH_OPTS[user_id] = opts
+            await search(key, direct_site, searching, "apisearch")
         return
     # Bare "/search" (or "/search -l 5" with no key) keeps the old
     # Trending/Recent menu; single-word keys stay normal search keys.
