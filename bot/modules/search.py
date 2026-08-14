@@ -560,6 +560,7 @@ _WORD_FLAGS = {
     "-e": "exclude",
     "-mx": "max_size",
     "-k": "keywords",
+    "-w": "format",
 }
 _FLAG_ONLY = {
     "-f": "fresh",
@@ -702,6 +703,8 @@ def _api_extra_params(opts, method):
     if method == "apisearch":
         if opts.get("timeout"):
             params.append(f"timeout={opts['timeout']}")
+        if opts.get("format"):
+            params.append(f"format={quote(opts['format'])}")
         if opts.get("seeders"):
             params.append(f"min_seeders={opts['seeders']}")
         if opts.get("fresh"):
@@ -927,6 +930,7 @@ SEARCH_HELP_TEXT = (
     "• <code>-c &lt;cat&gt;</code> → <code>movies</code>, <code>tv</code>, <code>music</code>, <code>anime</code>, <code>audiobook</code>, <code>course</code>, <code>book</code>, <code>game</code>, <code>app</code>\n"
     "• <code>-z &lt;size&gt;</code> → <code>&lt;1GB</code>, <code>&gt;3GB</code>, <code>1GB-3GB</code>\n"
     "• <code>-mx &lt;size&gt;</code> → max size cap: <code>2GB</code>\n"
+    "• <code>-w &lt;format&gt;</code> → file type: <code>mkv</code>, <code>mp4</code>, <code>pdf</code>\n"
     "• <code>-S &lt;sort&gt;</code> → <code>seeders</code>, <code>size</code>, <code>date</code>\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;<code>quality</code> bhi: <code>-S quality</code>\n"
     "• <code>-o &lt;order&gt;</code> → <code>asc</code>, <code>desc</code>\n"
@@ -950,6 +954,7 @@ SEARCH_HELP_TEXT = (
     "<code>/s oppenheimer -hd -bd</code>\n"
     "<code>/s breaking bad -se 5 -hd</code>\n"
     "<code>/s oppenheimer,interstellar -4k</code>\n"
+    "<code>/s oppenheimer -w mkv</code>\n"
     "<code>/s oppenheimer -auto -sp 2GB -n Oppy</code>"
 )
 
