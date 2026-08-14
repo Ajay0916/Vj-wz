@@ -61,7 +61,7 @@ async def picture_add(_, message):
             return await _save_images(editable, links)
         if resm and resm.photo:
             try:
-                group = await message.get_media_group(resm.id)
+                group = await resm.get_media_group()
             except Exception:
                 group = [resm]
             pics = [
