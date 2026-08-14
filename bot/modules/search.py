@@ -121,9 +121,15 @@ def _site_display_name(site):
 
 
 def _group_sites_param(group):
-    """Comma-separated enabled site ids for a group button, or "" for All."""
-    if group == "all" or not SITES:
+    """Comma-separated enabled site ids for a group.
+
+    All returns EVERY enabled site (books + courses + general) so the API
+    combo search covers them too - the API only searches combo_available
+    sites when no sites= param is sent."""
+    if not SITES:
         return ""
+    if group == "all":
+        return ",".join(s for s in SITES if s != "all")
     members = GROUP_SITES.get(group)
     if not members:
         return ""
