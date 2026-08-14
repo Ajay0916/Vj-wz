@@ -102,6 +102,7 @@ async def picture_add(_, message):
 ┠ <b>Reply to Link:</b> <code>/{BotCommands.AddImageCommand} {{link}}</code>
 ┠ <b>Reply to Photo:</b> <code>/{BotCommands.AddImageCommand}</code>
 ┠ <b>Bulk (-b):</b> <code>/{BotCommands.AddImageCommand} -b</code> reply to multi-link message / album
+┠ <b>Bulk count:</b> <code>/{BotCommands.AddImageCommand} -b 10</code> sirf pehle 10
 ┖ <b>Supported:</b> <i>Telegra.ph, DDL links, Telegram photos</i>"""
         return await edit_message(editable, help_msg)
 
