@@ -1,7 +1,7 @@
 from ast import literal_eval
 from pyrogram import Client, enums
 from pyrogram.errors import FloodWait
-from asyncio import Lock, gather, sleep
+from asyncio import Lock, gather, sleep, wait_for, TimeoutError as AsyncTimeout
 from hashlib import sha256
 from inspect import signature
 
@@ -223,12 +223,17 @@ class TgClient:
                 sleep_threshold=60,
                 no_updates=True,
             )
-            await cls.user.start()
+            await wait_for(cls.user.start(), timeout=60)
             cls.IS_PREMIUM_USER = cls.user.me.is_premium
             if cls.IS_PREMIUM_USER:
                 cls.MAX_SPLIT_SIZE = 4194304000
             uname = cls.user.me.username or cls.user.me.first_name
             LOGGER.info(f"WZ User : [{uname}] Started!")
+        except AsyncTimeout:
+            LOGGER.error("User client retry timed out after 60s; giving up")
+            cls.IS_PREMIUM_USER = False
+            cls.MAX_SPLIT_SIZE = 2097152000
+            cls.user = None
         except FloodWait as e:
             LOGGER.warning(f"User client FloodWait: Retrying in {e.value}s...")
             bot_loop.create_task(cls._retry_user(e.value))
@@ -250,13 +255,20 @@ class TgClient:
                     no_updates=True,
                 )
                 LOGGER.info("DBG start_user: before user.start()")
-                await cls.user.start()
+                await wait_for(cls.user.start(), timeout=60)
                 LOGGER.info("DBG start_user: after user.start()")
                 cls.IS_PREMIUM_USER = cls.user.me.is_premium
                 if cls.IS_PREMIUM_USER:
                     cls.MAX_SPLIT_SIZE = 4194304000
                 uname = cls.user.me.username or cls.user.me.first_name
                 LOGGER.info(f"WZ User : [{uname}] Started!")
+            except AsyncTimeout:
+                LOGGER.error(
+                    "User client start timed out after 60s; continuing without user client"
+                )
+                cls.IS_PREMIUM_USER = False
+                cls.MAX_SPLIT_SIZE = 2097152000
+                cls.user = None
             except FloodWait as e:
                 LOGGER.warning(
                     f"User client FloodWait: Retrying in {e.value}s (non-blocking)..."

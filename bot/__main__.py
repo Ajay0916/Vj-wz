@@ -81,13 +81,11 @@ async def main():
 
     Formatter.converter = changetz
 
-    await gather(
-        TgClient.start_bot(),
-        TgClient.start_user(),
-        TgClient.start_helper_bots(),
-        TgClient.start_helper_users(),
-    )
-    LOGGER.info("DBG startup: clients gather done")
+    await TgClient.start_bot()
+    bot_loop.create_task(TgClient.start_user())
+    bot_loop.create_task(TgClient.start_helper_bots())
+    bot_loop.create_task(TgClient.start_helper_users())
+    LOGGER.info("DBG startup: clients kicked off")
     await gather(load_configurations(), update_variables())
     LOGGER.info("DBG startup: config gather done")
 
