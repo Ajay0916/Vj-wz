@@ -163,9 +163,11 @@ async def search(
         if method == "apisearch":
             extra = f" opts={opts}" if opts else ""
             LOGGER.info(f"API Searching: {key} from {site} (limit={limit}){extra}")
-            if site in GROUP_NAMES:
+            if site in GROUP_NAMES or "," in site:
                 api = f"{Config.SEARCH_API_LINK}/api/v1/all/search?query={quote(key)}&limit={limit}"
                 group_sites = _group_sites_param(site)
+                if not group_sites and "," in site:
+                    group_sites = site
                 if group_sites:
                     api += f"&sites={quote(group_sites)}"
             else:
@@ -412,10 +414,24 @@ FILTER_STATE = {}
 SEARCH_OPTS = {}
 
 
+_DIGIT_FLAGS = {"-l": "limit", "-s": "seeders", "-p": "page"}
+_WORD_FLAGS = {
+    "-x": "include",
+    "-g": "site",
+    "-q": "quality",
+    "-lng": "language",
+    "-c": "category",
+    "-z": "size",
+    "-S": "sort",
+    "-o": "order",
+}
+_FLAG_ONLY = {"-f": "fresh", "-du": "dedup", "--help": "help"}
+
+
 def _parse_search_cmd(text):
-    """Split '/search data science -l 15 -s 50 -p 2 -f -du -x 480p' into
-    ('data science', {'limit': 15, 'seeders': 50, 'page': 2,
-    'fresh': True, 'dedup': True, 'include': '480p'}).
+    """Split '/search data science -l 15 -g 1337x,tgx -q 1080p -f -du' into
+    ('data science', {'limit': 15, 'site': '1337x,tgx', 'quality': '1080p',
+    'fresh': True, 'dedup': True}).
 
     Args are only recognised at the END, after the key - putting them
     before the key would be confusing."""
@@ -424,17 +440,16 @@ def _parse_search_cmd(text):
     i = len(parts) - 1
     while i > 0:
         part = parts[i]
-        if part.isdigit() and i - 1 > 0 and parts[i - 1] in ("-l", "-s", "-p"):
-            flag = parts[i - 1]
-            opts[{"-l": "limit", "-s": "seeders", "-p": "page"}[flag]] = int(part)
+        if part.isdigit() and i - 1 > 0 and parts[i - 1] in _DIGIT_FLAGS:
+            opts[_DIGIT_FLAGS[parts[i - 1]]] = int(part)
             i -= 2
             continue
-        if i - 1 > 0 and parts[i - 1] == "-x" and not part.startswith("-"):
-            opts["include"] = part
+        if i - 1 > 0 and parts[i - 1] in _WORD_FLAGS and not part.startswith("-"):
+            opts[_WORD_FLAGS[parts[i - 1]]] = part
             i -= 2
             continue
-        if part in ("-f", "-du", "--help"):
-            opts[{"-f": "fresh", "-du": "dedup", "--help": "help"}[part]] = True
+        if part in _FLAG_ONLY:
+            opts[_FLAG_ONLY[part]] = True
             i -= 1
             continue
         break
@@ -467,6 +482,27 @@ def _search_limit(message):
     return _search_opts(message).get("limit") or Config.SEARCH_LIMIT
 
 
+_SIZE_RE = re.compile(
+    r"^([<>]?)\s*([0-9.]+ ?(?:tb|gb|mb|kb))(?:-([0-9.]+ ?(?:tb|gb|mb|kb)))?$",
+    re.I,
+)
+
+
+def _size_bounds(value):
+    """Turn '-z 1GB-3GB' / '-z <1GB' / '-z >3GB' into (min_size, max_size)."""
+    m = _SIZE_RE.match((value or "").strip())
+    if not m:
+        return "", ""
+    op = m.group(1)
+    lo = m.group(2).replace(" ", "").lower()
+    hi = (m.group(3) or "").replace(" ", "").lower()
+    if hi:
+        return lo, hi
+    if op == "<":
+        return "", lo
+    return lo, ""
+
+
 def _api_extra_params(opts, method):
     """Query-string params for the search API from command-line args."""
     params = []
@@ -481,6 +517,22 @@ def _api_extra_params(opts, method):
             params.append("dedup=1")
         if opts.get("include"):
             params.append(f"include={quote(opts['include'])}")
+        if opts.get("quality"):
+            params.append(f"quality={quote(opts['quality'])}")
+        if opts.get("language"):
+            params.append(f"language={quote(opts['language'])}")
+        if opts.get("category"):
+            params.append(f"category={quote(opts['category'])}")
+        if opts.get("sort"):
+            params.append(f"sort={quote(opts['sort'])}")
+        if opts.get("order"):
+            params.append(f"order={quote(opts['order'])}")
+        if opts.get("size"):
+            min_size, max_size = _size_bounds(opts["size"])
+            if min_size:
+                params.append(f"min_size={quote(min_size)}")
+            if max_size:
+                params.append(f"max_size={quote(max_size)}")
     return ("&" + "&".join(params)) if params else ""
 
 
@@ -492,10 +544,20 @@ SEARCH_HELP_TEXT = (
     "• <code>-p &lt;n&gt;</code> → page number\n"
     "• <code>-f</code> → fresh (cache skip)\n"
     "• <code>-du</code> → duplicate protection ON\n"
-    "• <code>-x &lt;word&gt;</code> → sirf us word wale results\n\n"
+    "• <code>-x &lt;word&gt;</code> → sirf us word wale results\n"
+    "• <code>-g &lt;site&gt;</code> → direct search, buttons skip\n"
+    "&nbsp;&nbsp;&nbsp;&nbsp;Groups: <code>all</code>, <code>books</code>, <code>courses</code>\n"
+    "&nbsp;&nbsp;&nbsp;&nbsp;Multiple: <code>1337x,tgx,yts</code>\n"
+    "• <code>-q &lt;quality&gt;</code> → <code>480</code>, <code>720</code>, <code>1080</code>, <code>4k</code>\n"
+    "• <code>-lng &lt;lang&gt;</code> → <code>hindi</code>, <code>english</code>, <code>tamil</code>, <code>telugu</code>, <code>dual</code>\n"
+    "• <code>-c &lt;cat&gt;</code> → <code>movies</code>, <code>tv</code>, <code>music</code>, <code>anime</code>, <code>course</code>, <code>book</code>, <code>game</code>, <code>app</code>\n"
+    "• <code>-z &lt;size&gt;</code> → <code>&lt;1GB</code>, <code>&gt;3GB</code>, <code>1GB-3GB</code>\n"
+    "• <code>-S &lt;sort&gt;</code> → <code>seeders</code>, <code>size</code>, <code>date</code>\n"
+    "• <code>-o &lt;order&gt;</code> → <code>asc</code>, <code>desc</code>\n\n"
     "Examples:\n"
-    "<code>/s oppenheimer -l 10 -f -du</code>\n"
-    "<code>/s ikigai -x hindi</code>"
+    "<code>/s oppenheimer -g 1337x,tgx -l 10 -f</code>\n"
+    "<code>/s ikigai -g books -lng hindi -x pdf</code>\n"
+    "<code>/s python -c course -z 1GB-3GB</code>"
 )
 
 
@@ -791,6 +853,40 @@ async def torrent_search(_, message):
     else:
         SEARCH_OPTS.pop(user_id, None)
         SEARCH_OPTS.pop(message.id, None)
+    direct_site = opts.get("site")
+    if direct_site and not key:
+        await send_message(
+            message,
+            "Send a search key along with command\n"
+            "Usage: /s <key> -g <site>\n"
+            "Example: /s oppenheimer -g 1337x,tgx",
+        )
+        return
+    if direct_site:
+        if SITES is None and Config.SEARCH_API_LINK:
+            api_ready = await _refresh_sites()
+        if SITES is None:
+            await send_message(
+                message, "Search API is unavailable right now. Try again in a bit."
+            )
+            return
+        requested = [s.strip() for s in direct_site.split(",") if s.strip()]
+        unknown = [s for s in requested if s not in GROUP_NAMES and s not in SITES]
+        if unknown:
+            await send_message(
+                message,
+                f"❌ Invalid site: <code>{escape(', '.join(unknown))}</code>\n\n"
+                "Groups: <code>all, books, courses</code>\n"
+                "Sites: buttons se site ka naam dekho (jaise <code>1337x, tgx, audiobookbay</code>)",
+            )
+            return
+        searching = await send_message(
+            message,
+            f"<b>Searching for <i>{escape(key)}</i>\n"
+            f"Torrent Site:- <i>{_site_display_name(direct_site)}</i></b>",
+        )
+        await search(key, direct_site, searching, "apisearch")
+        return
     # Bare "/search" (or "/search -l 5" with no key) keeps the old
     # Trending/Recent menu; single-word keys stay normal search keys.
     key = key.split() if key else []
@@ -818,7 +914,7 @@ async def torrent_search(_, message):
         await send_message(
             message,
             "Send a search key along with command\n"
-            "Usage: /search <key> [-l <limit>] [-s <seeders>] [-p <page>] [-f] [-du] [-x <word>]\n/s --help for all args",
+            "Usage: /search <key> [-l <n>] [-s <n>] [-p <n>] [-f] [-du] [-x <w>] [-g <site>] [-q <q>] [-lng <l>] [-c <c>] [-z <size>] [-S <sort>] [-o <order>]\n/s --help for all args",
             button,
         )
     elif SITES is not None and Config.SEARCH_PLUGINS:
