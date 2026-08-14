@@ -239,9 +239,10 @@ async def search(
             async with AsyncSession(timeout=60) as client:
                 if method == "apisearch" and (pages > 1 or multi_query):
                     # -p N => fetch pages 1..N; comma key => each query.
-                    # Merged with dedup by hash/name.
+                    # Merged as-is; dedup (by hash/name) only with -du.
                     merged, seen = [], set()
                     search_results = {}
+                    dedup = bool(opts.get("dedup"))
                     for q in queries:
                         qapi = api.replace(quote(key), quote(q)) if multi_query else api
                         for pg in range(1, (1 if multi_query else pages) + 1):
@@ -253,6 +254,9 @@ async def search(
                             if data.get("error") or data.get("detail"):
                                 continue
                             for it in (data.get("data") or []):
+                                if not dedup:
+                                    merged.append(it)
+                                    continue
                                 k = it.get("hash") or it.get("name")
                                 if not k or k in seen:
                                     continue
