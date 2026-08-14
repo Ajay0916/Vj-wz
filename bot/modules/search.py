@@ -333,27 +333,19 @@ async def search(
     if method.startswith("api") and opts.get("verbose") and search_results:
         msg = _verbose_preview(search_results, msg)
     await edit_message(message, msg, button)
-    if method.startswith("api") and search_results and (
-        opts.get("auto_leech") or opts.get("leech_multi")
-    ):
-        links = _leech_links(search_results, opts)
+    if method.startswith("api") and search_results and opts.get("auto_leech"):
+        links = _leech_links(search_results)
         if not links:
             await edit_message(
                 message,
                 "Kisi result me leech karne layak link (magnet/torrent) nahi mila.",
             )
             return
-        await _start_leech(
-            message,
-            links,
-            multi=bool(opts.get("leech_multi") and not opts.get("auto_leech")),
-        )
+        await _start_leech(message, links)
 
 
-def _leech_links(results, opts):
-    """Links to auto-leech: -auto top result, -m N top N results."""
-    links, seen = [], set()
-    want = 1 if opts.get("auto_leech") else int(opts.get("leech_multi") or 1)
+def _leech_links(results):
+    """Link to auto-leech: first (top) result with a magnet/torrent."""
     for r in results:
         link = (
             r.get("magnet")
@@ -361,16 +353,13 @@ def _leech_links(results, opts):
             or r.get("download")
             or r.get("url")
         )
-        if link and link not in seen:
-            seen.add(link)
-            links.append(link)
-        if len(links) >= want:
-            break
-    return links
+        if link:
+            return [link]
+    return []
 
 
-async def _start_leech(message, links, multi):
-    """Kick off leech for one (-auto) or many (-m N) links.
+async def _start_leech(message, links):
+    """Kick off leech for the -auto result.
 
     Reuses the bot's own leech command path (Mirror) so qbittorrent/aria2
     selection, options and status tracking behave exactly like /leech."""
@@ -381,10 +370,7 @@ async def _start_leech(message, links, multi):
         await edit_message(message, "Leech command is disabled.")
         return
     cmd = "/{}".format(BotCommands.LeechCommand[0])
-    if multi:
-        txt = "{} -b\n{}".format(cmd, "\n".join(links))
-    else:
-        txt = "{} {}".format(cmd, links[0])
+    txt = "{} {}".format(cmd, links[0])
     nextmsg = await send_message(message, txt)
     if not nextmsg or not getattr(nextmsg, "id", None):
         return
@@ -552,7 +538,6 @@ _DIGIT_FLAGS = {
     "-p": "page",
     "-n": "days",
     "-y": "year",
-    "-m": "leech_multi",
 }
 _WORD_FLAGS = {
     "-x": "include",
@@ -895,7 +880,6 @@ SEARCH_HELP_TEXT = (
     "• <code>-n &lt;days&gt;</code> → sirf last N din ke results\n"
     "• <code>-t &lt;type&gt;</code> → category short (<code>-c</code> jaisa)\n"
     "• <code>-v</code> → chat me hi preview (size + seeders + site)\n\n"
-    "• <code>-m &lt;n&gt;</code> → top N results DIRECT leech: <code>-m 5</code>\n"
     "• <code>-auto</code> → best (top seeders) result DIRECT leech\n\n"
     "Examples:\n"
     "<code>/s oppenheimer -g 1337x,tgx -l 10 -f</code>\n"
@@ -905,7 +889,6 @@ SEARCH_HELP_TEXT = (
     "<code>/s star wars -y 1977-2005 -e hindi -sd 5</code>\n"
     "<code>/s oppenheimer -hs 1337x,tgx -q 1080p,4k -mn 2GB</code>\n"
     "<code>/s python -k complete,course -lng hindi,english</code>\n"
-    "<code>/s python -p 3 -m 5</code>\n"
     "<code>/s oppenheimer -auto</code>"
 )
 
