@@ -1,3 +1,4 @@
+import os
 import re
 
 from ..core.config_manager import Config
@@ -26,6 +27,33 @@ def _extract_http_links(*texts):
     return links
 
 
+def _is_image_document(m):
+    """True if message is an image sent as a file (document)."""
+    return bool(
+        m.document
+        and m.document.mime_type
+        and m.document.mime_type.startswith("image")
+        and m.document.file_size <= 5242880 * 2
+    )
+
+
+async def _document_as_photo(client, m):
+    """Re-upload an image document as a photo so the gallery (photo-only) can show it."""
+    path = await m.download()
+    if not path:
+        return None
+    try:
+        sent = await client.send_photo("me", path)
+        return sent.photo.file_id
+    except Exception:
+        return None
+    finally:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+
 async def _save_images(editable, items):
     """Append new images (dedup) and persist the gallery."""
     existing = set(Config.IMAGES)
@@ -44,7 +72,7 @@ async def _save_images(editable, items):
 
 
 @new_task
-async def picture_add(_, message):
+async def picture_add(client, message):
     resm = message.reply_to_message
     editable = await send_message(message, "<i>Fetching Input ...</i>")
     if "-b" in message.command:
@@ -59,16 +87,19 @@ async def picture_add(_, message):
             links = links[:count]
         if links:
             return await _save_images(editable, links)
-        if resm and resm.photo:
+        if resm and (resm.photo or _is_image_document(resm)):
             try:
                 group = await resm.get_media_group()
             except Exception:
                 group = [resm]
-            pics = [
-                m.photo.file_id
-                for m in group
-                if m.photo and m.photo.file_size <= 5242880 * 2
-            ]
+            pics = []
+            for m in group:
+                if m.photo and m.photo.file_size <= 5242880 * 2:
+                    pics.append(m.photo.file_id)
+                elif _is_image_document(m):
+                    fid = await _document_as_photo(client, m)
+                    if fid:
+                        pics.append(fid)
             if not pics:
                 return await edit_message(
                     editable, "<i>Media is Not Supported! Only Photos!!</i>"
@@ -89,21 +120,28 @@ async def picture_add(_, message):
             )
         pic_add = msg_text.strip()
         return await _save_images(editable, [pic_add])
-    elif resm and resm.photo:
-        if resm.photo.file_size > 5242880 * 2:
-            return await edit_message(
-                editable, "<i>Media is Not Supported! Only Photos!!</i>"
-            )
-        pic_add = resm.photo.file_id
+    elif resm and (resm.photo or _is_image_document(resm)):
+        if resm.photo:
+            if resm.photo.file_size > 5242880 * 2:
+                return await edit_message(
+                    editable, "<i>Media is Not Supported! Only Photos!!</i>"
+                )
+            pic_add = resm.photo.file_id
+        else:
+            pic_add = await _document_as_photo(client, resm)
+            if not pic_add:
+                return await edit_message(
+                    editable, "<i>Media is Not Supported! Only Photos!!</i>"
+                )
         return await _save_images(editable, [pic_add])
     else:
         help_msg = f"""⌬ <b><u>Add Image Usage</u></b>
 │
 ┠ <b>Reply to Link:</b> <code>/{BotCommands.AddImageCommand} {{link}}</code>
-┠ <b>Reply to Photo:</b> <code>/{BotCommands.AddImageCommand}</code>
+┠ <b>Reply to Photo/File:</b> <code>/{BotCommands.AddImageCommand}</code>
 ┠ <b>Bulk (-b):</b> <code>/{BotCommands.AddImageCommand} -b</code> reply to multi-link message / album
 ┠ <b>Bulk count:</b> <code>/{BotCommands.AddImageCommand} -b 10</code> sirf pehle 10
-┖ <b>Supported:</b> <i>Telegra.ph, DDL links, Telegram photos</i>"""
+┖ <b>Supported:</b> <i>Telegra.ph, DDL links, Telegram photos/files</i>"""
         return await edit_message(editable, help_msg)
 
 
