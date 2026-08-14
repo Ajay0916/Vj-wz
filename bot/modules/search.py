@@ -564,6 +564,8 @@ BOOK_SITES = {
 # sites the API currently has enabled, so dead sites never appear.
 COURSE_SITES = {
     "downarchive",
+    "freecourseweb",
+    "downloadfreecourse",
     "rutracker",
     "pimpmymind",
 }
