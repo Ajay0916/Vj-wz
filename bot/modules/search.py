@@ -563,7 +563,6 @@ BOOK_SITES = {
 # once; every other site keeps its own button. Groups are built from the
 # sites the API currently has enabled, so dead sites never appear.
 COURSE_SITES = {
-    "downarchive",
     "freecourseweb",
     "downloadfreecourse",
     "rutracker",
@@ -571,7 +570,6 @@ COURSE_SITES = {
 }
 BOOK_GROUP_SITES = BOOK_SITES | {
     "hindiaudio",
-    "audiobookbay",
     "oceanofpdf",
 }
 GROUP_SITES = {
