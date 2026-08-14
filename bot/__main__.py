@@ -85,16 +85,13 @@ async def main():
     bot_loop.create_task(TgClient.start_user())
     bot_loop.create_task(TgClient.start_helper_bots())
     bot_loop.create_task(TgClient.start_helper_users())
-    LOGGER.info("DBG startup: clients kicked off")
     await gather(load_configurations(), update_variables())
-    LOGGER.info("DBG startup: config gather done")
 
     await gather(
         update_qb_options(),
         update_aria2_options(),
         update_nzb_options(),
     )
-    LOGGER.info("DBG startup: options gather done")
     from .core.jdownloader_booter import jdownloader
     from .helper.ext_utils.bot_utils import git_info, search_images
     from .helper.ext_utils.files_utils import clean_all
