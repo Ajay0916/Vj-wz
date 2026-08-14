@@ -121,15 +121,9 @@ def _site_display_name(site):
 
 
 def _group_sites_param(group):
-    """Comma-separated enabled site ids for a group.
-
-    All returns EVERY enabled site (books + courses + general) so the API
-    combo search covers them too - the API only searches combo_available
-    sites when no sites= param is sent."""
-    if not SITES:
+    """Comma-separated enabled site ids for a group button, or "" for All."""
+    if group == "all" or not SITES:
         return ""
-    if group == "all":
-        return ",".join(s for s in SITES if s != "all")
     members = GROUP_SITES.get(group)
     if not members:
         return ""
@@ -174,6 +168,10 @@ async def search(
                 group_sites = _group_sites_param(site)
                 if not group_sites and "," in site:
                     group_sites = site
+                if not group_sites and opts.get("all_sites") and SITES:
+                    group_sites = ",".join(
+                        s for s in SITES if s != "all"
+                    )
                 if group_sites:
                     api += f"&sites={quote(group_sites)}"
             else:
@@ -460,6 +458,7 @@ def _parse_search_cmd(text):
             continue
         if part == "-a":
             opts["site"] = "all"
+            opts["all_sites"] = True
             i -= 1
             continue
         break
@@ -556,9 +555,9 @@ SEARCH_HELP_TEXT = (
     "• <code>-du</code> → duplicate protection ON\n"
     "• <code>-x &lt;word&gt;</code> → sirf us word wale results\n"
     "• <code>-g &lt;site&gt;</code> → direct search, buttons skip\n"
-    "&nbsp;&nbsp;&nbsp;&nbsp;Groups: <code>all</code>, <code>books</code>, <code>courses</code>\n"
+    "&nbsp;&nbsp;&nbsp;&nbsp;Groups: <code>all</code> (17 sites), <code>books</code>, <code>courses</code>\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Multiple: <code>1337x,tgx,yts</code>\n"
-    "• <code>-a</code> → all sites ek sath (same as <code>-g all</code>)\n"
+    "• <code>-a</code> → SAB sites ek sath (29: general + books + courses)\n"
     "• <code>-q &lt;quality&gt;</code> → <code>480</code>, <code>720</code>, <code>1080</code>, <code>4k</code>\n"
     "• <code>-lng &lt;lang&gt;</code> → <code>hindi</code>, <code>english</code>, <code>tamil</code>, <code>telugu</code>, <code>dual</code>\n"
     "• <code>-c &lt;cat&gt;</code> → <code>movies</code>, <code>tv</code>, <code>music</code>, <code>anime</code>, <code>audiobook</code>, <code>course</code>, <code>book</code>, <code>game</code>, <code>app</code>\n"
