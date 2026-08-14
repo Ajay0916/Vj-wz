@@ -646,8 +646,9 @@ def _api_extra_params(opts, method):
             params.append("fresh=1")
         if opts.get("dedup"):
             params.append("dedup=1")
-        if opts.get("include"):
-            params.append(f"include={quote(opts['include'])}")
+        include = opts.get("include")
+        if include and "," not in str(include):
+            params.append(f"include={quote(include)}")
         quality = opts.get("quality")
         if quality and "," not in str(quality):
             params.append(f"quality={quote(quality)}")
@@ -759,6 +760,15 @@ def _apply_client_filters(results, opts):
     Results without a parseable year/date are kept (filter only drops what
     it can positively reject)."""
     out = results
+    include = opts.get("include")
+    if include and "," in str(include):
+        words = [w.strip().lower() for w in str(include).split(",") if w.strip()]
+        if words:
+            out = [
+                r
+                for r in out
+                if any(w in str(r.get("name") or "").lower() for w in words)
+            ]
     quality = opts.get("quality")
     if quality and "," in str(quality):
         quals = [x.strip().lower() for x in str(quality).split(",") if x.strip()]
@@ -803,6 +813,7 @@ SEARCH_HELP_TEXT = (
     "• <code>-f</code> → fresh (cache skip)\n"
     "• <code>-du</code> → duplicate protection ON\n"
     "• <code>-x &lt;word&gt;</code> → sirf us word wale results\n"
+    "&nbsp;&nbsp;&nbsp;&nbsp;Multi: <code>-x 1080p,4k</code>\n"
     "• <code>-k &lt;words&gt;</code> → title me SAB words match (strict): <code>complete,course</code>\n"
     "• <code>-e &lt;words&gt;</code> → exclude words: <code>hindi,audible</code>\n"
     "• <code>-g &lt;site&gt;</code> → direct search, buttons skip\n"
