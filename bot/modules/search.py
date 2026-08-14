@@ -565,7 +565,6 @@ BOOK_SITES = {
 COURSE_SITES = {
     "downarchive",
     "freecourseweb",
-    "downloadfreecourse",
     "rutracker",
     "pimpmymind",
 }
