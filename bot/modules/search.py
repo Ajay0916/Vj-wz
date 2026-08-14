@@ -287,7 +287,7 @@ async def search(
             relaxed_filters = search_results.get("relaxed_filters")
             search_results = search_results["data"]
             if method == "apisearch":
-                search_results = _apply_client_filters(search_results, opts)
+                search_results = _apply_client_filters(search_results, opts, key)
             if not search_results:
                 await edit_message(
                     message,
@@ -567,6 +567,7 @@ _FLAG_ONLY = {
     "-f": "fresh",
     "-du": "dedup",
     "-auto": "auto_leech",
+    "-ex": "exact",
     "--help": "help",
 }
 
@@ -788,6 +789,25 @@ def _result_year(item):
     return int(m.group(0)) if m else None
 
 
+_EXACT_SPLIT = re.compile(r"[:|()\-–—]")
+
+
+def _normalize_title(text):
+    return " ".join(re.sub(r"[^\w]+", " ", str(text).lower()).split())
+
+
+def _exact_matches(item, query):
+    """Exact title match: main title (before : | - ( ) separators) must equal
+    the query, so 'Ikigai for Teens'/'The Ikigai Journey' drop but
+    'Ikigai: The Japanese Secret' stays."""
+    title = str(item.get("name") or "")
+    head = _normalize_title(_EXACT_SPLIT.split(title, 1)[0])
+    qs = [_normalize_title(q) for q in str(query).split(",") if q.strip()]
+    if not qs:
+        return True
+    return head in qs
+
+
 def _season_episode_matches(item, season, episode):
     """Match a series result by season/episode (S05E03, S5E3, Season 5...)."""
     name = str(item.get("name") or "").lower()
@@ -873,7 +893,7 @@ def _author_matches(item, author):
     return a in text.lower().replace("_", " ")
 
 
-def _apply_client_filters(results, opts):
+def _apply_client_filters(results, opts, query=""):
     """Client-side filters for args t-api has no query param for (-y, -e, -n,
     -k) plus multi-value -q/-lng (t-api takes a single value per param).
 
@@ -881,6 +901,8 @@ def _apply_client_filters(results, opts):
     Results without a parseable year/date are kept (filter only drops what
     it can positively reject)."""
     out = results
+    if opts.get("exact"):
+        out = [r for r in out if _exact_matches(r, query)]
     include = opts.get("include")
     if include and "," in str(include):
         words = [w.strip().lower() for w in str(include).split(",") if w.strip()]
@@ -983,6 +1005,7 @@ SEARCH_HELP_TEXT = (
     "• <code>-w &lt;format&gt;</code> → file type: <code>mkv</code>, <code>mp4</code>, <code>pdf</code>\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Multi: <code>-w pdf,epub,mobi</code>\n"
     "• <code>-au &lt;author&gt;</code> → author filter (books): <code>-au james</code>, multi-word: <code>-au james_clear</code>\n"
+    "• <code>-ex</code> → exact title match (books): <code>-ex</code>\n"
     "• <code>-S &lt;sort&gt;</code> → <code>seeders</code>, <code>size</code>, <code>date</code>\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;<code>quality</code> bhi: <code>-S quality</code>\n"
     "• <code>-o &lt;order&gt;</code> → <code>asc</code>, <code>desc</code>\n"
@@ -1014,6 +1037,7 @@ SEARCH_HELP_TEXT = (
     "<code>/s ikigai -g books -epub</code>\n"
     "<code>/s atomic habits -ab</code>\n"
     "<code>/s ikigai -au ikigai -w pdf,epub -g books</code>"
+    "\n<code>/s ikigai -ex -g books</code>"
 )
 
 
