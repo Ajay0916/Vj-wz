@@ -452,6 +452,10 @@ def _parse_search_cmd(text):
             opts[_FLAG_ONLY[part]] = True
             i -= 1
             continue
+        if part == "-a":
+            opts["site"] = "all"
+            i -= 1
+            continue
         break
     key = " ".join(parts[1 : i + 1]).strip()
     return key, opts
@@ -548,6 +552,7 @@ SEARCH_HELP_TEXT = (
     "• <code>-g &lt;site&gt;</code> → direct search, buttons skip\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Groups: <code>all</code>, <code>books</code>, <code>courses</code>\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Multiple: <code>1337x,tgx,yts</code>\n"
+    "• <code>-a</code> → all sites ek sath (same as <code>-g all</code>)\n"
     "• <code>-q &lt;quality&gt;</code> → <code>480</code>, <code>720</code>, <code>1080</code>, <code>4k</code>\n"
     "• <code>-lng &lt;lang&gt;</code> → <code>hindi</code>, <code>english</code>, <code>tamil</code>, <code>telugu</code>, <code>dual</code>\n"
     "• <code>-c &lt;cat&gt;</code> → <code>movies</code>, <code>tv</code>, <code>music</code>, <code>anime</code>, <code>audiobook</code>, <code>course</code>, <code>book</code>, <code>game</code>, <code>app</code>\n"
@@ -914,7 +919,7 @@ async def torrent_search(_, message):
         await send_message(
             message,
             "Send a search key along with command\n"
-            "Usage: /search <key> [-l <n>] [-s <n>] [-p <n>] [-f] [-du] [-x <w>] [-g <site>] [-q <q>] [-lng <l>] [-c <c>] [-z <size>] [-S <sort>] [-o <order>]\n/s --help for all args",
+            "Usage: /search <key> [-l <n>] [-s <n>] [-p <n>] [-f] [-du] [-x <w>] [-g <site>] [-a] [-q <q>] [-lng <l>] [-c <c>] [-z <size>] [-S <sort>] [-o <order>]\n/s --help for all args",
             button,
         )
     elif SITES is not None and Config.SEARCH_PLUGINS:
