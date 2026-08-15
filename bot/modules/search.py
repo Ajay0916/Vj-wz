@@ -165,6 +165,12 @@ PAGE2_SITES = {
     "yts",
 }
 
+# Sites excluded from -a (all-sites) search: audiobookbay has its own
+# dedicated button, so it shouldn't flood every "search all" result.
+ALL_SITES_EXCLUDE = {
+    "audiobookbay",
+}
+
 
 def _site_sort_key(item):
     site, name = item
@@ -199,7 +205,7 @@ async def search(
                     group_sites = site
                 if not group_sites and opts.get("all_sites") and SITES:
                     group_sites = ",".join(
-                        s for s in SITES if s != "all"
+                        s for s in SITES if s != "all" and s not in ALL_SITES_EXCLUDE
                     )
                 hide = opts.get("hide_sites")
                 if hide:
