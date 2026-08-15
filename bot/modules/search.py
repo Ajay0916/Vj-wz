@@ -962,23 +962,32 @@ def _is_adult(name):
     return any(kw in low for kw in ADULT_KEYWORDS)
 
 
-# Video-release markers: quality, container, release-type words. Whole-word
-# matched so "mp4"/"avi"/"4k" never hit normal words. -nv drops these,
-# handy for course/book searches where video uploads should not appear.
+# Video-release markers: quality, container, release-type words. -nv drops
+# these, handy for course/book searches where video uploads should not
+# appear. Distinctive tokens match as plain substrings so glued release
+# names like "1080pAmazonWEB-DL" are still caught; short/ambiguous tokens
+# ("avi", "aac") stay whole-word so "Aviator"/"Isaac" are never hit.
 VIDEO_KEYWORDS = (
     "1080p", "2160p", "720p", "480p", "360p", "4k", "8k", "hdrip",
     "brrip", "webrip", "web-dl", "webdl", "bluray", "blu-ray", "remux",
     "hdtv", "dvdrip", "camrip", "h264", "h265", "x264", "x265", "hevc",
-    "aac", "dd5.1", "imax", "mkv", "mp4", "avi", "m2ts", "movies",
+    "dd5.1", "imax", "mkv", "mp4", "m2ts", "movies",
 )
+VIDEO_WORD_KEYWORDS = ("avi", "aac")
+# Dolby Digital tag written with spaces: "DD 5.1", "DD 5 1", "DD5.1"
+VIDEO_RE_PATTERNS = (r"dd\s*5\s*\.?\s*1",)
 
 
 def _is_video(name):
     low = str(name or "").lower()
-    return any(
+    if any(kw in low for kw in VIDEO_KEYWORDS):
+        return True
+    if any(
         re.search(r"(?<![a-z0-9])" + re.escape(kw) + r"(?![a-z0-9])", low)
-        for kw in VIDEO_KEYWORDS
-    )
+        for kw in VIDEO_WORD_KEYWORDS
+    ):
+        return True
+    return any(re.search(pat, low) for pat in VIDEO_RE_PATTERNS)
 
 
 def _apply_client_filters(results, opts, query=""):
