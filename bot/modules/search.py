@@ -59,9 +59,10 @@ def _share_link(url):
 
 
 def _api_headers():
-    """Headers for every search-API call; sends the PIN when configured."""
+    """Headers for every search-API call; sends the PIN when configured
+    and the API PIN toggle (API_PIN_ON) is enabled."""
     headers = {}
-    if Config.API_PIN:
+    if getattr(Config, "API_PIN_ON", True) and Config.API_PIN:
         headers["X-API-Pin"] = Config.API_PIN
     return headers
 PLUGINS = []
