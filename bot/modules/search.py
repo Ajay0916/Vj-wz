@@ -976,11 +976,16 @@ VIDEO_KEYWORDS = (
     "1080p", "2160p", "720p", "480p", "360p", "4k", "8k", "hdrip",
     "brrip", "webrip", "web-dl", "webdl", "bluray", "blu-ray", "remux",
     "hdtv", "dvdrip", "camrip", "h264", "h265", "x264", "x265", "hevc",
-    "dd5.1", "imax", "mkv", "mp4", "m2ts", "movies",
+    "dd5.1", "imax", "mkv", "mp4", "m2ts", "movies", "xvid", "divx",
+    "eztv",
 )
 VIDEO_WORD_KEYWORDS = ("avi", "aac", "hd")
-# Dolby Digital tag written with spaces: "DD 5.1", "DD 5 1", "DD5.1"
-VIDEO_RE_PATTERNS = (r"dd\s*5\s*\.?\s*1",)
+# Dolby Digital tag written with spaces: "DD 5.1", "DD 5 1", "DD5.1",
+# plus TV episode patterns: S03E01 / S03 E01 / S3E1
+VIDEO_RE_PATTERNS = (
+    r"dd\s*5\s*\.?\s*1",
+    r"(?<![a-z0-9])s\d{1,2}\s*e\d{1,2}(?![a-z0-9])",
+)
 
 
 def _is_video(name):
