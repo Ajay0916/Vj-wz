@@ -41,6 +41,16 @@ def _dl_link(url, name="", ext="", short=""):
     )
 
 
+
+
+def _magnet_share_link(magnet, short=""):
+    """'Share Magnet to Telegram' link; uses the API short token when the
+    result has one so the shared link isn't a 1KB+ magnet string."""
+    if short:
+        target = "{}/api/v1/magnet/{}".format(Config.SEARCH_API_LINK, short)
+    else:
+        target = magnet
+    return "http://t.me/share/url?url={}".format(quote(target))
 PLUGINS = []
 SITES = None
 SITE_STATUS = {}
@@ -423,7 +433,9 @@ async def get_result(search_results, key, message, method):
                             msg += " | "
                         if subres.get("magnet"):
                             msg += "<b>Share Magnet to</b> "
-                            msg += f"<a href='http://t.me/share/url?url={quote(subres['magnet'])}'>Telegram</a>"
+                            msg += "<a href='{}'>Telegram</a>".format(
+                                _magnet_share_link(subres["magnet"], subres.get("magnet_short") or "")
+                            )
                         msg += "<br>"
                     msg += "<br>"
                 else:
@@ -476,7 +488,9 @@ async def get_result(search_results, key, message, method):
                         msg += " | "
                     if result.get("magnet"):
                         msg += "<b>Share Magnet to</b> "
-                        msg += f"<a href='http://t.me/share/url?url={quote(result['magnet'])}'>Telegram</a>"
+                        msg += "<a href='{}'>Telegram</a>".format(
+                            _magnet_share_link(result["magnet"], result.get("magnet_short") or "")
+                        )
                     if result.get("torrent") or result.get("magnet"):
                         msg += "<br><br>"
                     else:
