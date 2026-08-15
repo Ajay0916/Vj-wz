@@ -973,7 +973,7 @@ VIDEO_KEYWORDS = (
     "hdtv", "dvdrip", "camrip", "h264", "h265", "x264", "x265", "hevc",
     "dd5.1", "imax", "mkv", "mp4", "m2ts", "movies",
 )
-VIDEO_WORD_KEYWORDS = ("avi", "aac")
+VIDEO_WORD_KEYWORDS = ("avi", "aac", "hd")
 # Dolby Digital tag written with spaces: "DD 5.1", "DD 5 1", "DD5.1"
 VIDEO_RE_PATTERNS = (r"dd\s*5\s*\.?\s*1",)
 
