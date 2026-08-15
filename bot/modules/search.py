@@ -13,14 +13,17 @@ from ..helper.ext_utils.telegraph_helper import telegraph
 from ..helper.telegram_helper.button_build import ButtonMaker
 from ..helper.telegram_helper.message_utils import edit_message, send_message
 
-def _dl_link(url, name, ext=""):
+def _dl_link(url, name="", ext="", short=""):
     """Build a download link for a result. Google Drive URLs are linked
     directly so WZML-X can resolve the Drive ID natively (its extractor
-    fails on proxied drive URLs); everything else goes through the API
+    fails on proxied drive URLs); results with a short token get a tiny
+    /torrent_file/<token> link; everything else goes through the API
     proxy with a filename slug so browsers that ignore Content-Disposition
     still save the file with a real name, not "torrent_file.pdf"."""
     if "drive.usercontent.google.com" in url or "drive.google.com" in url:
         return url
+    if short:
+        return "{}/api/v1/torrent_file/{}".format(Config.SEARCH_API_LINK, short)
     slug = re.sub(r"[^a-zA-Z0-9._-]", "_", str(name or "download"))[:80] or "download"
     slug = slug.strip("._-")
     if not re.search(r"\.[a-z0-9]{2,5}$", slug, re.I):
@@ -463,7 +466,7 @@ async def get_result(search_results, key, message, method):
                             msg += f"<i>+{len(files) - 3} more</i><br>"
                     if result.get("torrent"):
                         msg += "<a href='{}'>Direct Link</a>".format(
-                            _dl_link(result["torrent"], result.get("name") or "", result.get("extension") or "")
+                            _dl_link(result["torrent"], result.get("name") or "", result.get("extension") or "", result.get("short") or "")
                         )
                     if result.get("download"):
                         msg += " | <a href='{}'>Alt Link</a>".format(
