@@ -280,7 +280,7 @@ async def search(
                 if method == "apisearch" and (pages > 1 or multi_query):
                     # -p N => fetch pages 1..N; comma key => each query.
                     # Merged as-is; dedup (by hash/name) only with -du.
-                    merged, seen = [], set()
+                    merged = []
                     search_results = {}
                     dedup = bool(opts.get("dedup"))
                     for q in queries:
@@ -293,15 +293,9 @@ async def search(
                             search_results = data
                             if data.get("error") or data.get("detail"):
                                 continue
-                            for it in (data.get("data") or []):
-                                if not dedup:
-                                    merged.append(it)
-                                    continue
-                                k = it.get("hash") or it.get("name")
-                                if not k or k in seen:
-                                    continue
-                                seen.add(k)
-                                merged.append(it)
+                            merged.extend(data.get("data") or [])
+                    if dedup:
+                        merged = _dedup_rows(merged)
                     search_results = dict(search_results)
                     search_results["data"] = merged
                     search_results["total"] = len(merged)
@@ -317,17 +311,9 @@ async def search(
                     ):
                         # -du on a normal single-page search too: same
                         # release from multiple sites shows only once.
-                        seen = set()
-                        deduped = []
-                        for it in (search_results.get("data") or []):
-                            k = it.get("hash") or it.get("name")
-                            if not k or k in seen:
-                                continue
-                            seen.add(k)
-                            deduped.append(it)
                         search_results = dict(search_results)
-                        search_results["data"] = deduped
-                        search_results["total"] = len(deduped)
+                        search_results["data"] = _dedup_rows(search_results.get("data") or [])
+                        search_results["total"] = len(search_results["data"])
             if isinstance(search_results, dict):
                 api_error = search_results.get("error") or search_results.get("detail")
                 if api_error:
@@ -1048,6 +1034,23 @@ def _is_video(name):
     ):
         return True
     return any(re.search(pat, low) for pat in VIDEO_RE_PATTERNS)
+
+
+def _dedup_rows(rows):
+    """-du: drop rows that repeat the same release. Keyed by the normalized
+    name, so the same release from different sites (different infohash)
+    collapses into one row; hash is used when no name is present."""
+    seen = set()
+    out = []
+    for it in rows:
+        name = re.sub(r"\s+", " ", str(it.get("name") or "")).strip().lower()
+        h = str(it.get("hash") or "").strip().lower()
+        k = name or h
+        if not k or k in seen:
+            continue
+        seen.add(k)
+        out.append(it)
+    return out
 
 
 def _apply_client_filters(results, opts, query=""):
