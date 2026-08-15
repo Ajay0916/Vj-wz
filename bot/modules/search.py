@@ -259,12 +259,18 @@ async def search(
                     api += f"&sites={quote(group_sites)}"
             else:
                 api = f"{Config.SEARCH_API_LINK}/api/v1/recent?site={site}&limit={limit}"
-        api += _api_extra_params(opts, method)
+        api += _api_extra_params(opts, method, is_all=bool(opts.get("all_sites") and method == "apisearch"))
         try:
             pages = max(1, min(int(opts.get("page") or 1), 5))
             queries = [q.strip() for q in str(key).split(",") if q.strip()][:3]
             multi_query = method == "apisearch" and len(queries) > 1
-            async with AsyncSession(timeout=60) as client:
+            if opts.get("timeout"):
+                req_timeout = int(opts["timeout"]) + 60
+            elif method == "apisearch" and opts.get("all_sites"):
+                req_timeout = 900
+            else:
+                req_timeout = 60
+            async with AsyncSession(timeout=req_timeout) as client:
                 if method == "apisearch" and (pages > 1 or multi_query):
                     # -p N => fetch pages 1..N; comma key => each query.
                     # Merged as-is; dedup (by hash/name) only with -du.
@@ -736,12 +742,17 @@ def _size_bounds(value):
     return lo, ""
 
 
-def _api_extra_params(opts, method):
+def _api_extra_params(opts, method, is_all=False):
     """Query-string params for the search API from command-line args."""
     params = []
     if method == "apisearch":
         if opts.get("timeout"):
             params.append(f"timeout={opts['timeout']}")
+        elif is_all:
+            # -a searches every site: don't let the per-site deadline
+            # (40s) skip slow sites - wait up to 10 min so every site
+            # returns results. -to always wins when set explicitly.
+            params.append("timeout=600")
         fmt = opts.get("format")
         if fmt and "," not in str(fmt):
             params.append(f"format={quote(fmt)}")
