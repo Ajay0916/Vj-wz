@@ -51,6 +51,11 @@ def _magnet_share_link(magnet, short=""):
     else:
         target = magnet
     return "http://t.me/share/url?url={}".format(quote(target))
+
+
+def _share_link(url):
+    """Telegram share URL for a direct/alt download link."""
+    return "http://t.me/share/url?url={}".format(quote(url))
 PLUGINS = []
 SITES = None
 SITE_STATUS = {}
@@ -426,9 +431,9 @@ async def get_result(search_results, key, message, method):
                         msg += f"<b>Quality: </b>{subres['quality']} | <b>Type: </b>{subres['type']} | "
                         msg += f"<b>Size: </b>{subres['size']}<br>"
                         if subres.get("torrent"):
-                            msg += "<a href='{}'>Direct Link</a>".format(
-                                _dl_link(subres["torrent"], result.get("name") or "", subres.get("extension") or "")
-                            )
+                            _dl = _dl_link(subres["torrent"], result.get("name") or "", subres.get("extension") or "")
+                            msg += "<a href='{}'>Direct Link</a>".format(_dl)
+                            msg += " | <a href='{}'>Share</a>".format(_share_link(_dl))
                         if subres.get("torrent") and subres.get("magnet"):
                             msg += " | "
                         if subres.get("magnet"):
@@ -476,18 +481,19 @@ async def get_result(search_results, key, message, method):
                             msg += f"• {escape(str(f))[:90]}<br>"
                         if len(files) > 3:
                             msg += f"<i>+{len(files) - 3} more</i><br>"
+                    _links = []
                     if result.get("torrent"):
-                        msg += "<a href='{}'>Direct Link</a>".format(
-                            _dl_link(result["torrent"], result.get("name") or "", result.get("extension") or "", result.get("short") or "")
-                        )
+                        _dl = _dl_link(result["torrent"], result.get("name") or "", result.get("extension") or "", result.get("short") or "")
+                        _links.append("<a href='{}'>Direct Link</a>".format(_dl))
+                        _links.append("<a href='{}'>Share</a>".format(_share_link(_dl)))
                     if result.get("download"):
-                        msg += " | <a href='{}'>Alt Link</a>".format(
-                            _dl_link(result["download"], result.get("name") or "", result.get("extension") or "")
-                        )
-                    if result.get("torrent") and result.get("magnet"):
-                        msg += " | "
+                        _alt = _dl_link(result["download"], result.get("name") or "", result.get("extension") or "", result.get("download_short") or "")
+                        _links.append("<a href='{}'>Alt Link</a>".format(_alt))
+                        _links.append("<a href='{}'>Share</a>".format(_share_link(_alt)))
+                    if _links:
+                        msg += " | ".join(_links)
                     if result.get("magnet"):
-                        msg += "<b>Share Magnet to</b> "
+                        msg += (" | " if _links else "") + "<b>Share Magnet to</b> "
                         msg += "<a href='{}'>Telegram</a>".format(
                             _magnet_share_link(result["magnet"], result.get("magnet_short") or "")
                         )
