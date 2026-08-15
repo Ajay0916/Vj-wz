@@ -24,7 +24,7 @@ def _dl_link(url, name, ext=""):
     slug = re.sub(r"[^a-zA-Z0-9._-]", "_", str(name or "download"))[:80] or "download"
     slug = slug.strip("._-")
     if not re.search(r"\.[a-z0-9]{2,5}$", slug, re.I):
-        if re.fullmatch(r"[a-z0-9]{2,5}", str(ext), re.I):
+        if re.fullmatch(r"[a-z0-9]{2,8}", str(ext), re.I):
             slug = slug.rstrip("._-") + "." + str(ext).lower()
         else:
             m = re.search(
