@@ -59,10 +59,10 @@ def _share_link(url):
 
 
 def _api_headers():
-    """Headers for every search-API call; sends the PIN when configured
-    and the API PIN toggle (API_PIN_ON) is enabled."""
+    """Headers for every search-API call; sends the PIN automatically
+    when it is set in settings."""
     headers = {}
-    if getattr(Config, "API_PIN_ON", True) and Config.API_PIN:
+    if Config.API_PIN:
         headers["X-API-Pin"] = Config.API_PIN
     return headers
 PLUGINS = []
@@ -318,10 +318,20 @@ async def search(
             if isinstance(search_results, dict):
                 api_error = search_results.get("error") or search_results.get("detail")
                 if api_error:
-                    await edit_message(
-                        message,
-                        f"{escape(str(api_error))}\nTorrent Site:- <i>{_site_display_name(site)}</i>",
-                    )
+                    if "pin" in str(api_error).lower():
+                        await edit_message(
+                            message,
+                            "🔑 Please give API pin for result.\n"
+                            "/settings → <code>API_PIN</code> me sahi PIN set karo. "
+                            "Current: <code>{}</code>".format(
+                                escape(str(Config.API_PIN or "None"))
+                            ),
+                        )
+                    else:
+                        await edit_message(
+                            message,
+                            f"{escape(str(api_error))}\nTorrent Site:- <i>{_site_display_name(site)}</i>",
+                        )
                     return
             if search_results["total"] == 0:
                 await edit_message(

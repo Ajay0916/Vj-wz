@@ -221,7 +221,6 @@ DEFAULT_DESP = {
     "RSS_SIZE_LIMIT": "RSS download size limit in GB. 0 = unlimited.",
     "SEARCH_API_LINK": "Search API app URL for multi-search.",
     "API_PIN": "API PIN for search API auth (X-API-Pin header). Empty = no auth.",
-    "API_PIN_ON": "Send API PIN header on search API calls. Off = public access.",
     "SEARCH_LIMIT": "Max search results per site. 0 = default API limit.",
     "SEARCH_PLUGINS": "qBittorrent search plugin URLs. List format.",
     "SET_COMMANDS": "Auto-set bot commands on start. Default: True.",
@@ -276,7 +275,6 @@ RESTART_VARS = {
 }
 
 ONOFF_VARS = [
-    "API_PIN_ON",
     "DISABLE_TORRENTS",
     "DISABLE_LEECH",
     "DISABLE_BULK",
@@ -390,9 +388,7 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
     elif key == "setonoff":
         for k in ONOFF_VARS:
             val = Config.get(k)
-            label = {"API_PIN_ON": "API PIN"}.get(
-                k, k.removeprefix("DISABLE_")
-            )
+            label = k.removeprefix("DISABLE_")
             if not val:
                 buttons.data_button(f"✓ {label}", f"botset toggleonoff {k} on")
             else:
