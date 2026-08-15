@@ -653,7 +653,18 @@ def _parse_search_cmd(text):
 
     Args are only recognised at the END, after the key - putting them
     before the key would be confusing."""
-    parts = (text or "").split()
+    text = text or ""
+    # Hold quoted phrases ("data science") as single tokens so spaced words
+    # work as flag values: -k "machine learning" stays one keyword.
+    quoted = {}
+
+    def _hold(m):
+        idx = len(quoted)
+        quoted[idx] = m.group(1)
+        return "__Q{}__".format(idx)
+
+    text = re.sub(r'"([^"]+)"', _hold, text)
+    parts = text.split()
     opts = {}
     i = len(parts) - 1
     while i > 0:
@@ -701,6 +712,20 @@ def _parse_search_cmd(text):
             continue
         break
     key = " ".join(parts[1 : i + 1]).strip()
+
+    def _restore(v):
+        if isinstance(v, str):
+            return re.sub(
+                r"__Q(\d+)__",
+                lambda m: quoted.get(int(m.group(1)), ""),
+                v,
+            )
+        if isinstance(v, list):
+            return [_restore(x) for x in v]
+        return v
+
+    key = _restore(key)
+    opts = {k: _restore(v) for k, v in opts.items()}
     return key, opts
 
 
@@ -1052,7 +1077,11 @@ def _apply_client_filters(results, opts, query=""):
             out = [r for r in out if any(_language_matches(r, l) for l in langs)]
     keywords = opts.get("keywords")
     if keywords:
-        words = [w.strip().lower() for w in str(keywords).split(",") if w.strip()]
+        words = [
+            w.strip().lower().replace("_", " ")
+            for w in str(keywords).split(",")
+            if w.strip()
+        ]
         if words:
             out = [
                 r
@@ -1112,6 +1141,7 @@ SEARCH_HELP_TEXT = (
     "• <code>-x &lt;word&gt;</code> → sirf us word wale results\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Multi: <code>-x 1080p,4k</code>\n"
     "• <code>-k &lt;words&gt;</code> → title me SAB words match (strict): <code>complete,course</code>\n"
+    "&nbsp;&nbsp;&nbsp;&nbsp;Spaced: <code>-k \"machine learning\"</code> ya <code>machine_learning</code>\n"
     "• <code>-e &lt;words&gt;</code> → exclude words: <code>hindi,audible</code>\n"
     "• <code>-ad</code> → adult/porn results hatao\n"
     "• <code>-nv</code> → video results hatao (1080p/mkv/webrip) - courses ke liye useful\n"
