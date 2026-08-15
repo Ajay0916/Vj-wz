@@ -949,10 +949,15 @@ ADULT_KEYWORDS = (
     "blowjob", "sextape", "sex tape", "bukkake", "squirt", "dildo",
     "gangbang", "bdsm", "erotic", "erotica",
 )
+# Whole-word matches only, so "anal" never hits "analog"/"analysis".
+ADULT_WORD_KEYWORDS = ("anal",)
 
 
 def _is_adult(name):
     low = str(name or "").lower()
+    for kw in ADULT_WORD_KEYWORDS:
+        if re.search(r"(?<![a-z0-9])" + re.escape(kw) + r"(?![a-z0-9])", low):
+            return True
     return any(kw in low for kw in ADULT_KEYWORDS)
 
 
