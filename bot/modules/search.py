@@ -29,7 +29,7 @@ def _dl_link(url, name, ext=""):
         else:
             m = re.search(
                 r"(?<![a-z0-9])(pdf|epub|mobi|azw3|djvu|fb2|zip|rar|mp3|m4b|torrent)(?![a-z0-9])",
-                slug,
+                slug + " " + str(url),
                 re.I,
             )
             slug = slug.rstrip("._-") + ("." + m.group(1).lower() if m else ".dl")
