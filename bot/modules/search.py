@@ -310,6 +310,24 @@ async def search(
                         api += f"&page={pages}"
                     response = await client.get(api, headers=_api_headers())
                     search_results = response.json()
+                    if (
+                        method == "apisearch"
+                        and opts.get("dedup")
+                        and isinstance(search_results, dict)
+                    ):
+                        # -du on a normal single-page search too: same
+                        # release from multiple sites shows only once.
+                        seen = set()
+                        deduped = []
+                        for it in (search_results.get("data") or []):
+                            k = it.get("hash") or it.get("name")
+                            if not k or k in seen:
+                                continue
+                            seen.add(k)
+                            deduped.append(it)
+                        search_results = dict(search_results)
+                        search_results["data"] = deduped
+                        search_results["total"] = len(deduped)
             if isinstance(search_results, dict):
                 api_error = search_results.get("error") or search_results.get("detail")
                 if api_error:
