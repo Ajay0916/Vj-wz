@@ -613,6 +613,7 @@ _FLAG_ONLY = {
     "-du": "dedup",
     "-auto": "auto_leech",
     "-ex": "exact",
+    "-ad": "adult",
     "--help": "help",
 }
 
@@ -943,6 +944,18 @@ def _author_matches(item, author):
     return a in text.lower().replace("_", " ")
 
 
+ADULT_KEYWORDS = (
+    "porn", "xxx", "hentai", "onlyfans", "nsfw", "milf", "creampie",
+    "blowjob", "sextape", "sex tape", "bukkake", "squirt", "dildo",
+    "gangbang", "bdsm", "erotic", "erotica",
+)
+
+
+def _is_adult(name):
+    low = str(name or "").lower()
+    return any(kw in low for kw in ADULT_KEYWORDS)
+
+
 def _apply_client_filters(results, opts, query=""):
     """Client-side filters for args t-api has no query param for (-y, -e, -n,
     -k) plus multi-value -q/-lng (t-api takes a single value per param).
@@ -1024,6 +1037,8 @@ def _apply_client_filters(results, opts, query=""):
                 for r in out
                 if not any(w in str(r.get("name") or "").lower() for w in words)
             ]
+    if opts.get("adult"):
+        out = [r for r in out if not _is_adult(str(r.get("name") or ""))]
     return out
 
 
@@ -1040,6 +1055,7 @@ SEARCH_HELP_TEXT = (
     "&nbsp;&nbsp;&nbsp;&nbsp;Multi: <code>-x 1080p,4k</code>\n"
     "• <code>-k &lt;words&gt;</code> → title me SAB words match (strict): <code>complete,course</code>\n"
     "• <code>-e &lt;words&gt;</code> → exclude words: <code>hindi,audible</code>\n"
+    "• <code>-ad</code> → adult/porn results hatao\n"
     "• <code>-g &lt;site&gt;</code> → direct search, buttons skip\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Groups: <code>all</code> (17 sites), <code>books</code>, <code>courses</code>\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Multiple: <code>1337x,tgx,yts</code>\n"
