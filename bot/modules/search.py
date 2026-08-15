@@ -969,7 +969,7 @@ VIDEO_KEYWORDS = (
     "1080p", "2160p", "720p", "480p", "360p", "4k", "8k", "hdrip",
     "brrip", "webrip", "web-dl", "webdl", "bluray", "blu-ray", "remux",
     "hdtv", "dvdrip", "camrip", "h264", "h265", "x264", "x265", "hevc",
-    "aac", "dd5.1", "imax", "mkv", "mp4", "avi", "m2ts",
+    "aac", "dd5.1", "imax", "mkv", "mp4", "avi", "m2ts", "movies",
 )
 
 
