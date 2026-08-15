@@ -1037,15 +1037,18 @@ def _is_video(name):
 
 
 def _dedup_rows(rows):
-    """-du: drop rows that repeat the same release. Keyed by the normalized
-    name, so the same release from different sites (different infohash)
-    collapses into one row; hash is used when no name is present."""
+    """-du: drop rows that repeat the same release. Keyed by the infohash
+    first, so the same torrent on multiple sites collapses into one row;
+    rows without a hash fall back to the normalized name. Same-name rows
+    with different hashes are different releases and stay separate."""
     seen = set()
     out = []
     for it in rows:
-        name = re.sub(r"\s+", " ", str(it.get("name") or "")).strip().lower()
         h = str(it.get("hash") or "").strip().lower()
-        k = name or h
+        if h:
+            k = h
+        else:
+            k = re.sub(r"\s+", " ", str(it.get("name") or "")).strip().lower()
         if not k or k in seen:
             continue
         seen.add(k)
