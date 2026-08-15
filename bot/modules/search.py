@@ -614,6 +614,7 @@ _FLAG_ONLY = {
     "-auto": "auto_leech",
     "-ex": "exact",
     "-ad": "adult",
+    "-nv": "no_video",
     "--help": "help",
 }
 
@@ -961,6 +962,25 @@ def _is_adult(name):
     return any(kw in low for kw in ADULT_KEYWORDS)
 
 
+# Video-release markers: quality, container, release-type words. Whole-word
+# matched so "mp4"/"avi"/"4k" never hit normal words. -nv drops these,
+# handy for course/book searches where video uploads should not appear.
+VIDEO_KEYWORDS = (
+    "1080p", "2160p", "720p", "480p", "360p", "4k", "8k", "hdrip",
+    "brrip", "webrip", "web-dl", "webdl", "bluray", "blu-ray", "remux",
+    "hdtv", "dvdrip", "camrip", "h264", "h265", "x264", "x265", "hevc",
+    "aac", "dd5.1", "imax", "mkv", "mp4", "avi", "m2ts",
+)
+
+
+def _is_video(name):
+    low = str(name or "").lower()
+    return any(
+        re.search(r"(?<![a-z0-9])" + re.escape(kw) + r"(?![a-z0-9])", low)
+        for kw in VIDEO_KEYWORDS
+    )
+
+
 def _apply_client_filters(results, opts, query=""):
     """Client-side filters for args t-api has no query param for (-y, -e, -n,
     -k) plus multi-value -q/-lng (t-api takes a single value per param).
@@ -1044,6 +1064,8 @@ def _apply_client_filters(results, opts, query=""):
             ]
     if opts.get("adult"):
         out = [r for r in out if not _is_adult(str(r.get("name") or ""))]
+    if opts.get("no_video"):
+        out = [r for r in out if not _is_video(str(r.get("name") or ""))]
     return out
 
 
@@ -1061,6 +1083,7 @@ SEARCH_HELP_TEXT = (
     "• <code>-k &lt;words&gt;</code> → title me SAB words match (strict): <code>complete,course</code>\n"
     "• <code>-e &lt;words&gt;</code> → exclude words: <code>hindi,audible</code>\n"
     "• <code>-ad</code> → adult/porn results hatao\n"
+    "• <code>-nv</code> → video results hatao (1080p/mkv/webrip) - courses ke liye useful\n"
     "• <code>-g &lt;site&gt;</code> → direct search, buttons skip\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Groups: <code>all</code> (17 sites), <code>books</code>, <code>courses</code>\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Multiple: <code>1337x,tgx,yts</code>\n"
