@@ -994,7 +994,7 @@ SEARCH_HELP_TEXT = (
     "&nbsp;&nbsp;&nbsp;&nbsp;Groups: <code>all</code> (17 sites), <code>books</code>, <code>courses</code>\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Multiple: <code>1337x,tgx,yts</code>\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Hide sites: <code>-hs 1337x,tgx</code> (ulta <code>-g</code>)\n"
-    "• <code>-a</code> → SAB sites ek sath (29: general + books + courses)\n"
+    "• <code>-a</code> → SAB sites ek sath (31: general + books + courses)\n"
     "• <code>-q &lt;quality&gt;</code> → <code>480</code>, <code>720</code>, <code>1080</code>, <code>4k</code>\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Multi: <code>-q 1080p,4k</code>\n"
     "• <code>-lng &lt;lang&gt;</code> → <code>hindi</code>, <code>english</code>, <code>tamil</code>, <code>telugu</code>, <code>dual</code>\n"
@@ -1195,6 +1195,7 @@ BOOK_SITES = {
     "annasarchive",
     "libgen",
     "archivebooks",
+    "gutenberg",
 }
 
 # Category-group buttons: Courses and Books search their whole group at
@@ -1206,6 +1207,7 @@ COURSE_SITES = {
     "freecoursesites",
     "rutracker",
     "pimpmymind",
+    "thedownloadly",
 }
 BOOK_GROUP_SITES = BOOK_SITES | {
     "hindiaudio",
