@@ -56,6 +56,14 @@ def _magnet_share_link(magnet, short=""):
 def _share_link(url):
     """Telegram share URL for a direct/alt download link."""
     return "http://t.me/share/url?url={}".format(quote(url))
+
+
+def _api_headers():
+    """Headers for every search-API call; sends the PIN when configured."""
+    headers = {}
+    if Config.API_PIN:
+        headers["X-API-Pin"] = Config.API_PIN
+    return headers
 PLUGINS = []
 SITES = None
 SITE_STATUS = {}
@@ -68,7 +76,9 @@ async def _refresh_sites():
     global SITES, SITE_STATUS
     try:
         async with AsyncSession() as client:
-            response = await client.get(f"{Config.SEARCH_API_LINK}/api/v1/sites")
+            response = await client.get(
+                f"{Config.SEARCH_API_LINK}/api/v1/sites", headers=_api_headers()
+            )
             data = response.json()
         sites = data.get("sites")
         if isinstance(sites, list):
@@ -86,7 +96,7 @@ async def _refresh_sites():
         try:
             async with AsyncSession() as client:
                 response = await client.get(
-                    f"{Config.SEARCH_API_LINK}/api/v1/sites/status"
+                    f"{Config.SEARCH_API_LINK}/api/v1/sites/status", headers=_api_headers()
                 )
                 status_data = response.json()
             for item in status_data.get("sites", []):
@@ -264,7 +274,7 @@ async def search(
                     for q in queries:
                         qapi = api.replace(quote(key), quote(q)) if multi_query else api
                         for pg in range(1, (1 if multi_query else pages) + 1):
-                            resp = await client.get(f"{qapi}&page={pg}")
+                            resp = await client.get(f"{qapi}&page={pg}", headers=_api_headers())
                             data = resp.json()
                             if not isinstance(data, dict):
                                 continue
@@ -286,7 +296,7 @@ async def search(
                 else:
                     if method != "apisearch" and pages > 1:
                         api += f"&page={pages}"
-                    response = await client.get(api)
+                    response = await client.get(api, headers=_api_headers())
                     search_results = response.json()
             if isinstance(search_results, dict):
                 api_error = search_results.get("error") or search_results.get("detail")

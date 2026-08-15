@@ -220,6 +220,7 @@ DEFAULT_DESP = {
     "RSS_DELAY": "RSS feed check interval in seconds. Default: 600.",
     "RSS_SIZE_LIMIT": "RSS download size limit in GB. 0 = unlimited.",
     "SEARCH_API_LINK": "Search API app URL for multi-search.",
+    "API_PIN": "API PIN for search API auth (X-API-Pin header). Empty = no auth.",
     "SEARCH_LIMIT": "Max search results per site. 0 = default API limit.",
     "SEARCH_PLUGINS": "qBittorrent search plugin URLs. List format.",
     "SET_COMMANDS": "Auto-set bot commands on start. Default: True.",
@@ -655,7 +656,7 @@ async def edit_variable(_, message, pre_message, key):
     await update_buttons(pre_message, key, "editvar", False)
     await delete_message(message)
     await database.update_config({key: value})
-    if key in ["SEARCH_PLUGINS", "SEARCH_API_LINK"]:
+    if key in ["SEARCH_PLUGINS", "SEARCH_API_LINK", "API_PIN"]:
         await initiate_search_tools()
     elif key in ["QUEUE_ALL", "QUEUE_DOWNLOAD", "QUEUE_UPLOAD"]:
         await start_from_queued()

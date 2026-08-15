@@ -116,6 +116,7 @@ class Config:
     RSS_DELAY = 600
     RSS_SIZE_LIMIT = 0
     SEARCH_API_LINK = ""
+    API_PIN = ""
     SEARCH_LIMIT = 0
     SEARCH_PLUGINS = []
     SET_COMMANDS = True
