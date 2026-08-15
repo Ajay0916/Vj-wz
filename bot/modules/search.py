@@ -986,6 +986,13 @@ VIDEO_RE_PATTERNS = (
     r"dd\s*5\s*\.?\s*1",
     r"(?<![a-z0-9])s\d{1,2}\s*e\d{1,2}(?![a-z0-9])",
 )
+# Result categories that mean video/TV content - -nv drops these too.
+# Exact lowercased match, so "Video Training" (courses) is NOT dropped.
+VIDEO_CATEGORIES = {
+    "movies", "movie", "tv", "tv-shows", "tv shows", "television",
+    "video", "anime", "series", "episodes", "episode", "shows", "show",
+    "cartoon", "cartoons", "xxx",
+}
 
 
 def _is_video(name):
@@ -1084,7 +1091,12 @@ def _apply_client_filters(results, opts, query=""):
     if opts.get("adult"):
         out = [r for r in out if not _is_adult(str(r.get("name") or ""))]
     if opts.get("no_video"):
-        out = [r for r in out if not _is_video(str(r.get("name") or ""))]
+        out = [
+            r
+            for r in out
+            if not _is_video(str(r.get("name") or ""))
+            and str(r.get("category") or "").strip().lower() not in VIDEO_CATEGORIES
+        ]
     return out
 
 
