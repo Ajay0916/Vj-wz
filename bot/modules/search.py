@@ -948,10 +948,15 @@ def _author_matches(item, author):
 ADULT_KEYWORDS = (
     "porn", "xxx", "hentai", "onlyfans", "nsfw", "milf", "creampie",
     "blowjob", "sextape", "sex tape", "bukkake", "squirt", "dildo",
-    "gangbang", "bdsm", "erotic", "erotica",
+    "gangbang", "bdsm", "erotic", "erotica", "fuck", "horny", "manyvids",
+    "tits", "boobs", "naked", "nude", "cumshot", "vagina", "penis",
+    "orgasm", "pornstar", "squirting", "incest", "whore", "slut", "bitch",
+    "stepmom", "stepsister",
 )
-# Whole-word matches only, so "anal" never hits "analog"/"analysis".
-ADULT_WORD_KEYWORDS = ("anal",)
+# Whole-word matches only: "anal" never hits "analog", "sex" never hits
+# "Essex"/"Middlesex", "cum" never hits "document", "cock" never hits
+# "cocktail", "dick" never hits "Dickens", "pussy" never hits "Pussycat".
+ADULT_WORD_KEYWORDS = ("anal", "sex", "cum", "cock", "dick", "pussy", "rape", "ass")
 
 
 def _is_adult(name):
