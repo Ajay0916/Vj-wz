@@ -381,6 +381,7 @@ PASSWORD_ERROR_MESSAGE = """
 
 
 def get_bot_commands():
+    from ...core.config_manager import Config
     from ...core.plugin_manager import get_plugin_manager
 
     static_commands = {
@@ -416,7 +417,7 @@ def get_bot_commands():
     commands = static_commands.copy()
 
     plugin_manager = get_plugin_manager()
-    if plugin_manager:
+    if plugin_manager and not Config.DISABLE_PLUGINS:
         for plugin_info in plugin_manager.list_plugins():
             if plugin_info.enabled and plugin_info.commands:
                 for cmd in plugin_info.commands:
@@ -440,6 +441,14 @@ DISABLE_COMMANDS = {
     "DISABLE_YTDLP": {"Ytdl", "YtdlLeech"},
     "DISABLE_TORRENTS": {"QbMirror", "QbLeech"},
     "DISABLE_LEECH": {"Leech", "QbLeech", "JdLeech", "NzbLeech", "YtdlLeech"},
+    "DISABLE_IMAGES": {"AddImage", "Images"},
+    "DISABLE_UPHOSTER": {"UpHoster"},
+    "DISABLE_PLUGINS": {"Plugins"},
+    "DISABLE_SHELL": {"Shell", "AExec", "Exec", "ClearLocals"},
+    "DISABLE_IMDB": {"IMDB"},
+    "DISABLE_LIST": {"List"},
+    "DISABLE_CLONE": {"Clone"},
+    "DISABLE_MEDIAINFO": {"MediaInfo"},
 }
 
 

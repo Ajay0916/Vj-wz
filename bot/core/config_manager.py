@@ -34,6 +34,14 @@ class Config:
     DISABLE_RSS = False
     DISABLE_SEARCH = False
     DISABLE_YTDLP = False
+    DISABLE_IMAGES = False
+    DISABLE_UPHOSTER = False
+    DISABLE_PLUGINS = False
+    DISABLE_SHELL = False
+    DISABLE_IMDB = False
+    DISABLE_LIST = False
+    DISABLE_CLONE = False
+    DISABLE_MEDIAINFO = False
     EQUAL_SPLITS = False
     EXCLUDED_EXTENSIONS = ""
     FFMPEG_CMDS = {}

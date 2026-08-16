@@ -295,6 +295,25 @@ ONOFF_VARS = [
     "DISABLE_YTDLP",
 ]
 
+NEW_ONOFF_VARS = [
+    "DISABLE_IMAGES",
+    "DISABLE_UPHOSTER",
+    "DISABLE_PLUGINS",
+    "DISABLE_SHELL",
+    "DISABLE_IMDB",
+    "DISABLE_LIST",
+    "DISABLE_CLONE",
+    "DISABLE_MEDIAINFO",
+]
+
+BOOL_ONOFF_VARS = [
+    "BOT_PM",
+    "DELETE_LINKS",
+    "COLORED_BTNS",
+    "MEDIA_STORE",
+    "USE_HYPER",
+]
+
 
 async def get_buttons(key=None, edit_type=None, edit_mode=False):
     buttons = ButtonMaker()
@@ -445,6 +464,33 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
                     "USE_HYPER",
                 ]
             )
+        if Config.DISABLE_IMAGES:
+            hidden_vars.update(
+                ["IMG_SEARCH", "IMG_PAGE", "IMG_SOURCES", "USE_IMAGES"]
+            )
+        if Config.DISABLE_UPHOSTER:
+            hidden_vars.update(
+                [
+                    "GOFILE_API",
+                    "GOFILE_FOLDER_ID",
+                    "GOFILE_AUTO_CREATE_FOLDER",
+                    "PIXELDRAIN_KEY",
+                    "FILELION_API",
+                    "BUZZHEAVIER_API",
+                    "DEVUPLOADS_KEY",
+                    "DEVUPLOADS_FOLDER",
+                    "VIKINGFILE_HASH",
+                    "VIKINGFILE_FOLDER",
+                    "STREAMWISH_API",
+                    "PROTECTED_API",
+                    "DEBRID_LINK_API",
+                    "INSTADL_API",
+                ]
+            )
+        if Config.DISABLE_IMDB:
+            hidden_vars.update(["IMDB_TEMPLATE"])
+        if Config.DISABLE_LIST:
+            hidden_vars.update(["INDEX_URL"])
         conf_dict = {
             k: v
             for k, v in Config.get_all().items()
@@ -472,11 +518,31 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
                 buttons.data_button(label, f"botset toggleonoff {k} off")
         if not Config.DISABLE_SEARCH:
             buttons.data_button("API Result", "botset api_result")
+        buttons.data_button("Page 2 ⏭", "botset setonoff2")
         buttons.data_button("Back", "botset back", position="footer")
         buttons.data_button(
             "Close", "botset close", position="footer", style=ButtonStyle.DANGER
         )
-        msg = "⌬ <b><u>Module Settings</u></b>"
+        msg = "⌬ <b><u>Module Settings</u></b> | Page 1"
+    elif key == "setonoff2":
+        for k in NEW_ONOFF_VARS:
+            val = Config.get(k)
+            label = k.removeprefix("DISABLE_")
+            if not val:
+                buttons.data_button(f"✓ {label}", f"botset toggleonoff {k} on")
+            else:
+                buttons.data_button(label, f"botset toggleonoff {k} off")
+        for k in BOOL_ONOFF_VARS:
+            if Config.get(k):
+                buttons.data_button(f"✓ {k}", f"botset toggleonoff {k} off")
+            else:
+                buttons.data_button(k, f"botset toggleonoff {k} on")
+        buttons.data_button("Page 1 ⏮", "botset setonoff")
+        buttons.data_button("Back", "botset back", position="footer")
+        buttons.data_button(
+            "Close", "botset close", position="footer", style=ButtonStyle.DANGER
+        )
+        msg = "⌬ <b><u>Module Settings</u></b> | Page 2"
     elif key == "api_result":
         host = str(Config.get("SEARCH_RESULT_HOST") or "telegraph")
         buttons.data_button(
@@ -794,7 +860,8 @@ async def toggle_onoff_var(_, query, pre_message, key, value):
     Config.set(key, bool_value)
     await database.update_config({key: bool_value})
     await _handle_service_toggle(key, bool_value)
-    await update_buttons(pre_message, "setonoff")
+    page = "setonoff" if key in ONOFF_VARS else "setonoff2"
+    await update_buttons(pre_message, page)
     if database.db is None:
         await query.answer(
             "DATABASE_URL not set - toggle will NOT survive restart! Set it in config.py.",
@@ -1213,9 +1280,16 @@ async def edit_bot_settings(client, query):
         Config.set("SEARCH_RESULT_HOST", data[2])
         await database.update_config({"SEARCH_RESULT_HOST": data[2]})
         await update_buttons(message, "api_result")
-    elif data[1] in ["var", "aria", "qbit", "nzb", "nzbserver", "setonoff", "api_result"] or data[
-        1
-    ].startswith("nzbser"):
+    elif data[1] in [
+        "var",
+        "aria",
+        "qbit",
+        "nzb",
+        "nzbserver",
+        "setonoff",
+        "setonoff2",
+        "api_result",
+    ] or data[1].startswith("nzbser"):
         if data[1] == "qbit" and Config.DISABLE_TORRENTS:
             await query.answer(
                 "qBittorrent is disabled by the Bot Owner.", show_alert=True
