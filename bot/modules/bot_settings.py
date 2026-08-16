@@ -305,6 +305,7 @@ NEW_ONOFF_VARS = [
     "DISABLE_LIMITS",
     "DISABLE_QUEUE",
     "DISABLE_RCLONE",
+    "DISABLE_GOOGLE",
 ]
 
 
@@ -503,6 +504,10 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
                     "DEBRID_LINK_API",
                     "INSTADL_API",
                 ]
+            )
+        if Config.DISABLE_GOOGLE:
+            hidden_vars.update(
+                ["GDRIVE_ID", "GD_DESP", "GD_DL_LIMIT", "INDEX_URL", "USE_SERVICE_ACCOUNTS"]
             )
         if Config.DISABLE_IMDB:
             hidden_vars.update(["IMDB_TEMPLATE"])

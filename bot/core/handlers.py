@@ -188,7 +188,7 @@ async def add_handlers():
     TgClient.bot.add_handler(
         CallbackQueryHandler(cancel_multi, filters=regex("^stopm"))
     )
-    if not Config.DISABLE_CLONE:
+    if not Config.DISABLE_CLONE and not Config.DISABLE_GOOGLE:
         TgClient.bot.add_handler(
             MessageHandler(
                 clone_node,
@@ -528,14 +528,15 @@ async def add_handlers():
     TgClient.bot.add_handler(
         CallbackQueryHandler(confirm_category, filters=regex("^scat"))
     )
-    TgClient.bot.add_handler(
-        MessageHandler(
-            drive_clean,
-            filters=command(BotCommands.GDCleanCommand, case_sensitive=True)
-            & CustomFilters.authorized,
+    if not Config.DISABLE_GOOGLE:
+        TgClient.bot.add_handler(
+            MessageHandler(
+                drive_clean,
+                filters=command(BotCommands.GDCleanCommand, case_sensitive=True)
+                & CustomFilters.authorized,
+            )
         )
-    )
-    TgClient.bot.add_handler(
-        CallbackQueryHandler(confirm_drive_clean_cb, filters=regex("^gdccat"))
-    )
+        TgClient.bot.add_handler(
+            CallbackQueryHandler(confirm_drive_clean_cb, filters=regex("^gdccat"))
+        )
     await refresh_bot_commands()
