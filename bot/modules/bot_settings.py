@@ -112,6 +112,11 @@ BOOL_VARS = [
     "WEB_PINCODE",
 ]
 
+# Config vars with preset choice buttons (rendered directly like BOOL_VARS).
+CHOICE_VARS = {
+    "SEARCH_RESULT_HOST": [("Telegraph", "telegraph"), ("Rentry", "rentry")],
+}
+
 DEFAULT_DESP = {
     "AS_DOCUMENT": "Send files as document instead of media. Default: False.",
     "AUTHORIZED_CHATS": "User/Chat IDs authorized to use the bot. Space-separated. Supports thread IDs with | separator.",
@@ -223,6 +228,7 @@ DEFAULT_DESP = {
     "API_PIN": "API PIN for search API auth (X-API-Pin header). Empty = no auth.",
     "SEARCH_LIMIT": "Max search results per site. 0 = default API limit.",
     "SEARCH_PLUGINS": "qBittorrent search plugin URLs. List format.",
+    "SEARCH_RESULT_HOST": "Search results kahan publish honge: telegraph | rentry (Module Settings → API Result bhi).",
     "SET_COMMANDS": "Auto-set bot commands on start. Default: True.",
     "STATUS_LIMIT": "Number of status messages to show. Default: 10.",
     "STATUS_UPDATE_INTERVAL": "Status message refresh interval in seconds. Default: 15.",
@@ -347,7 +353,11 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
                 "View Value", f"botset showvar {key}", position="header"
             )
             buttons.data_button("Back", "botset back var", position="footer")
-            if key not in BOOL_VARS:
+            if key in CHOICE_VARS:
+                msg += "<i>Choose a value for the above Var</i>\n\n"
+                for label, value in CHOICE_VARS[key]:
+                    buttons.data_button(label, f"botset choicevar {key} {value}")
+            elif key not in BOOL_VARS:
                 if not edit_mode:
                     buttons.data_button(
                         "Edit Value",
@@ -360,7 +370,11 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
                 msg += "<i>Choose a valid value for the above Var</i>\n\n"
                 buttons.data_button("True", f"botset boolvar {key} on")
                 buttons.data_button("False", f"botset boolvar {key} off")
-            if key not in BOOL_VARS and key not in PROTECTED_VARS:
+            if (
+                key not in BOOL_VARS
+                and key not in CHOICE_VARS
+                and key not in PROTECTED_VARS
+            ):
                 buttons.data_button("Reset", f"botset resetvar {key}")
             buttons.data_button(
                 "Close", "botset close", position="footer", style=ButtonStyle.DANGER
@@ -1281,6 +1295,13 @@ async def edit_bot_settings(client, query):
         key = data[2]
         value = data[3]
         await toggle_bool_var(client, query, message, key, value)
+    elif data[1] == "choicevar":
+        await query.answer()
+        key = data[2]
+        value = data[3]
+        Config.set(key, value)
+        await database.update_config({key: value})
+        await update_buttons(message, key, "editvar", False)
     elif data[1] == "toggleonoff":
         await query.answer()
         key = data[2]
