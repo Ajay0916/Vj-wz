@@ -19,6 +19,7 @@ from ..core.torrent_manager import TorrentManager
 from ..helper.ext_utils.bot_utils import (
     THREAD_POOL,
     cmd_exec,
+    git_info,
     new_task,
     resolve_command,
 )
@@ -60,12 +61,16 @@ async def restart_sessions(_, message):
 
 def _restart_header(now, is_restart_chat=False):
     title = "Restarted Successfully!" if is_restart_chat else "Bot Restarted!"
+    commit = git_info.commit_hash()
+    commit_url = git_info.commit_url()
+    commit_txt = f'<a href="{commit_url}">{commit}</a>' if commit_url else commit
     return (
         f"⌬ <b><i>{title}</i></b>\n"
         f"┟ <b>Date:</b> {now.strftime('%d/%m/%y')}\n"
         f"┠ <b>Time:</b> {now.strftime('%I:%M:%S %p')}\n"
         f"┠ <b>TimeZone:</b> {Config.TIMEZONE}\n"
         f"┠ <b>Branch:</b> {Config.UPSTREAM_BRANCH}\n"
+        f"┠ <b>Commit:</b> {commit_txt}\n"
         f"┖ <b>Version:</b> {get_version()}"
     )
 
