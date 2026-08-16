@@ -85,13 +85,19 @@ async def main():
     bot_loop.create_task(TgClient.start_user())
     bot_loop.create_task(TgClient.start_helper_bots())
     bot_loop.create_task(TgClient.start_helper_users())
-    await gather(load_configurations(), update_variables())
+    try:
+        await gather(load_configurations(), update_variables())
+    except Exception as e:
+        LOGGER.error(f"load_configurations/update_variables failed: {e}")
 
-    await gather(
-        update_qb_options(),
-        update_aria2_options(),
-        update_nzb_options(),
-    )
+    try:
+        await gather(
+            update_qb_options(),
+            update_aria2_options(),
+            update_nzb_options(),
+        )
+    except Exception as e:
+        LOGGER.error(f"service options update failed: {e}")
     from .core.jdownloader_booter import jdownloader
     from .helper.ext_utils.bot_utils import git_info, search_images
     from .helper.ext_utils.files_utils import clean_all

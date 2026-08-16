@@ -76,17 +76,20 @@ async def refresh_bot_commands():
         len(BOT_COMMANDS),
     )
 
-    await TgClient.bot.set_bot_commands(
-        [
-            BotCommand(
-                cmds[0] if isinstance(cmds, list) else cmds,
-                description,
-            )
-            for cmd, description in BOT_COMMANDS.items()
-            for cmds in [getattr(BotCommands, f"{cmd}Command", None)]
-            if cmds is not None
-        ]
-    )
+    try:
+        await TgClient.bot.set_bot_commands(
+            [
+                BotCommand(
+                    cmds[0] if isinstance(cmds, list) else cmds,
+                    description,
+                )
+                for cmd, description in BOT_COMMANDS.items()
+                for cmds in [getattr(BotCommands, f"{cmd}Command", None)]
+                if cmds is not None
+            ]
+        )
+    except Exception as e:
+        LOGGER.error(f"set_bot_commands failed: {e}")
 
 
 async def add_handlers():

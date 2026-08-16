@@ -800,9 +800,12 @@ async def toggle_onoff_var(_, query, pre_message, key, value):
             "DATABASE_URL not set - toggle will NOT survive restart! Set it in config.py.",
             show_alert=True,
         )
-    from ..core.handlers import refresh_bot_commands
+    try:
+        from ..core.handlers import refresh_bot_commands
 
-    await refresh_bot_commands()
+        await refresh_bot_commands()
+    except Exception as e:
+        LOGGER.error(f"refresh_bot_commands failed: {e}")
 
 
 async def _handle_service_toggle(key, disabled):
