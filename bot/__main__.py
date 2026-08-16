@@ -91,11 +91,12 @@ async def main():
         LOGGER.error(f"load_configurations/update_variables failed: {e}")
 
     try:
-        await gather(
-            update_qb_options(),
-            update_aria2_options(),
-            update_nzb_options(),
-        )
+        options_tasks = [update_aria2_options()]
+        if not Config.DISABLE_TORRENTS:
+            options_tasks.append(update_qb_options())
+        if not Config.DISABLE_NZB:
+            options_tasks.append(update_nzb_options())
+        await gather(*options_tasks)
     except Exception as e:
         LOGGER.error(f"service options update failed: {e}")
     from .core.jdownloader_booter import jdownloader

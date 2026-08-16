@@ -42,14 +42,12 @@ def _qbit_password():
 
 
 async def update_qb_options():
+    if not TorrentManager.qbittorrent:
+        LOGGER.info("qBittorrent is not initialized. Skipping qBittorrent options update.")
+        return
     LOGGER.info("Get qBittorrent options from server")
     pwd = _qbit_password()
     if not qbit_options:
-        if not TorrentManager.qbittorrent:
-            LOGGER.warning(
-                "qBittorrent is not initialized. Skipping qBittorrent options update."
-            )
-            return
         opt = await TorrentManager.qbittorrent.app.preferences()
         qbit_options.update(opt)
         del qbit_options["listen_port"]
