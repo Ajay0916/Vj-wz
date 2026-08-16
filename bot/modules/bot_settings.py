@@ -532,11 +532,6 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
                 buttons.data_button(f"✓ {label}", f"botset toggleonoff {k} on")
             else:
                 buttons.data_button(label, f"botset toggleonoff {k} off")
-        for k in BOOL_ONOFF_VARS:
-            if Config.get(k):
-                buttons.data_button(f"✓ {k}", f"botset toggleonoff {k} off")
-            else:
-                buttons.data_button(k, f"botset toggleonoff {k} on")
         buttons.data_button("Page 1 ⏮", "botset setonoff")
         buttons.data_button("Back", "botset back", position="footer")
         buttons.data_button(
