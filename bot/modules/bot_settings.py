@@ -779,6 +779,14 @@ async def toggle_onoff_var(_, query, pre_message, key, value):
     await database.update_config({key: bool_value})
     await _handle_service_toggle(key, bool_value)
     await update_buttons(pre_message, "setonoff")
+    if not database.db:
+        await query.answer(
+            "DATABASE_URL not set - toggle will NOT survive restart! Set it in config.py.",
+            show_alert=True,
+        )
+    from ..core.handlers import refresh_bot_commands
+
+    await refresh_bot_commands()
 
 
 async def _handle_service_toggle(key, disabled):

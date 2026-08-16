@@ -4,12 +4,88 @@ from pyrogram.filters import command, regex
 from pyrogram.handlers import CallbackQueryHandler, EditedMessageHandler, MessageHandler
 from pyrogram.types import BotCommand
 
+from .. import LOGGER
 from ..core.config_manager import Config
 from ..helper.ext_utils.help_messages import BOT_COMMANDS
 from ..helper.telegram_helper.bot_commands import BotCommands
 from ..helper.telegram_helper.filters import CustomFilters
 from ..modules import *
 from .tg_client import TgClient
+
+
+async def refresh_bot_commands():
+    if not Config.SET_COMMANDS:
+        return
+    global BOT_COMMANDS
+    from ..helper.ext_utils import help_messages
+
+    BOT_COMMANDS = help_messages.get_bot_commands()
+
+    def insert_at(d, k, v, i):
+        return dict(list(d.items())[:i] + [(k, v)] + list(d.items())[i:])
+
+    if Config.JD_EMAIL and Config.JD_PASS:
+        BOT_COMMANDS = insert_at(
+            BOT_COMMANDS,
+            "JdMirror",
+            "[link/file] Mirror to Upload Destination using JDownloader",
+            2,
+        )
+        BOT_COMMANDS = insert_at(
+            BOT_COMMANDS,
+            "JdLeech",
+            "[link/file] Leech files to Upload to Telegram using JDownloader",
+            6,
+        )
+
+    if len(Config.USENET_SERVERS) != 0:
+        BOT_COMMANDS = insert_at(
+            BOT_COMMANDS,
+            "NzbMirror",
+            "[nzb] Mirror to Upload Destination using Sabnzbd",
+            2,
+        )
+        BOT_COMMANDS = insert_at(
+            BOT_COMMANDS,
+            "NzbLeech",
+            "[nzb] Leech files to Upload to Telegram using Sabnzbd",
+            6,
+        )
+
+    if Config.LOGIN_PASS:
+        BOT_COMMANDS = insert_at(
+            BOT_COMMANDS, "Login", "[password] Login to Bot", 14
+        )
+
+    module_cmds = {
+        "DISABLE_JD": ["JdMirror", "JdLeech"],
+        "DISABLE_NZB": ["NzbMirror", "NzbLeech", "NzbSearch"],
+        "DISABLE_RSS": ["Rss"],
+        "DISABLE_SEARCH": ["Search"],
+        "DISABLE_YTDLP": ["Ytdl", "YtdlLeech"],
+        "DISABLE_TORRENTS": ["QbMirror", "QbLeech"],
+        "DISABLE_LEECH": ["Leech", "QbLeech", "JdLeech", "NzbLeech", "YtdlLeech"],
+    }
+    removed = []
+    for _var, _cmds in module_cmds.items():
+        if getattr(Config, _var):
+            for _c in _cmds:
+                if BOT_COMMANDS.pop(_c, None) is not None:
+                    removed.append(_c)
+    if removed:
+        LOGGER.info("Disabled module commands removed from menu: %s", ", ".join(removed))
+
+    await TgClient.bot.set_bot_commands(
+        [
+            BotCommand(
+                cmds[0] if isinstance(cmds, list) else cmds,
+                description,
+            )
+            for cmd, description in BOT_COMMANDS.items()
+            for cmds in [getattr(BotCommands, f"{cmd}Command", None)]
+            if cmds is not None
+        ]
+    )
 
 
 async def add_handlers():
@@ -435,67 +511,4 @@ async def add_handlers():
     TgClient.bot.add_handler(
         CallbackQueryHandler(confirm_drive_clean_cb, filters=regex("^gdccat"))
     )
-    if Config.SET_COMMANDS:
-        global BOT_COMMANDS
-
-        def insert_at(d, k, v, i):
-            return dict(list(d.items())[:i] + [(k, v)] + list(d.items())[i:])
-
-        if Config.JD_EMAIL and Config.JD_PASS:
-            BOT_COMMANDS = insert_at(
-                BOT_COMMANDS,
-                "JdMirror",
-                "[link/file] Mirror to Upload Destination using JDownloader",
-                2,
-            )
-            BOT_COMMANDS = insert_at(
-                BOT_COMMANDS,
-                "JdLeech",
-                "[link/file] Leech files to Upload to Telegram using JDownloader",
-                6,
-            )
-
-        if len(Config.USENET_SERVERS) != 0:
-            BOT_COMMANDS = insert_at(
-                BOT_COMMANDS,
-                "NzbMirror",
-                "[nzb] Mirror to Upload Destination using Sabnzbd",
-                2,
-            )
-            BOT_COMMANDS = insert_at(
-                BOT_COMMANDS,
-                "NzbLeech",
-                "[nzb] Leech files to Upload to Telegram using Sabnzbd",
-                6,
-            )
-
-        if Config.LOGIN_PASS:
-            BOT_COMMANDS = insert_at(
-                BOT_COMMANDS, "Login", "[password] Login to Bot", 14
-            )
-
-        module_cmds = {
-            "DISABLE_JD": ["JdMirror", "JdLeech"],
-            "DISABLE_NZB": ["NzbMirror", "NzbLeech", "NzbSearch"],
-            "DISABLE_RSS": ["Rss"],
-            "DISABLE_SEARCH": ["Search"],
-            "DISABLE_YTDLP": ["Ytdl", "YtdlLeech"],
-            "DISABLE_TORRENTS": ["QbMirror", "QbLeech"],
-            "DISABLE_LEECH": ["Leech", "QbLeech", "JdLeech", "NzbLeech", "YtdlLeech"],
-        }
-        for _var, _cmds in module_cmds.items():
-            if getattr(Config, _var):
-                for _c in _cmds:
-                    BOT_COMMANDS.pop(_c, None)
-
-        await TgClient.bot.set_bot_commands(
-            [
-                BotCommand(
-                    cmds[0] if isinstance(cmds, list) else cmds,
-                    description,
-                )
-                for cmd, description in BOT_COMMANDS.items()
-                for cmds in [getattr(BotCommands, f"{cmd}Command", None)]
-                if cmds is not None
-            ]
-        )
+    await refresh_bot_commands()
