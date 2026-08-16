@@ -151,7 +151,7 @@ def _run_update(upstream_repo, upstream_branch, version):
         ["git", "reset", "--hard", f"origin/{upstream_branch}", "-q"],
     ]
     for cmd in git_cmds:
-        result = srun(cmd)
+        result = srun(["timeout", "90"] + cmd)
         if result.returncode != 0:
             break
     display_repo = "/".join(upstream_repo.split("/")[-2:])
@@ -164,9 +164,26 @@ def _run_update(upstream_repo, upstream_branch, version):
     )
 
 
+def _req_hash():
+    try:
+        with open("requirements.txt", "rb") as f:
+            return sha256(f.read()).hexdigest()
+    except Exception:
+        return ""
+
+
 def _update_packages():
+    req_hash = _req_hash()
+    if req_hash and path.exists(".req_hash"):
+        with open(".req_hash") as f:
+            if f.read().strip() == req_hash:
+                _LOGGER.info("requirements.txt unchanged, skipping package update")
+                return
     scall("uv pip install -U -r requirements.txt", shell=True)
     _LOGGER.info("Successfully Updated all the Packages!")
+    if req_hash:
+        with open(".req_hash", "w") as f:
+            f.write(req_hash)
 
 
 def _cleanup():
