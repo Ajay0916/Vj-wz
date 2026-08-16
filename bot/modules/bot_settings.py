@@ -542,8 +542,6 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
                 buttons.data_button(f"✓ {label}", f"botset toggleonoff {k} on")
             else:
                 buttons.data_button(label, f"botset toggleonoff {k} off")
-        if not Config.DISABLE_SEARCH:
-            buttons.data_button("API Result", "botset api_result")
         buttons.data_button("Page 2 ⏭", "botset setonoff2")
         buttons.data_button("Back", "botset back", position="footer")
         buttons.data_button(
