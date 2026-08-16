@@ -629,27 +629,23 @@ def _rentry_blocks(search_results, key, method):
             line += " — " + " • ".join(tags)
         links = []
         if result.get("torrent"):
-            links.append(
-                "[📥 Direct Link]({})".format(
-                    _dl_link(
-                        result["torrent"],
-                        result.get("name") or "",
-                        result.get("extension") or "",
-                        result.get("short") or "",
-                    )
-                )
+            dl = _dl_link(
+                result["torrent"],
+                result.get("name") or "",
+                result.get("extension") or "",
+                result.get("short") or "",
             )
+            links.append(f"[📥 Direct Link]({dl})")
+            links.append(f"[📤 Share]({_share_link(dl)})")
         if result.get("download"):
-            links.append(
-                "[🔗 Alt Link]({})".format(
-                    _dl_link(
-                        result["download"],
-                        result.get("name") or "",
-                        result.get("extension") or "",
-                        result.get("download_short") or "",
-                    )
-                )
+            alt = _dl_link(
+                result["download"],
+                result.get("name") or "",
+                result.get("extension") or "",
+                result.get("download_short") or "",
             )
+            links.append(f"[🔗 Alt Link]({alt})")
+            links.append(f"[📤 Share]({_share_link(alt)})")
         if result.get("magnet"):
             m = result["magnet"]
             if result.get("magnet_short"):
