@@ -475,6 +475,7 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
                     "HYPER_THREADS",
                     "LEECH_CAPTION",
                     "LEECH_DUMP_CHAT",
+                    "LINKS_LOG_ID",
                     "LEECH_FONT",
                     "LEECH_LIMIT",
                     "LEECH_PREFIX",
@@ -505,7 +506,7 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
             )
         if Config.DISABLE_GOOGLE:
             hidden_vars.update(
-                ["GDRIVE_ID", "GD_DESP", "GD_DL_LIMIT", "INDEX_URL", "USE_SERVICE_ACCOUNTS", "DRIVE_CATEGORY_MODE", "DRIVE_CATEGORY_SA", "IS_TEAM_DRIVE"]
+                ["GDRIVE_ID", "GD_DESP", "GD_DL_LIMIT", "INDEX_URL", "USE_SERVICE_ACCOUNTS", "DRIVE_CATEGORY_MODE", "DRIVE_CATEGORY_SA", "IS_TEAM_DRIVE", "SHOW_CLOUD_LINK", "STOP_DUPLICATE"]
             )
         if Config.DISABLE_IMDB:
             hidden_vars.update(["IMDB_TEMPLATE"])
