@@ -242,13 +242,14 @@ async def add_handlers():
             & CustomFilters.authorized,
         )
     )
-    TgClient.bot.add_handler(
-        MessageHandler(
-            count_node,
-            filters=command(BotCommands.CountCommand, case_sensitive=True)
-            & CustomFilters.authorized,
+    if not Config.DISABLE_GOOGLE:
+        TgClient.bot.add_handler(
+            MessageHandler(
+                count_node,
+                filters=command(BotCommands.CountCommand, case_sensitive=True)
+                & CustomFilters.authorized,
+            )
         )
-    )
     TgClient.bot.add_handler(
         MessageHandler(
             delete_file,

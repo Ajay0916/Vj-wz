@@ -449,7 +449,7 @@ DISABLE_COMMANDS = {
     "DISABLE_LIST": {"List"},
     "DISABLE_CLONE": {"Clone"},
     "DISABLE_MEDIAINFO": {"MediaInfo"},
-    "DISABLE_GOOGLE": {"Clone", "GDClean"},
+    "DISABLE_GOOGLE": {"Clone", "GDClean", "Count"},
 }
 
 
