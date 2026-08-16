@@ -306,6 +306,7 @@ NEW_ONOFF_VARS = [
     "DISABLE_QUEUE",
     "DISABLE_RCLONE",
     "DISABLE_GOOGLE",
+    "DISABLE_API",
 ]
 
 
@@ -485,6 +486,18 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
         if Config.DISABLE_IMAGES:
             hidden_vars.update(
                 ["IMG_SEARCH", "IMG_PAGE", "IMG_SOURCES", "USE_IMAGES"]
+            )
+        if Config.DISABLE_API:
+            hidden_vars.update(
+                [
+                    "SEARCH_API_LINK", "SEARCH_LIMIT", "API_PIN",
+                    "GOFILE_API", "GOFILE_FOLDER_ID", "GOFILE_AUTO_CREATE_FOLDER",
+                    "PIXELDRAIN_KEY", "FILELION_API", "BUZZHEAVIER_API",
+                    "DEVUPLOADS_KEY", "DEVUPLOADS_FOLDER",
+                    "VIKINGFILE_HASH", "VIKINGFILE_FOLDER",
+                    "STREAMWISH_API", "PROTECTED_API",
+                    "DEBRID_LINK_API", "INSTADL_API",
+                ]
             )
         if Config.DISABLE_GOOGLE:
             hidden_vars.update(
