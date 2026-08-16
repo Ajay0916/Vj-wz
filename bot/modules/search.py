@@ -1168,6 +1168,9 @@ VIDEO_RE_PATTERNS = (
     r"dd\s*5\s*\.?\s*1",
     r"(?<![a-z0-9])s\d{1,2}\s*e\d{1,2}(?![a-z0-9])",
 )
+# Categories -ov always drops: user wants movies/webseries, not anime.
+ANIME_CATEGORIES = {"anime", "cartoon", "cartoons"}
+
 # Result categories that mean video/TV content - -nv drops these too.
 # Exact lowercased match, so "Video Training" (courses) is NOT dropped.
 VIDEO_CATEGORIES = {
@@ -1282,12 +1285,18 @@ def _apply_client_filters(results, opts, query=""):
     if opts.get("adult"):
         out = [r for r in out if not _is_adult(str(r.get("name") or ""))]
     if opts.get("only_video") and not opts.get("no_video"):
-        # -ov: sirf video/webseries/movie results rakho (-nv ka ulta).
+        # -ov: sirf video/webseries/movie results rakho (-nv ka ulta) -
+        # 480p/720p/1080p/4K/mkv/mp4/WEB-DL/HDTV/SxxEyy sab wahi words jo
+        # -nv hatata hai. Anime/cartoon category hamesha drop (movies/
+        # webseries chahiye, anime nahi).
         out = [
             r
             for r in out
-            if _is_video(str(r.get("name") or ""))
-            or str(r.get("category") or "").strip().lower() in VIDEO_CATEGORIES
+            if str(r.get("category") or "").strip().lower() not in ANIME_CATEGORIES
+            and (
+                _is_video(str(r.get("name") or ""))
+                or str(r.get("category") or "").strip().lower() in VIDEO_CATEGORIES
+            )
         ]
     if opts.get("no_video"):
         out = [
@@ -1315,7 +1324,7 @@ SEARCH_HELP_TEXT = (
     "• <code>-e &lt;words&gt;</code> → exclude words: <code>hindi,audible</code>\n"
     "• <code>-ad</code> → adult/porn results hatao\n"
     "• <code>-nv</code> → video results hatao (1080p/mkv/webrip) - courses ke liye useful\n"
-    "• <code>-ov</code> → SIRF video results rakho (movies/webseries): 1080p/mkv/S01E02 wale hi - <code>-nv</code> ka ulta\n"
+    "• <code>-ov</code> → SIRF video results (movies/webseries/TV): 480p/720p/1080p/4K/mkv/WEB-DL/S01E02 sab - anime/cartoon nahi - <code>-nv</code> ka ulta\n"
     "• <code>-g &lt;site&gt;</code> → direct search, buttons skip\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Groups: <code>all</code> (17 sites), <code>books</code>, <code>courses</code>\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Multiple: <code>1337x,tgx,yts</code>\n"
