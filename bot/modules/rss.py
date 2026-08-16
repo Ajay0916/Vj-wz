@@ -592,6 +592,9 @@ async def rss_listener(client, query):
     user_id = query.from_user.id
     message = query.message
     data = query.data.split()
+    if Config.DISABLE_RSS:
+        await query.answer("RSS is disabled by the Bot Owner.", show_alert=True)
+        return
     if int(data[2]) != user_id and not await CustomFilters.sudo("", query):
         await query.answer(
             text="You don't have permission to use these buttons!", show_alert=True

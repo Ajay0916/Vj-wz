@@ -1121,6 +1121,11 @@ async def edit_bot_settings(client, query):
             globals()["start"] = 0
         await update_buttons(message, key)
     elif data[1] == "syncjd":
+        if Config.DISABLE_JD:
+            await query.answer(
+                "JDownloader is disabled by the Bot Owner.", show_alert=True
+            )
+            return
         if not Config.JD_EMAIL or not Config.JD_PASS:
             await query.answer(
                 "No Email or Password provided!",
@@ -1140,6 +1145,18 @@ async def edit_bot_settings(client, query):
     elif data[1] in ["var", "aria", "qbit", "nzb", "nzbserver", "setonoff", "api_result"] or data[
         1
     ].startswith("nzbser"):
+        if data[1] == "qbit" and Config.DISABLE_TORRENTS:
+            await query.answer(
+                "qBittorrent is disabled by the Bot Owner.", show_alert=True
+            )
+            return
+        if (
+            data[1] in ("nzb", "nzbserver") or data[1].startswith("nzbser")
+        ) and Config.DISABLE_NZB:
+            await query.answer(
+                "SABnzbd is disabled by the Bot Owner.", show_alert=True
+            )
+            return
         if data[1] == "nzbserver":
             globals()["start"] = 0
         await query.answer()

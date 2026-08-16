@@ -474,6 +474,20 @@ async def add_handlers():
                 BOT_COMMANDS, "Login", "[password] Login to Bot", 14
             )
 
+        module_cmds = {
+            "DISABLE_JD": ["JdMirror", "JdLeech"],
+            "DISABLE_NZB": ["NzbMirror", "NzbLeech", "NzbSearch"],
+            "DISABLE_RSS": ["Rss"],
+            "DISABLE_SEARCH": ["Search"],
+            "DISABLE_YTDLP": ["Ytdl", "YtdlLeech"],
+            "DISABLE_TORRENTS": ["QbMirror", "QbLeech"],
+            "DISABLE_LEECH": ["Leech", "QbLeech", "JdLeech", "NzbLeech", "YtdlLeech"],
+        }
+        for _var, _cmds in module_cmds.items():
+            if getattr(Config, _var):
+                for _c in _cmds:
+                    BOT_COMMANDS.pop(_c, None)
+
         await TgClient.bot.set_bot_commands(
             [
                 BotCommand(
