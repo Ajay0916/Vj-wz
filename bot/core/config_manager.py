@@ -118,6 +118,7 @@ class Config:
     SEARCH_API_LINK = ""
     API_PIN = ""
     SEARCH_LIMIT = 0
+    SEARCH_RESULT_HOST = "telegraph"  # telegraph | rentry
     SEARCH_PLUGINS = []
     SET_COMMANDS = True
     STATUS_LIMIT = 10

@@ -393,11 +393,20 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
                 buttons.data_button(f"✓ {label}", f"botset toggleonoff {k} on")
             else:
                 buttons.data_button(label, f"botset toggleonoff {k} off")
+        host = str(Config.get("SEARCH_RESULT_HOST") or "telegraph")
+        buttons.data_button(
+            f"{'✓ ' if host == 'telegraph' else ''}Telegraph",
+            "botset resulthost telegraph",
+        )
+        buttons.data_button(
+            f"{'✓ ' if host == 'rentry' else ''}Rentry",
+            "botset resulthost rentry",
+        )
         buttons.data_button("Back", "botset back", position="footer")
         buttons.data_button(
             "Close", "botset close", position="footer", style=ButtonStyle.DANGER
         )
-        msg = "⌬ <b><u>Module Settings</u></b>"
+        msg = "⌬ <b><u>Module Settings</u></b>\n\n<b>Search Results Host:</b> search results kahan publish honge (Telegraph / Rentry)"
     elif key == "private":
         if edit_mode:
             buttons.data_button("Stop Invoke File", "botset private stop", "header")
@@ -1098,6 +1107,11 @@ async def edit_bot_settings(client, query):
             show_alert=True,
         )
         await sync_jdownloader()
+    elif data[1] == "resulthost":
+        await query.answer()
+        Config.set("SEARCH_RESULT_HOST", data[2])
+        await database.update_config({"SEARCH_RESULT_HOST": data[2]})
+        await update_buttons(message, "setonoff")
     elif data[1] in ["var", "aria", "qbit", "nzb", "nzbserver", "setonoff"] or data[
         1
     ].startswith("nzbser"):

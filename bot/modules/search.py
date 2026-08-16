@@ -1,6 +1,7 @@
 import re
 from niquests import AsyncSession
 from html import escape
+from secrets import token_hex
 from urllib.parse import quote
 from pyrogram.enums import ButtonStyle
 
@@ -67,6 +68,8 @@ PLUGINS = []
 SITES = None
 SITE_STATUS = {}
 TELEGRAPH_LIMIT = 9999999
+# rentry.co hard cap is 200K chars; chunk below it.
+RENTRY_CHUNK = 180000
 
 
 async def _refresh_sites():
@@ -392,7 +395,12 @@ async def search(
         await TorrentManager.qbittorrent.search.delete(search_id)
     link = await get_result(search_results, key, message, method)
     buttons = ButtonMaker()
-    buttons.url_button("🔎 VIEW", link, style=ButtonStyle.PRIMARY)
+    links = link.split("\n")
+    if len(links) == 1:
+        buttons.url_button("🔎 VIEW", links[0], style=ButtonStyle.PRIMARY)
+    else:
+        for i, l in enumerate(links, 1):
+            buttons.url_button(f"VIEW {i}", l)
     button = buttons.build_menu(1)
     await edit_message(message, msg, button)
     if method.startswith("api") and search_results and opts.get("auto_leech"):
@@ -562,6 +570,12 @@ async def get_result(search_results, key, message, method):
     if msg != "":
         telegraph_content.append(msg)
 
+    if (Config.SEARCH_RESULT_HOST or "telegraph") == "rentry":
+        try:
+            return await _publish_rentry(search_results, key, method, message)
+        except Exception as e:
+            LOGGER.warning(f"rentry publish failed, falling back to telegraph: {e}")
+
     await edit_message(
         message, f"<b>Creating</b> {len(telegraph_content)} <b>Telegraph pages.</b>"
     )
@@ -579,6 +593,121 @@ async def get_result(search_results, key, message, method):
         )
         await telegraph.edit_telegraph(path, telegraph_content)
     return f"https://telegra.ph/{path[0]}"
+
+
+def _rentry_blocks(search_results, key, method):
+    """Search results as markdown blocks (header + one per result) so large
+    sets can be chunked across multiple rentry entries (200K char cap)."""
+    if method == "apirecent":
+        head = "# API Recent Results"
+    elif method == "apisearch":
+        head = f"# API Search Result(s) For {key}"
+    elif method == "apitrend":
+        head = "# API Trending Results"
+    else:
+        head = f"# PLUGINS Search Result(s) For {key}"
+    blocks = [head + f"\n\n**{len(search_results)} results**\n\n---\n"]
+    for index, result in enumerate(search_results, 1):
+        name = re.sub(r"([\[\]()*_`])", r"\\\1", str(result.get("name") or "?"))
+        url = result.get("url") or "#"
+        parts = []
+        if result.get("size"):
+            parts.append(f"Size: {result['size']}")
+        if result.get("seeders") is not None:
+            s_line = f"Seeders: {result['seeders']}"
+            if result.get("leechers") is not None:
+                s_line += f" | Leechers: {result['leechers']}"
+            parts.append(s_line)
+        tags = []
+        for t in ("site", "category", "quality", "language", "format", "date", "uploader"):
+            if result.get(t):
+                tags.append(str(result[t]))
+        line = f"{index}. **[{name}]({url})**"
+        if parts:
+            line += " — " + " — ".join(parts)
+        if tags:
+            line += " — " + " • ".join(tags)
+        links = []
+        if result.get("torrent"):
+            links.append(
+                "[📥 Direct Link]({})".format(
+                    _dl_link(
+                        result["torrent"],
+                        result.get("name") or "",
+                        result.get("extension") or "",
+                        result.get("short") or "",
+                    )
+                )
+            )
+        if result.get("download"):
+            links.append(
+                "[🔗 Alt Link]({})".format(
+                    _dl_link(
+                        result["download"],
+                        result.get("name") or "",
+                        result.get("extension") or "",
+                        result.get("download_short") or "",
+                    )
+                )
+            )
+        if result.get("magnet"):
+            m = result["magnet"]
+            if result.get("magnet_short"):
+                m = f"{Config.SEARCH_API_LINK}/api/v1/magnet/{result['magnet_short']}"
+            links.append(f"[🧲 Magnet]({m})")
+            links.append(f"[📤 Telegram]({_magnet_share_link(result['magnet'], result.get('magnet_short') or '')})")
+        if links:
+            blocks.append(line + "\n\n   " + " | ".join(links) + "\n\n")
+        else:
+            blocks.append(line + "\n\n")
+    return blocks
+
+
+def _pack_chunks(blocks, limit):
+    chunks, cur = [], ""
+    for b in blocks:
+        if cur and len(cur) + len(b) > limit:
+            chunks.append(cur)
+            cur = b
+        else:
+            cur += b
+    if cur:
+        chunks.append(cur)
+    return chunks
+
+
+async def _rentry_new(text):
+    """Create one rentry entry; returns the public URL."""
+    async with AsyncSession() as client:
+        resp = await client.get("https://rentry.co/", timeout=30)
+        m = re.search(r'name="csrfmiddlewaretoken" value="([^"]+)"', resp.text)
+        if not m:
+            raise RuntimeError("rentry: csrf token not found")
+        data = {
+            "csrfmiddlewaretoken": m.group(1),
+            "text": text,
+            "edit_code": token_hex(6),
+        }
+        resp = await client.post(
+            "https://rentry.co/api/new",
+            data=data,
+            headers={"Referer": "https://rentry.co/"},
+            timeout=60,
+        )
+        js = resp.json()
+    if js.get("status") != "200":
+        raise RuntimeError("rentry: {}".format(js.get("content") or js))
+    return js["url"]
+
+
+async def _publish_rentry(search_results, key, method, message):
+    blocks = _rentry_blocks(search_results, key, method)
+    chunks = _pack_chunks(blocks, RENTRY_CHUNK)
+    await edit_message(message, f"<b>Creating</b> {len(chunks)} <b>rentry page(s).</b>")
+    links = []
+    for text in chunks:
+        links.append(await _rentry_new(text))
+    return "\n".join(links)
 
 
 API_PAGE_SIZE = 18
