@@ -770,6 +770,7 @@ _FLAG_ONLY = {
     "-ex": "exact",
     "-ad": "adult",
     "-nv": "no_video",
+    "-ov": "only_video",
     "--help": "help",
 }
 
@@ -1280,6 +1281,14 @@ def _apply_client_filters(results, opts, query=""):
             out = [r for r in out if not any(w in str(r.get("name") or "").lower() for w in words)]
     if opts.get("adult"):
         out = [r for r in out if not _is_adult(str(r.get("name") or ""))]
+    if opts.get("only_video") and not opts.get("no_video"):
+        # -ov: sirf video/webseries/movie results rakho (-nv ka ulta).
+        out = [
+            r
+            for r in out
+            if _is_video(str(r.get("name") or ""))
+            or str(r.get("category") or "").strip().lower() in VIDEO_CATEGORIES
+        ]
     if opts.get("no_video"):
         out = [
             r
@@ -1306,6 +1315,7 @@ SEARCH_HELP_TEXT = (
     "• <code>-e &lt;words&gt;</code> → exclude words: <code>hindi,audible</code>\n"
     "• <code>-ad</code> → adult/porn results hatao\n"
     "• <code>-nv</code> → video results hatao (1080p/mkv/webrip) - courses ke liye useful\n"
+    "• <code>-ov</code> → SIRF video results rakho (movies/webseries): 1080p/mkv/S01E02 wale hi - <code>-nv</code> ka ulta\n"
     "• <code>-g &lt;site&gt;</code> → direct search, buttons skip\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Groups: <code>all</code> (17 sites), <code>books</code>, <code>courses</code>\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Multiple: <code>1337x,tgx,yts</code>\n"
