@@ -303,7 +303,7 @@ async def search(
                     search_results["data"] = merged
                     search_results["total"] = len(merged)
                 else:
-                    if method != "apisearch" and page_spec.isdigit() and page_spec != "1":
+                    if method != "apisearch" and page_spec.isdigit() and int(page_spec) > 1:
                         api += f"&page={page_spec}"
                     response = await client.get(api, headers=_api_headers())
                     search_results = response.json()
@@ -767,8 +767,9 @@ def _search_opts(message):
 
 
 def _search_limit(message):
-    """Result limit: -l value if given, else SEARCH_LIMIT."""
-    return _search_opts(message).get("limit") or Config.SEARCH_LIMIT
+    """Result limit: -l value if given, else SEARCH_LIMIT (0 = unlimited)."""
+    limit = _search_opts(message).get("limit")
+    return Config.SEARCH_LIMIT if limit is None else limit
 
 
 _SIZE_RE = re.compile(
