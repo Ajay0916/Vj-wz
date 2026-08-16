@@ -414,6 +414,11 @@ async def search(
     else:
         for i, l in enumerate(links, 1):
             buttons.url_button(f"VIEW {i}", l)
+    if (Config.SEARCH_RESULT_HOST or "telegraph") == "rentry":
+        # Telegram confirms external-domain buttons (Android); the message
+        # text link opens directly, so show it too. Telegraph pages are
+        # Telegram-owned and open straight from the button - no text needed.
+        msg += "\n\n" + "\n".join(links)
     button = buttons.build_menu(1)
     await edit_message(message, msg, button)
     if method.startswith("api") and search_results and opts.get("auto_leech"):
