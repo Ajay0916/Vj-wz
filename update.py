@@ -179,7 +179,11 @@ def _update_packages():
             if f.read().strip() == req_hash:
                 _LOGGER.info("requirements.txt unchanged, skipping package update")
                 return
-    scall("uv pip install -U -r requirements.txt", shell=True)
+    result = scall(
+        "timeout 300 uv pip install -U -r requirements.txt", shell=True
+    )
+    if result != 0:
+        _LOGGER.error("Package update failed or timed out (300s)!")
     _LOGGER.info("Successfully Updated all the Packages!")
     if req_hash:
         with open(".req_hash", "w") as f:
