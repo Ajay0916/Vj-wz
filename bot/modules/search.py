@@ -1168,15 +1168,25 @@ VIDEO_RE_PATTERNS = (
     r"dd\s*5\s*\.?\s*1",
     r"(?<![a-z0-9])s\d{1,2}\s*e\d{1,2}(?![a-z0-9])",
 )
-# Categories -ov always drops: user wants movies/webseries, not anime.
-ANIME_CATEGORIES = {"anime", "cartoon", "cartoons"}
+# Categories -ov never keeps even if they look like video: no anime and
+# no adult content - user wants movies/webseries only.
+ANIME_CATEGORIES = {"anime", "cartoon", "cartoons", "animation", "animated"}
+OV_DROP_CATEGORIES = ANIME_CATEGORIES | {"xxx", "porn", "adult"}
 
-# Result categories that mean video/TV content - -nv drops these too.
-# Exact lowercased match, so "Video Training" (courses) is NOT dropped.
+# Result categories that mean video/TV content - -nv drops these too and
+# -ov keeps them. Exact lowercased match, so "Video Training" (courses)
+# is NOT treated as video.
 VIDEO_CATEGORIES = {
-    "movies", "movie", "tv", "tv-shows", "tv shows", "television",
-    "video", "anime", "series", "episodes", "episode", "shows", "show",
-    "cartoon", "cartoons", "xxx",
+    "movies", "movie", "films", "film",
+    "tv", "tv-shows", "tv shows", "television", "series", "episodes",
+    "episode", "shows", "show", "webseries", "web series", "web-series",
+    "webisodes", "drama", "reality", "sitcom", "miniseries", "mini-series",
+    "documentary", "documentaries", "docs",
+    "sports", "concerts", "concert", "music videos", "music video",
+    "live shows", "standup", "stand-up", "comedy",
+    "wrestling", "short films", "short film", "shorts", "trailers",
+    "video", "anime", "cartoon", "cartoons", "animation", "animated",
+    "xxx", "porn",
 }
 
 
@@ -1292,7 +1302,7 @@ def _apply_client_filters(results, opts, query=""):
         out = [
             r
             for r in out
-            if str(r.get("category") or "").strip().lower() not in ANIME_CATEGORIES
+            if str(r.get("category") or "").strip().lower() not in OV_DROP_CATEGORIES
             and (
                 _is_video(str(r.get("name") or ""))
                 or str(r.get("category") or "").strip().lower() in VIDEO_CATEGORIES
