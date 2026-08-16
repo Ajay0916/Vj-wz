@@ -64,7 +64,7 @@ async def refresh_bot_commands():
                 if BOT_COMMANDS.pop(_c, None) is not None:
                     removed.append(_c)
     LOGGER.info(
-        "set_commands refresh: flags RSS=%s YTDLP=%s LEECH=%s SEARCH=%s TORRENTS=%s JD=%s NZB=%s IMAGES=%s UPHOSTER=%s PLUGINS=%s SHELL=%s IMDB=%s LIST=%s CLONE=%s MEDIAINFO=%s | removed=%s | total=%d",
+        "set_commands refresh: flags RSS=%s YTDLP=%s LEECH=%s SEARCH=%s TORRENTS=%s JD=%s NZB=%s IMAGES=%s UPHOSTER=%s PLUGINS=%s SHELL=%s IMDB=%s LIST=%s CLONE=%s MEDIAINFO=%s GOOGLE=%s LIMITS=%s QUEUE=%s RCLONE=%s API=%s | removed=%s | total=%d",
         Config.DISABLE_RSS,
         Config.DISABLE_YTDLP,
         Config.DISABLE_LEECH,
@@ -80,6 +80,11 @@ async def refresh_bot_commands():
         Config.DISABLE_LIST,
         Config.DISABLE_CLONE,
         Config.DISABLE_MEDIAINFO,
+        Config.DISABLE_GOOGLE,
+        Config.DISABLE_LIMITS,
+        Config.DISABLE_QUEUE,
+        Config.DISABLE_RCLONE,
+        Config.DISABLE_API,
         ",".join(removed) or "-",
         len(BOT_COMMANDS),
     )
