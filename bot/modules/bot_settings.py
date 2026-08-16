@@ -104,6 +104,7 @@ BOOL_VARS = [
     "IS_TEAM_DRIVE",
     "MEDIA_GROUP",
     "MEDIA_STORE",
+                    "EXCLUDED_EXTENSIONS",
     "SET_COMMANDS",
     "SHOW_CLOUD_LINK",
     "STOP_DUPLICATE",
@@ -473,6 +474,7 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
                     "HYPER_PIPELINE",
                     "HYPER_THREADS",
                     "LEECH_CAPTION",
+                    "LEECH_DUMP_CHAT",
                     "LEECH_FONT",
                     "LEECH_LIMIT",
                     "LEECH_PREFIX",
@@ -480,12 +482,13 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
                     "LEECH_SUFFIX",
                     "MEDIA_GROUP",
                     "MEDIA_STORE",
+                    "EXCLUDED_EXTENSIONS",
                     "USE_HYPER",
                 ]
             )
         if Config.DISABLE_IMAGES:
             hidden_vars.update(
-                ["IMG_SEARCH", "IMG_PAGE", "IMG_SOURCES", "USE_IMAGES"]
+                ["IMG_SEARCH", "IMG_PAGE", "IMG_SOURCES", "USE_IMAGES", "IMAGES"]
             )
         if Config.DISABLE_API:
             hidden_vars.update(
@@ -502,7 +505,7 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
             )
         if Config.DISABLE_GOOGLE:
             hidden_vars.update(
-                ["GDRIVE_ID", "GD_DESP", "GD_DL_LIMIT", "INDEX_URL", "USE_SERVICE_ACCOUNTS"]
+                ["GDRIVE_ID", "GD_DESP", "GD_DL_LIMIT", "INDEX_URL", "USE_SERVICE_ACCOUNTS", "DRIVE_CATEGORY_MODE", "DRIVE_CATEGORY_SA", "IS_TEAM_DRIVE"]
             )
         if Config.DISABLE_IMDB:
             hidden_vars.update(["IMDB_TEMPLATE"])
