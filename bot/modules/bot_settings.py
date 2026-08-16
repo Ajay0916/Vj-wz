@@ -389,10 +389,54 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
             if edit_mode and key not in BOOL_VARS:
                 msg += "<i>Send a valid value for the above Var.</i>\n┖ <b>Time Left :</b> <code>60 sec</code>"
     elif key == "var":
+        hidden_vars = set()
+        if Config.DISABLE_RSS:
+            hidden_vars.update(["RSS_CHAT", "RSS_DELAY", "RSS_SIZE_LIMIT"])
+        if Config.DISABLE_SEARCH:
+            hidden_vars.update(
+                [
+                    "API_PIN",
+                    "AUTHOR_NAME",
+                    "AUTHOR_URL",
+                    "SEARCH_API_LINK",
+                    "SEARCH_LIMIT",
+                    "SEARCH_PLUGINS",
+                    "SEARCH_RESULT_HOST",
+                ]
+            )
+        if Config.DISABLE_JD:
+            hidden_vars.update(["JD_EMAIL", "JD_PASS"])
+        if Config.DISABLE_NZB:
+            hidden_vars.update(["HYDRA_API_KEY", "HYDRA_IP", "USENET_SERVERS"])
+        if Config.DISABLE_MEGA:
+            hidden_vars.update(["MEGA_EMAIL", "MEGA_LIMIT", "MEGA_PASSWORD"])
+        if Config.DISABLE_YTDLP:
+            hidden_vars.update(
+                ["YT_CATEGORY_ID", "YT_DESP", "YT_PRIVACY_STATUS", "YT_TAGS"]
+            )
+        if Config.DISABLE_TORRENTS:
+            hidden_vars.update(["TORRENT_LIMIT", "TORRENT_TIMEOUT"])
+        if Config.DISABLE_LEECH:
+            hidden_vars.update(
+                [
+                    "AS_DOCUMENT",
+                    "EQUAL_SPLITS",
+                    "LEECH_CAPTION",
+                    "LEECH_FONT",
+                    "LEECH_PREFIX",
+                    "LEECH_SPLIT_SIZE",
+                    "LEECH_SUFFIX",
+                    "MEDIA_GROUP",
+                ]
+            )
         conf_dict = {
-            k: v for k, v in Config.get_all().items() if not k.startswith("DISABLE_")
+            k: v
+            for k, v in Config.get_all().items()
+            if not k.startswith("DISABLE_") and k not in hidden_vars
         }
         all_keys = list(conf_dict.keys())
+        if start >= len(all_keys) and all_keys:
+            globals()["start"] = 0
         for k in all_keys[start : 10 + start]:
             buttons.data_button(k, f"botset editvar {k}")
         buttons.data_button("Back", "botset back")
