@@ -305,6 +305,7 @@ NEW_ONOFF_VARS = [
     "DISABLE_CLONE",
     "DISABLE_MEDIAINFO",
     "DISABLE_LIMITS",
+    "DISABLE_QUEUE",
     "DISABLE_RCLONE",
 ]
 
@@ -447,6 +448,8 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
             hidden_vars.update(
                 ["ARCHIVE_LIMIT", "EXTRACT_LIMIT", "FFMPEG_CMDS"]
             )
+        if Config.DISABLE_QUEUE:
+            hidden_vars.update(["QUEUE_ALL", "QUEUE_DOWNLOAD", "QUEUE_UPLOAD"])
         if Config.DISABLE_LIMITS:
             hidden_vars.update(
                 [

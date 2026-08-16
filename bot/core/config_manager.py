@@ -43,6 +43,7 @@ class Config:
     DISABLE_CLONE = False
     DISABLE_MEDIAINFO = False
     DISABLE_LIMITS = False
+    DISABLE_QUEUE = False
     DISABLE_RCLONE = False
     EQUAL_SPLITS = False
     EXCLUDED_EXTENSIONS = ""

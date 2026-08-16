@@ -62,6 +62,8 @@ async def stop_duplicate_check(listener):
 
 
 async def check_running_tasks(listener, state="dl"):
+    if Config.DISABLE_QUEUE:
+        return
     all_limit = safe_int(Config.QUEUE_ALL)
     state_limit = (
         safe_int(Config.QUEUE_DOWNLOAD)
