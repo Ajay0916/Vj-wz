@@ -302,10 +302,13 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
         buttons.data_button("Config Variables", "botset var")
         buttons.data_button("Module Settings", "botset setonoff")
         buttons.data_button("Private Files", "botset private open")
-        buttons.data_button("Qbit Settings", "botset qbit")
+        if not Config.DISABLE_TORRENTS:
+            buttons.data_button("Qbit Settings", "botset qbit")
         buttons.data_button("Aria2c Settings", "botset aria")
-        buttons.data_button("Sabnzbd Settings", "botset nzb")
-        buttons.data_button("JDownloader Sync", "botset syncjd")
+        if not Config.DISABLE_NZB:
+            buttons.data_button("Sabnzbd Settings", "botset nzb")
+        if not Config.DISABLE_JD:
+            buttons.data_button("JDownloader Sync", "botset syncjd")
         buttons.data_button("Close", "botset close", style=ButtonStyle.DANGER)
         msg = "Bot Settings:"
     elif edit_type is not None:
@@ -407,7 +410,8 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
                 buttons.data_button(f"✓ {label}", f"botset toggleonoff {k} on")
             else:
                 buttons.data_button(label, f"botset toggleonoff {k} off")
-        buttons.data_button("API Result", "botset api_result")
+        if not Config.DISABLE_SEARCH:
+            buttons.data_button("API Result", "botset api_result")
         buttons.data_button("Back", "botset back", position="footer")
         buttons.data_button(
             "Close", "botset close", position="footer", style=ButtonStyle.DANGER
