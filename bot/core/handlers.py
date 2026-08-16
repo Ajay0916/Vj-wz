@@ -57,23 +57,24 @@ async def refresh_bot_commands():
             BOT_COMMANDS, "Login", "[password] Login to Bot", 14
         )
 
-    module_cmds = {
-        "DISABLE_JD": ["JdMirror", "JdLeech"],
-        "DISABLE_NZB": ["NzbMirror", "NzbLeech", "NzbSearch"],
-        "DISABLE_RSS": ["Rss"],
-        "DISABLE_SEARCH": ["Search"],
-        "DISABLE_YTDLP": ["Ytdl", "YtdlLeech"],
-        "DISABLE_TORRENTS": ["QbMirror", "QbLeech"],
-        "DISABLE_LEECH": ["Leech", "QbLeech", "JdLeech", "NzbLeech", "YtdlLeech"],
-    }
     removed = []
-    for _var, _cmds in module_cmds.items():
-        if getattr(Config, _var):
+    for _var, _cmds in help_messages.DISABLE_COMMANDS.items():
+        if getattr(Config, _var, False):
             for _c in _cmds:
                 if BOT_COMMANDS.pop(_c, None) is not None:
                     removed.append(_c)
-    if removed:
-        LOGGER.info("Disabled module commands removed from menu: %s", ", ".join(removed))
+    LOGGER.info(
+        "set_commands refresh: flags RSS=%s YTDLP=%s LEECH=%s SEARCH=%s TORRENTS=%s JD=%s NZB=%s | removed=%s | total=%d",
+        Config.DISABLE_RSS,
+        Config.DISABLE_YTDLP,
+        Config.DISABLE_LEECH,
+        Config.DISABLE_SEARCH,
+        Config.DISABLE_TORRENTS,
+        Config.DISABLE_JD,
+        Config.DISABLE_NZB,
+        ",".join(removed) or "-",
+        len(BOT_COMMANDS),
+    )
 
     await TgClient.bot.set_bot_commands(
         [

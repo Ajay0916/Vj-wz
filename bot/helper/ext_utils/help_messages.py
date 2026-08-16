@@ -432,12 +432,34 @@ def get_bot_commands():
 BOT_COMMANDS = get_bot_commands()
 
 
+DISABLE_COMMANDS = {
+    "DISABLE_JD": {"JdMirror", "JdLeech"},
+    "DISABLE_NZB": {"NzbMirror", "NzbLeech", "NzbSearch"},
+    "DISABLE_RSS": {"Rss"},
+    "DISABLE_SEARCH": {"Search"},
+    "DISABLE_YTDLP": {"Ytdl", "YtdlLeech"},
+    "DISABLE_TORRENTS": {"QbMirror", "QbLeech"},
+    "DISABLE_LEECH": {"Leech", "QbLeech", "JdLeech", "NzbLeech", "YtdlLeech"},
+}
+
+
+def disabled_commands():
+    from ...core.config_manager import Config
+
+    hidden = set()
+    for _var, _cmds in DISABLE_COMMANDS.items():
+        if getattr(Config, _var, False):
+            hidden.update(_cmds)
+    return hidden
+
+
 def get_help_string():
     from ..telegram_helper.bot_commands import BotCommands
 
     help_lines = ["NOTE: Try each command without any argument to see more details."]
 
     commands = BotCommands.get_commands()
+    commands = {k: v for k, v in commands.items() if k not in disabled_commands()}
 
     for key, cmds in commands.items():
         cmd_attr = getattr(BotCommands, f"{key}Command", None)

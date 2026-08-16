@@ -412,21 +412,37 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
             hidden_vars.update(["MEGA_EMAIL", "MEGA_LIMIT", "MEGA_PASSWORD"])
         if Config.DISABLE_YTDLP:
             hidden_vars.update(
-                ["YT_CATEGORY_ID", "YT_DESP", "YT_PRIVACY_STATUS", "YT_TAGS"]
+                [
+                    "YT_CATEGORY_ID",
+                    "YT_DESP",
+                    "YT_DLP_OPTIONS",
+                    "YT_PRIVACY_STATUS",
+                    "YT_TAGS",
+                ]
             )
         if Config.DISABLE_TORRENTS:
             hidden_vars.update(["TORRENT_LIMIT", "TORRENT_TIMEOUT"])
+        if Config.DISABLE_FF_MODE:
+            hidden_vars.update(
+                ["ARCHIVE_LIMIT", "EXTRACT_LIMIT", "FFMPEG_CMDS"]
+            )
         if Config.DISABLE_LEECH:
             hidden_vars.update(
                 [
                     "AS_DOCUMENT",
                     "EQUAL_SPLITS",
+                    "HYPER_CHUNK",
+                    "HYPER_PIPELINE",
+                    "HYPER_THREADS",
                     "LEECH_CAPTION",
                     "LEECH_FONT",
+                    "LEECH_LIMIT",
                     "LEECH_PREFIX",
                     "LEECH_SPLIT_SIZE",
                     "LEECH_SUFFIX",
                     "MEDIA_GROUP",
+                    "MEDIA_STORE",
+                    "USE_HYPER",
                 ]
             )
         conf_dict = {
