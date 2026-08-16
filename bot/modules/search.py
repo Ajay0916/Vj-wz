@@ -41,8 +41,6 @@ def _dl_link(url, name="", ext="", short=""):
     )
 
 
-
-
 def _magnet_share_link(magnet, short=""):
     """'Share Magnet to Telegram' link; uses the API short token when the
     result has one so the shared link isn't a 1KB+ magnet string."""
