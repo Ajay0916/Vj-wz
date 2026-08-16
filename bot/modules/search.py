@@ -14,14 +14,27 @@ from ..helper.ext_utils.telegraph_helper import telegraph
 from ..helper.telegram_helper.button_build import ButtonMaker
 from ..helper.telegram_helper.message_utils import edit_message, send_message
 
+_LOCKER_HOSTS = (
+    "nitroflare.com", "uploadgig.com", "rapidgator.net", "keep2share.cc",
+    "k2s.cc", "filecrypt.cc", "katfile.com", "turbobit.net", "hitfile.net",
+    "alfafile.net", "uploadrar.com", "userscloud.com", "file-upload.com",
+    "fboom.me", "douploads.net", "hxfile.co", "dropapk.to", "uploadboy.com",
+    "upload.ee", "ddownload.com", "wdupload.com", "dailyuploads.net",
+    "4funbox.co", "mega.nz",
+)
+
+
 def _dl_link(url, name="", ext="", short=""):
     """Build a download link for a result. Google Drive URLs are linked
     directly so WZML-X can resolve the Drive ID natively (its extractor
-    fails on proxied drive URLs); results with a short token get a tiny
-    /torrent_file/<token> link; everything else goes through the API
-    proxy with a filename slug so browsers that ignore Content-Disposition
-    still save the file with a real name, not "torrent_file.pdf"."""
+    fails on proxied drive URLs); file-locker pages (nitroflare/uploadgig/
+    rapidgator/...) also link directly - proxying them always 502s; results
+    with a short token get a tiny /torrent_file/<token> link; everything
+    else goes through the API proxy with a filename slug so browsers that
+    ignore Content-Disposition still save the file with a real name."""
     if "drive.usercontent.google.com" in url or "drive.google.com" in url:
+        return url
+    if any(h in url for h in _LOCKER_HOSTS):
         return url
     if short:
         return "{}/api/v1/torrent_file/{}".format(Config.SEARCH_API_LINK, short)
