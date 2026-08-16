@@ -304,6 +304,8 @@ NEW_ONOFF_VARS = [
     "DISABLE_LIST",
     "DISABLE_CLONE",
     "DISABLE_MEDIAINFO",
+    "DISABLE_LIMITS",
+    "DISABLE_RCLONE",
 ]
 
 BOOL_ONOFF_VARS = [
@@ -444,6 +446,23 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
         if Config.DISABLE_FF_MODE:
             hidden_vars.update(
                 ["ARCHIVE_LIMIT", "EXTRACT_LIMIT", "FFMPEG_CMDS"]
+            )
+        if Config.DISABLE_LIMITS:
+            hidden_vars.update(
+                [
+                    "BOT_MAX_TASKS", "QUEUE_ALL", "QUEUE_DOWNLOAD", "QUEUE_UPLOAD",
+                    "DIRECT_LIMIT", "TORRENT_LIMIT", "CLONE_LIMIT", "LEECH_LIMIT",
+                    "GD_DL_LIMIT", "STORAGE_LIMIT", "MEGA_LIMIT", "LEECH_SPLIT_SIZE",
+                    "RC_DL_LIMIT", "TORRENT_TIMEOUT",
+                ]
+            )
+        if Config.DISABLE_RCLONE:
+            hidden_vars.update(
+                [
+                    "RCLONE_PATH", "RCLONE_FLAGS",
+                    "RCLONE_SERVE_URL", "RCLONE_SERVE_USER",
+                    "RCLONE_SERVE_PASS", "RCLONE_SERVE_PORT",
+                ]
             )
         if Config.DISABLE_LEECH:
             hidden_vars.update(

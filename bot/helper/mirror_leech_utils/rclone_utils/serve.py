@@ -9,6 +9,8 @@ RcloneServe = []
 
 
 async def rclone_serve_booter():
+    if Config.DISABLE_RCLONE:
+        return
     if not Config.RCLONE_SERVE_URL or not await aiopath.exists("rclone.conf"):
         if RcloneServe:
             try:

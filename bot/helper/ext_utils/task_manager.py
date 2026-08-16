@@ -176,6 +176,10 @@ async def limit_checker(listener, yt_playlist=0):
 
     size = listener.size
 
+    if Config.DISABLE_LIMITS:
+        LOGGER.info("All size limits disabled.")
+        return
+
     async def recurr_limits(limits):
         nonlocal yt_playlist, size
         limit_exceeded = ""
