@@ -309,13 +309,7 @@ NEW_ONOFF_VARS = [
     "DISABLE_RCLONE",
 ]
 
-BOOL_ONOFF_VARS = [
-    "BOT_PM",
-    "DELETE_LINKS",
-    "COLORED_BTNS",
-    "MEDIA_STORE",
-    "USE_HYPER",
-]
+
 
 
 async def get_buttons(key=None, edit_type=None, edit_mode=False):
@@ -427,9 +421,9 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
                 ]
             )
         if Config.DISABLE_JD:
-            hidden_vars.update(["JD_EMAIL", "JD_PASS"])
+            hidden_vars.update(["JD_EMAIL", "JD_PASS", "JD_LIMIT"])
         if Config.DISABLE_NZB:
-            hidden_vars.update(["HYDRA_API_KEY", "HYDRA_IP", "USENET_SERVERS"])
+            hidden_vars.update(["HYDRA_API_KEY", "HYDRA_IP", "USENET_SERVERS", "NZB_LIMIT"])
         if Config.DISABLE_MEGA:
             hidden_vars.update(["MEGA_EMAIL", "MEGA_LIMIT", "MEGA_PASSWORD"])
         if Config.DISABLE_YTDLP:
@@ -440,6 +434,8 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
                     "YT_DLP_OPTIONS",
                     "YT_PRIVACY_STATUS",
                     "YT_TAGS",
+                    "YTDLP_LIMIT",
+                    "PLAYLIST_LIMIT",
                 ]
             )
         if Config.DISABLE_TORRENTS:
@@ -465,6 +461,7 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
                     "RCLONE_PATH", "RCLONE_FLAGS",
                     "RCLONE_SERVE_URL", "RCLONE_SERVE_USER",
                     "RCLONE_SERVE_PASS", "RCLONE_SERVE_PORT",
+                    "RC_DL_LIMIT",
                 ]
             )
         if Config.DISABLE_LEECH:
@@ -554,6 +551,38 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
                 buttons.data_button(f"✓ {label}", f"botset toggleonoff {k} on")
             else:
                 buttons.data_button(label, f"botset toggleonoff {k} off")
+        settings_vars = [
+            "BOT_MAX_TASKS", "QUEUE_ALL", "QUEUE_DOWNLOAD", "QUEUE_UPLOAD",
+            "DIRECT_LIMIT", "TORRENT_LIMIT", "CLONE_LIMIT", "LEECH_LIMIT",
+            "GD_DL_LIMIT", "STORAGE_LIMIT", "MEGA_LIMIT", "LEECH_SPLIT_SIZE",
+            "DEFAULT_UPLOAD", "CMD_SUFFIX", "THROTTLE_SERVICES",
+            "SEARCH_API_LINK", "SEARCH_LIMIT", "API_PIN",
+            "RCLONE_PATH", "EXCLUDED_EXTENSIONS", "CPU_LIMIT",
+            "LEECH_DUMP_CHAT", "LEECH_PREFIX", "LEECH_CAPTION",
+            "GOFILE_API", "PIXELDRAIN_KEY", "DEBRID_LINK_API",
+            "IMDB_TEMPLATE", "FFMPEG_CMDS", "NAME_SWAP",
+            "WEB_PINCODE", "WEB_ACCESS_PASSWORD",
+        ]
+        hidden = set()
+        if Config.DISABLE_LIMITS:
+            hidden.update(["BOT_MAX_TASKS", "QUEUE_ALL", "QUEUE_DOWNLOAD", "QUEUE_UPLOAD", "DIRECT_LIMIT", "TORRENT_LIMIT", "CLONE_LIMIT", "LEECH_LIMIT", "GD_DL_LIMIT", "STORAGE_LIMIT", "MEGA_LIMIT", "LEECH_SPLIT_SIZE"])
+        if Config.DISABLE_QUEUE:
+            hidden.update(["QUEUE_ALL", "QUEUE_DOWNLOAD", "QUEUE_UPLOAD"])
+        if Config.DISABLE_RCLONE:
+            hidden.update(["RCLONE_PATH"])
+        if Config.DISABLE_SEARCH:
+            hidden.update(["SEARCH_API_LINK", "SEARCH_LIMIT", "API_PIN"])
+        if Config.DISABLE_LEECH:
+            hidden.update(["LEECH_DUMP_CHAT", "LEECH_PREFIX", "LEECH_CAPTION"])
+        if Config.DISABLE_UPHOSTER:
+            hidden.update(["GOFILE_API", "PIXELDRAIN_KEY", "DEBRID_LINK_API"])
+        if Config.DISABLE_IMDB:
+            hidden.update(["IMDB_TEMPLATE"])
+        if Config.DISABLE_FF_MODE:
+            hidden.update(["FFMPEG_CMDS"])
+        for k in settings_vars:
+            if k not in hidden:
+                buttons.data_button(k, f"botset editvar {k}")
         buttons.data_button("Page 1 ⏮", "botset setonoff")
         buttons.data_button("Back", "botset back", position="footer")
         buttons.data_button(
