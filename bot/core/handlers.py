@@ -64,7 +64,7 @@ async def refresh_bot_commands():
                 if BOT_COMMANDS.pop(_c, None) is not None:
                     removed.append(_c)
     LOGGER.info(
-        "set_commands refresh: flags RSS=%s YTDLP=%s LEECH=%s SEARCH=%s TORRENTS=%s JD=%s NZB=%s IMAGES=%s UPHOSTER=%s PLUGINS=%s SHELL=%s IMDB=%s LIST=%s CLONE=%s MEDIAINFO=%s GOOGLE=%s LIMITS=%s QUEUE=%s RCLONE=%s API=%s | removed=%s | total=%d",
+        "set_commands refresh: flags RSS=%s YTDLP=%s LEECH=%s SEARCH=%s TORRENTS=%s JD=%s NZB=%s IMAGES=%s UPHOSTER=%s PLUGINS=%s SHELL=%s IMDB=%s LIST=%s CLONE=%s MEDIAINFO=%s SESSION=%s GOOGLE=%s LIMITS=%s QUEUE=%s RCLONE=%s API=%s | removed=%s | total=%d",
         Config.DISABLE_RSS,
         Config.DISABLE_YTDLP,
         Config.DISABLE_LEECH,
@@ -80,6 +80,7 @@ async def refresh_bot_commands():
         Config.DISABLE_LIST,
         Config.DISABLE_CLONE,
         Config.DISABLE_MEDIAINFO,
+        Config.DISABLE_SESSION,
         Config.DISABLE_GOOGLE,
         Config.DISABLE_LIMITS,
         Config.DISABLE_QUEUE,
@@ -387,13 +388,14 @@ async def add_handlers():
             confirm_restart, filters=regex("^botrestart") & CustomFilters.sudo
         )
     )
-    TgClient.bot.add_handler(
-        MessageHandler(
-            restart_sessions,
-            filters=command(BotCommands.RestartSessionsCommand, case_sensitive=True)
-            & CustomFilters.sudo,
+    if not Config.DISABLE_SESSION:
+        TgClient.bot.add_handler(
+            MessageHandler(
+                restart_sessions,
+                filters=command(BotCommands.RestartSessionsCommand, case_sensitive=True)
+                & CustomFilters.sudo,
+            )
         )
-    )
     if not Config.DISABLE_IMDB:
         TgClient.bot.add_handler(
             MessageHandler(
@@ -517,13 +519,14 @@ async def add_handlers():
             & CustomFilters.authorized,
         )
     )
-    TgClient.bot.add_handler(
-        MessageHandler(
-            gen_pyro_string,
-            filters=command(BotCommands.GenPyroSessCommand, case_sensitive=True)
-            & CustomFilters.sudo,
+    if not Config.DISABLE_SESSION:
+        TgClient.bot.add_handler(
+            MessageHandler(
+                gen_pyro_string,
+                filters=command(BotCommands.GenPyroSessCommand, case_sensitive=True)
+                & CustomFilters.sudo,
+            )
         )
-    )
     TgClient.bot.add_handler(
         MessageHandler(
             change_category,

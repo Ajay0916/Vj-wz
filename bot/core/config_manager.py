@@ -42,6 +42,7 @@ class Config:
     DISABLE_LIST = False
     DISABLE_CLONE = False
     DISABLE_MEDIAINFO = False
+    DISABLE_SESSION = False
     DISABLE_GOOGLE = False
     DISABLE_API = False
     DISABLE_LIMITS = False
