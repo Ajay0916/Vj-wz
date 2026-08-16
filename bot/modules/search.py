@@ -266,7 +266,7 @@ async def search(
                 api = f"{Config.SEARCH_API_LINK}/api/v1/recent?site={site}&limit={limit}"
         api += _api_extra_params(opts, method, is_all=bool(opts.get("all_sites") and method == "apisearch"))
         try:
-            pages = max(1, min(int(opts.get("page") or 1), 5))
+            page_spec = str(opts.get("page") or "").strip()
             queries = [q.strip() for q in str(key).split(",") if q.strip()][:3]
             multi_query = method == "apisearch" and len(queries) > 1
             if opts.get("timeout"):
@@ -275,32 +275,36 @@ async def search(
                 req_timeout = 900
             else:
                 req_timeout = 60
+            if page_spec and page_spec not in ("1",) and (page_spec == "0" or "-" in page_spec):
+                req_timeout = max(req_timeout, 300)
             async with AsyncSession(timeout=req_timeout) as client:
-                if method == "apisearch" and (pages > 1 or multi_query):
-                    # -p N => fetch pages 1..N; comma key => each query.
+                if method == "apisearch" and ((page_spec and page_spec != "1") or multi_query):
+                    # -p spec (N | 0 | A-B) is passed to the API, which
+                    # paginates/dedups server-side; comma key => each query.
                     # Merged as-is; dedup (by hash/name) only with -du.
                     merged = []
                     search_results = {}
                     dedup = bool(opts.get("dedup"))
                     for q in queries:
                         qapi = api.replace(quote(key), quote(q)) if multi_query else api
-                        for pg in range(1, (1 if multi_query else pages) + 1):
-                            resp = await client.get(f"{qapi}&page={pg}", headers=_api_headers())
-                            data = resp.json()
-                            if not isinstance(data, dict):
-                                continue
-                            search_results = data
-                            if data.get("error") or data.get("detail"):
-                                continue
-                            merged.extend(data.get("data") or [])
+                        if page_spec and page_spec != "1":
+                            qapi += f"&page={quote(page_spec)}"
+                        resp = await client.get(qapi, headers=_api_headers())
+                        data = resp.json()
+                        if not isinstance(data, dict):
+                            continue
+                        search_results = data
+                        if data.get("error") or data.get("detail"):
+                            continue
+                        merged.extend(data.get("data") or [])
                     if dedup:
                         merged = _dedup_rows(merged)
                     search_results = dict(search_results)
                     search_results["data"] = merged
                     search_results["total"] = len(merged)
                 else:
-                    if method != "apisearch" and pages > 1:
-                        api += f"&page={pages}"
+                    if method != "apisearch" and page_spec.isdigit() and page_spec != "1":
+                        api += f"&page={page_spec}"
                     response = await client.get(api, headers=_api_headers())
                     search_results = response.json()
                     if (
@@ -589,7 +593,7 @@ FILTER_SIZES = ["all", "small", "medium", "large"]
 # short callbacks (Telegram callback_data is limited to 64 bytes).
 FILTER_STATE = {}
 
-# Per-command search options set with /search -l <N> -s <S> -p <P> -f
+# Per-command search options set with /search -l <N> -s <S> -p <spec> -f
 # (keyed by (user_id, msg_id) because callbacks only carry the original
 # command message id).
 SEARCH_OPTS = {}
@@ -598,13 +602,13 @@ SEARCH_OPTS = {}
 _DIGIT_FLAGS = {
     "-l": "limit",
     "-s": "seeders",
-    "-p": "page",
     "-y": "year",
     "-se": "season",
     "-ep": "episode",
     "-to": "timeout",
 }
 _WORD_FLAGS = {
+    "-p": "page",
     "-x": "include",
     "-g": "site",
     "-hs": "hide_sites",
@@ -1152,7 +1156,7 @@ SEARCH_HELP_TEXT = (
     "Format: <code>/s &lt;key&gt; [args]</code> — args hamesha <b>key ke baad</b>\n\n"
     "• <code>-l &lt;n&gt;</code> → result limit\n"
     "• <code>-s &lt;n&gt;</code> → min seeders\n"
-    "• <code>-p &lt;n&gt;</code> → pehle N pages merge: <code>-p 3</code> = page 1+2+3\n"
+    "• <code>-p &lt;spec&gt;</code> → pages: <code>-p 1</code>, range <code>-p 1-4</code>, unlimited <code>-p 0</code>\n"
     "• <code>-to &lt;sec&gt;</code> → speed: slow sites skip (<code>-to 10</code> = max 10s)\n"
     "• <code>-f</code> → fresh (cache skip)\n"
     "• <code>-du</code> → duplicate protection ON\n"
@@ -1575,7 +1579,7 @@ async def torrent_search(_, message):
         await send_message(
             message,
             "Send a search key along with command\n"
-            "Usage: /search <key> [-l <n>] [-s <n>] [-p <n>] [-f] [-du] [-x <w>] [-g <site>] [-a] [-q <q>] [-lng <l>] [-c <c>] [-z <size>] [-S <sort>] [-o <order>]\n/s --help for all args",
+            "Usage: /search <key> [-l <n>] [-s <n>] [-p <spec>] [-f] [-du] [-x <w>] [-g <site>] [-a] [-q <q>] [-lng <l>] [-c <c>] [-z <size>] [-S <sort>] [-o <order>]\n/s --help for all args",
             button,
         )
     elif SITES is not None and Config.SEARCH_PLUGINS:
