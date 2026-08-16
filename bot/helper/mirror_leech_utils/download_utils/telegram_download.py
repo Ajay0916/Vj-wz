@@ -143,6 +143,8 @@ class TelegramDownloadHelper:
             await self._download(message, path)
             return
         except Exception as e:
+            if self._listener.is_cancelled:
+                return
             LOGGER.error(str(e), exc_info=True)
             await self._on_download_error(str(e))
             return
