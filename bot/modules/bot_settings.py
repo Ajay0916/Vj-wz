@@ -490,7 +490,6 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
         if Config.DISABLE_API:
             hidden_vars.update(
                 [
-                    "SEARCH_API_LINK", "SEARCH_LIMIT", "API_PIN",
                     "GOFILE_API", "GOFILE_FOLDER_ID", "GOFILE_AUTO_CREATE_FOLDER",
                     "PIXELDRAIN_KEY", "FILELION_API", "BUZZHEAVIER_API",
                     "DEVUPLOADS_KEY", "DEVUPLOADS_FOLDER",
