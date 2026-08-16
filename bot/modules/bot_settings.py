@@ -486,25 +486,6 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
             hidden_vars.update(
                 ["IMG_SEARCH", "IMG_PAGE", "IMG_SOURCES", "USE_IMAGES"]
             )
-        if Config.DISABLE_UPHOSTER:
-            hidden_vars.update(
-                [
-                    "GOFILE_API",
-                    "GOFILE_FOLDER_ID",
-                    "GOFILE_AUTO_CREATE_FOLDER",
-                    "PIXELDRAIN_KEY",
-                    "FILELION_API",
-                    "BUZZHEAVIER_API",
-                    "DEVUPLOADS_KEY",
-                    "DEVUPLOADS_FOLDER",
-                    "VIKINGFILE_HASH",
-                    "VIKINGFILE_FOLDER",
-                    "STREAMWISH_API",
-                    "PROTECTED_API",
-                    "DEBRID_LINK_API",
-                    "INSTADL_API",
-                ]
-            )
         if Config.DISABLE_GOOGLE:
             hidden_vars.update(
                 ["GDRIVE_ID", "GD_DESP", "GD_DL_LIMIT", "INDEX_URL", "USE_SERVICE_ACCOUNTS"]
