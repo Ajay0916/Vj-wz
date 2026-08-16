@@ -48,7 +48,7 @@ async def send_message(message, text, buttons=None, block=True, photo=None, **kw
         if photo:
             try:
                 if photo == "IMAGES":
-                    if Config.USE_IMAGES and Config.IMAGES:
+                    if not Config.DISABLE_IMAGES and Config.USE_IMAGES and Config.IMAGES:
                         photo = choice(Config.IMAGES)
                     else:
                         photo = None
@@ -165,7 +165,7 @@ async def edit_message(message, text, buttons=None, block=True, photo=None):
         if message.media:
             if photo:
                 if photo == "IMAGES":
-                    if Config.USE_IMAGES and Config.IMAGES:
+                    if not Config.DISABLE_IMAGES and Config.USE_IMAGES and Config.IMAGES:
                         photo = choice(Config.IMAGES)
                     else:
                         photo = None
