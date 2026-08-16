@@ -1065,6 +1065,15 @@ def _dedup_rows(rows):
     return out
 
 
+def _words(value, underscore=False):
+    """Comma-separated filter words -> lowercased list (underscores -> spaces)."""
+    return [
+        (w.strip().lower().replace("_", " ") if underscore else w.strip().lower())
+        for w in str(value or "").split(",")
+        if w.strip()
+    ]
+
+
 def _apply_client_filters(results, opts, query=""):
     """Client-side filters for args t-api has no query param for (-y, -e, -n,
     -k) plus multi-value -q/-lng (t-api takes a single value per param).
@@ -1077,50 +1086,34 @@ def _apply_client_filters(results, opts, query=""):
         out = [r for r in out if _exact_matches(r, query)]
     include = opts.get("include")
     if include and "," in str(include):
-        words = [w.strip().lower() for w in str(include).split(",") if w.strip()]
+        words = _words(include)
         if words:
-            out = [
-                r
-                for r in out
-                if any(w in str(r.get("name") or "").lower() for w in words)
-            ]
+            out = [r for r in out if any(w in str(r.get("name") or "").lower() for w in words)]
     quality = opts.get("quality")
     if quality and "," in str(quality):
-        quals = [x.strip().lower() for x in str(quality).split(",") if x.strip()]
+        quals = _words(quality)
         if quals:
             out = [r for r in out if any(_quality_matches(r, q) for q in quals)]
     fmt = opts.get("format")
     if fmt and "," in str(fmt):
-        formats = [x.strip().lower().lstrip(".") for x in str(fmt).split(",") if x.strip()]
+        formats = [w.lstrip(".") for w in _words(fmt)]
         if formats:
             out = [r for r in out if any(_format_matches(r, f) for f in formats)]
     author = opts.get("author")
     if author:
-        words = [
-            w.strip().lower().replace("_", " ")
-            for w in str(author).split(",")
-            if w.strip()
-        ]
+        words = _words(author, underscore=True)
         if words:
             out = [r for r in out if any(_author_matches(r, w) for w in words)]
     language = opts.get("language")
     if language and "," in str(language):
-        langs = [x.strip().lower() for x in str(language).split(",") if x.strip()]
+        langs = _words(language)
         if langs:
             out = [r for r in out if any(_language_matches(r, l) for l in langs)]
     keywords = opts.get("keywords")
     if keywords:
-        words = [
-            w.strip().lower().replace("_", " ")
-            for w in str(keywords).split(",")
-            if w.strip()
-        ]
+        words = _words(keywords, underscore=True)
         if words:
-            out = [
-                r
-                for r in out
-                if all(w in str(r.get("name") or "").lower() for w in words)
-            ]
+            out = [r for r in out if all(w in str(r.get("name") or "").lower() for w in words)]
     bounds = _year_bounds(opts.get("year"))
     if bounds:
         lo, hi = bounds
@@ -1134,22 +1127,14 @@ def _apply_client_filters(results, opts, query=""):
         ]
     source = opts.get("source")
     if source:
-        words = [w.strip().lower() for w in str(source).split(",") if w.strip()]
+        words = _words(source)
         if words:
-            out = [
-                r
-                for r in out
-                if any(w in str(r.get("name") or "").lower() for w in words)
-            ]
+            out = [r for r in out if any(w in str(r.get("name") or "").lower() for w in words)]
     exclude = opts.get("exclude")
     if exclude:
-        words = [w.strip().lower() for w in str(exclude).split(",") if w.strip()]
+        words = _words(exclude)
         if words:
-            out = [
-                r
-                for r in out
-                if not any(w in str(r.get("name") or "").lower() for w in words)
-            ]
+            out = [r for r in out if not any(w in str(r.get("name") or "").lower() for w in words)]
     if opts.get("adult"):
         out = [r for r in out if not _is_adult(str(r.get("name") or ""))]
     if opts.get("no_video"):
@@ -1607,6 +1592,40 @@ async def torrent_search(_, message):
         await send_message(message, "Choose site to search | Plugins:", button)
 
 
+def _searching_msg(key, site, extra=""):
+    """'Searching for...' status line used by every search entry point."""
+    return f"<b>Searching for <i>{key}</i>\nTorrent Site:- <i>{_site_display_name(site)}</i>{extra}</b>"
+
+
+def _listing_msg(site, endpoint):
+    """'Listing Trending/Recent items...' status line."""
+    return f"<b>Listing {endpoint} Items...\nTorrent Site:- <i>{_site_display_name(site)}</i></b>"
+
+
+def _parse_filters(data):
+    """site/category/quality/language/format from a filter callback row."""
+    return (
+        data[3] if len(data) > 3 else "all",
+        data[4] if len(data) > 4 else "all",
+        data[5] if len(data) > 5 else "all",
+        data[6] if len(data) > 6 else "all",
+        data[7] if len(data) > 7 else "all",
+    )
+
+
+async def _need_state(message, user_id, site=None):
+    """FILTER_STATE lookup; missing/wrong-group state falls back to the site
+    picker so a stale callback never 500s."""
+    state = FILTER_STATE.get(user_id)
+    if state and site and state.get("site") != site:
+        state = None
+    if not state:
+        button = await api_buttons(user_id, "apisearch")
+        await edit_message(message, "Choose site:", button)
+        return None
+    return state
+
+
 @new_task
 async def torrent_search_update(_, query):
     user_id = query.from_user.id
@@ -1643,20 +1662,12 @@ async def torrent_search_update(_, query):
         )
     elif data[2] in ("fq", "fl", "ff"):
         await query.answer()
-        site = data[3] if len(data) > 3 else "all"
-        category = data[4] if len(data) > 4 else "all"
-        quality = data[5] if len(data) > 5 else "all"
-        language = data[6] if len(data) > 6 else "all"
-        format_ = data[7] if len(data) > 7 else "all"
+        site, category, quality, language, format_ = _parse_filters(data)
         button = filter_buttons(user_id, site, category, quality, language, format_)
         await edit_message(message, filter_menu_text(key, site, category, quality, language, format_), button)
     elif data[2] == "fmore":
         await query.answer()
-        site = data[3] if len(data) > 3 else "all"
-        category = data[4] if len(data) > 4 else "all"
-        quality = data[5] if len(data) > 5 else "all"
-        language = data[6] if len(data) > 6 else "all"
-        format_ = data[7] if len(data) > 7 else "all"
+        site, category, quality, language, format_ = _parse_filters(data)
         prev = FILTER_STATE.get(user_id) or {}
         FILTER_STATE[user_id] = {
             "site": site,
@@ -1674,10 +1685,8 @@ async def torrent_search_update(_, query):
         )
     elif data[2] == "sz":
         await query.answer()
-        state = FILTER_STATE.get(user_id)
+        state = await _need_state(message, user_id)
         if not state:
-            button = await api_buttons(user_id, "apisearch")
-            await edit_message(message, "Choose site:", button)
             return
         state["size"] = data[3] if len(data) > 3 else "all"
         button = filter_size_buttons(user_id, state["size"])
@@ -1706,17 +1715,12 @@ async def torrent_search_update(_, query):
             f"\nFormat:- <i>{_filter_label(format_, 'format')}</i>"
             if format_ != "all" else ""
         )
-        await edit_message(
-            message,
-            f"<b>Searching for <i>{key}</i>\nTorrent Site:- <i>{_site_display_name(site)}</i>{fmt}</b>",
-        )
+        await edit_message(message, _searching_msg(key, site, fmt))
         await search(key, site, message, "apisearch", "all", "all", "all", format_)
     elif data[2] == "fgs":
         await query.answer()
-        state = FILTER_STATE.get(user_id)
+        state = await _need_state(message, user_id)
         if not state:
-            button = await api_buttons(user_id, "apisearch")
-            await edit_message(message, "Choose site:", button)
             return
         site = state["site"]
         category = state["category"]
@@ -1734,7 +1738,7 @@ async def torrent_search_update(_, query):
         ) or "None"
         await edit_message(
             message,
-            f"<b>Searching for <i>{key}</i>\nTorrent Site:- <i>{_site_display_name(site)}</i>\nCategory:- <i>{category.capitalize()}</i>\nFilters:- <i>{summary}</i></b>",
+            _searching_msg(key, site, f"\nCategory:- <i>{category.capitalize()}</i>\nFilters:- <i>{summary}</i>"),
         )
         await search(key, site, message, "apisearch", category, quality, language, format_, size)
         FILTER_STATE.pop(user_id, None)
@@ -1768,17 +1772,12 @@ async def torrent_search_update(_, query):
             )
         else:
             endpoint = "Trending" if method == "apitrend" else "Recent"
-            await edit_message(
-                message,
-                f"<b>Listing {endpoint} Items...\nTorrent Site:- <i>{_site_display_name(group)}</i></b>",
-            )
+            await edit_message(message, _listing_msg(group, endpoint))
             await search(key, group, message, method)
     elif data[2] == "gsz":
         await query.answer()
-        state = FILTER_STATE.get(user_id)
-        if not state or state.get("site") != "courses":
-            button = await api_buttons(user_id, "apisearch")
-            await edit_message(message, "Choose site:", button)
+        state = await _need_state(message, user_id, "courses")
+        if not state:
             return
         state["size"] = data[3] if len(data) > 3 else "all"
         button = filter_group_buttons(user_id, "courses", "all", "all", state["size"])
@@ -1789,10 +1788,8 @@ async def torrent_search_update(_, query):
         )
     elif data[2] == "gl":
         await query.answer()
-        state = FILTER_STATE.get(user_id)
-        if not state or state.get("site") != "books":
-            button = await api_buttons(user_id, "apisearch")
-            await edit_message(message, "Choose site:", button)
+        state = await _need_state(message, user_id, "books")
+        if not state:
             return
         state["language"] = data[3] if len(data) > 3 else "all"
         format_ = data[4] if len(data) > 4 else state.get("format", "all")
@@ -1808,10 +1805,8 @@ async def torrent_search_update(_, query):
         )
     elif data[2] == "gf":
         await query.answer()
-        state = FILTER_STATE.get(user_id)
-        if not state or state.get("site") != "books":
-            button = await api_buttons(user_id, "apisearch")
-            await edit_message(message, "Choose site:", button)
+        state = await _need_state(message, user_id, "books")
+        if not state:
             return
         language = data[3] if len(data) > 3 else state.get("language", "all")
         state["format"] = data[4] if len(data) > 4 else "all"
@@ -1827,10 +1822,8 @@ async def torrent_search_update(_, query):
         )
     elif data[2] == "ggo":
         await query.answer()
-        state = FILTER_STATE.get(user_id)
+        state = await _need_state(message, user_id)
         if not state:
-            button = await api_buttons(user_id, "apisearch")
-            await edit_message(message, "Choose site:", button)
             return
         language = data[3] if len(data) > 3 else "all"
         format_ = data[4] if len(data) > 4 else "all"
@@ -1845,10 +1838,7 @@ async def torrent_search_update(_, query):
             )
             if p
         ) or "None"
-        await edit_message(
-            message,
-            f"<b>Searching for <i>{key}</i>\nTorrent Site:- <i>{_site_display_name(site)}</i>\nFilters:- <i>{summary}</i></b>",
-        )
+        await edit_message(message, _searching_msg(key, site, f"\nFilters:- <i>{summary}</i>"))
         await search(key, site, message, "apisearch", "all", "all", language, format_, size)
         FILTER_STATE.pop(user_id, None)
     elif data[2] != "cancel":
@@ -1867,10 +1857,7 @@ async def torrent_search_update(_, query):
                     button,
                 )
             else:
-                await edit_message(
-                    message,
-                    f"<b>Searching for <i>{key}</i>\nTorrent Site:- <i>{_site_display_name(site)}</i></b>",
-                )
+                await edit_message(message, _searching_msg(key, site))
                 await search(key, site, message, "apisearch")
         elif method.startswith("api"):
             if key is None:
@@ -1878,16 +1865,10 @@ async def torrent_search_update(_, query):
                     endpoint = "Recent"
                 elif method == "apitrend":
                     endpoint = "Trending"
-                await edit_message(
-                    message,
-                    f"<b>Listing {endpoint} Items...\nTorrent Site:- <i>{_site_display_name(site)}</i></b>",
-                )
+                await edit_message(message, _listing_msg(site, endpoint))
                 await search(key, site, message, method)
             else:
-                await edit_message(
-                    message,
-                    f"<b>Searching for <i>{key}</i>\nTorrent Site:- <i>{_site_display_name(site)}</i></b>",
-                )
+                await edit_message(message, _searching_msg(key, site))
                 await search(key, site, message, method)
         else:
             await edit_message(
