@@ -222,7 +222,29 @@ def bot_sys_stats():
         f"<b>Recv:</b> {get_readable_file_size(net.bytes_recv)}"
     )
 
+
+
+# ── WZML Theme (separate, doesn't affect VJ) ──────────────────────
+WZML_FINISHED = "\u2588"  # █
+WZML_UNFINISHED = "\u2592"  # ▒
+WZML_INCOMPLETE = ["\u2581", "\u2582", "\u2583", "\u2584", "\u2585", "\u2586", "\u2587"]  # ▁▂▃▄▅▆▇
+WZML_MAX = 100 // 9
+
+
+def get_wzml_progress(pct):
+    pct = float(str(pct).strip("%"))
+    p = min(max(pct, 0), 100)
+    cFull = int(p // 8)
+    cPart = int(p % 8 - 1)
+    p_str = WZML_FINISHED * cFull
+    if cPart >= 0:
+        p_str += WZML_INCOMPLETE[cPart]
+    p_str += WZML_UNFINISHED * (WZML_MAX - cFull)
+    return f" \u2827{p_str}\u2839"
+
+
 async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=1):
+    wzml = (Config.get("STATUS_THEME") or "vj") == "wzml"
     msg = ""
     button = None
 
@@ -263,7 +285,8 @@ async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=
             and task.listener.progress
         ):
             progress = task.progress()
-            msg += f"\n┟ {get_progress_bar_string(progress)} <i>{progress}</i>"
+            pb = get_wzml_progress(progress) if wzml else get_progress_bar_string(progress)
+            msg += f"\n┟ {pb} <i>{progress}</i>"
             if task.listener.subname:
                 subsize = f" / {get_readable_file_size(task.listener.subsize)}"
                 ac = len(task.listener.files_to_proceed)
@@ -345,4 +368,22 @@ async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=
     button = buttons.build_menu(8)
     msg += f"\n┟ <b>CPU</b> → {cpu_percent()}% | <b>F</b> → {get_readable_file_size(disk_usage(DOWNLOAD_DIR).free)} [{round(100 - disk_usage(DOWNLOAD_DIR).percent, 1)}%]"
     msg += f"\n┖ <b>RAM</b> → {virtual_memory().percent}% | <b>UP</b> → {get_readable_time(time() - bot_start_time)}"
+    if wzml:
+        dl_speed = 0
+        up_speed = 0
+        with download_dict_lock:
+            for download in list(download_dict.values()):
+                spd = download.speed()
+                if hasattr(download, 'status'):
+                    st = download.status()
+                    if st in ("Download", "QueueD"):
+                        if 'K' in spd: dl_speed += float(spd.split('K')[0]) * 1024
+                        elif 'M' in spd: dl_speed += float(spd.split('M')[0]) * 1048576
+                    elif st in ("Upload", "UploadToTelegram", "QueueU"):
+                        if 'K' in spd: up_speed += float(spd.split('K')[0]) * 1024
+                        elif 'M' in spd: up_speed += float(spd.split('M')[0]) * 1048576
+                    elif st == "Seed":
+                        if 'K' in spd: up_speed += float(spd.split('K')[0]) * 1024
+                        elif 'M' in spd: up_speed += float(spd.split('M')[0]) * 1048576
+        msg += f"\n\n<b>\U0001f53b DL:</b> {get_readable_file_size(dl_speed)}/s | <b>\U0001f53a UL:</b> {get_readable_file_size(up_speed)}/s"
     return msg, button
