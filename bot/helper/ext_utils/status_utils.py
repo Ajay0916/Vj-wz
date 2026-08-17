@@ -4,7 +4,7 @@ from pyrogram.enums import ButtonStyle
 from re import findall
 from time import time
 
-from psutil import cpu_percent, disk_usage, virtual_memory, net_io_counters
+from psutil import cpu_percent, disk_usage, virtual_memory
 
 from ... import (
     DOWNLOAD_DIR,
@@ -195,86 +195,34 @@ def speed_string_to_bytes(size_text: str):
     return size
 
 
-WEEBZ_PROGRESS_INCOMPLETE = ['◔', '◔', '◑', '◑', '◑', '◕', '◕']
-
-
-def get_progress_bar_string(pct, theme="vj"):
+def get_progress_bar_string(pct):
     pct = float(str(pct).strip("%"))
     p = min(max(pct, 0), 100)
-    if theme == "weebz":
-        WEEBZ_FINISHED = "●"
-        WEEBZ_UNFINISHED = "○"
-        WEEBZ_MAX = 100 // 9  # = 11
-        cFull = int(p // 8)
-        cPart = int(p % 8 - 1)
-        p_str = WEEBZ_FINISHED * cFull
-        if cPart >= 0:
-            p_str += WEEBZ_PROGRESS_INCOMPLETE[cPart]
-        p_str += WEEBZ_UNFINISHED * (WEEBZ_MAX - cFull)
-        return f"⠧{p_str}⠹"
-    elif theme == "theme3":
-        WEEBZ_FINISHED = "▰"
-        WEEBZ_UNFINISHED = "▱"
-        WEEBZ_MAX = 100 // 9  # = 11
-        cFull = int(p // 8)
-        cPart = int(p % 8 - 1)
-        p_str = WEEBZ_FINISHED * cFull
-        if cPart >= 0:
-            p_str += WEEBZ_PROGRESS_INCOMPLETE[cPart]
-        p_str += WEEBZ_UNFINISHED * (WEEBZ_MAX - cFull)
-        return f"⠧{p_str}⠹"
-    else:
-        cFull = int(p // 8)
-        cPart = int(p % 8 - 1)
-        p_str = "■" * cFull
-        if cPart >= 0:
-            p_str += ["▤", "▥", "▦", "▧", "▨", "▩", "■"][cPart]
-        p_str += "□" * (12 - cFull)
-        return f"[{p_str}]"
+    cFull = int(p // 8)
+    cPart = int(p % 8 - 1)
+    p_str = "■" * cFull
+    if cPart >= 0:
+        p_str += ["▤", "▥", "▦", "▧", "▨", "▩", "■"][cPart]
+    p_str += "□" * (12 - cFull)
+    return f"[{p_str}]"
 
 
 
 def bot_sys_stats():
-    """Popup statistics for Statistics button."""
-    dl_speed = 0
-    up_speed = 0
-    from ... import download_dict
-    with download_dict_lock:
-        for download in list(download_dict.values()):
-            spd = download.speed()
-            if hasattr(download, 'status'):
-                st = download.status()
-                if st in ("Download", "QueueD"):
-                    if 'K' in spd:
-                        dl_speed += float(spd.split('K')[0]) * 1024
-                    elif 'M' in spd:
-                        dl_speed += float(spd.split('M')[0]) * 1048576
-                elif st in ("Upload", "UploadToTelegram", "QueueU"):
-                    if 'K' in spd:
-                        up_speed += float(spd.split('K')[0]) * 1024
-                    elif 'M' in spd:
-                        up_speed += float(spd.split('M')[0]) * 1048576
-                elif st == "Seed":
-                    if 'K' in spd:
-                        up_speed += float(spd.split('K')[0]) * 1024
-                    elif 'M' in spd:
-                        up_speed += float(spd.split('M')[0]) * 1048576
     from psutil import disk_usage as _du, virtual_memory as _vm, cpu_percent as _cpu, net_io_counters as _net
     from ...core.config_manager import Config
-    from ..ext_utils.bot_utils import get_readable_file_size, get_readable_time
-    from time import time as _time
+    from ..ext_utils.bot_utils import get_readable_file_size
     net = _net()
+    disk = _du(Config.DOWNLOAD_DIR)
     return (
-        f"<b>Bot Statistics</b>\n"
-        f"Sent: {get_readable_file_size(net.bytes_sent)} | "
-        f"Recv: {get_readable_file_size(net.bytes_recv)}\n"
-        f"CPU: {_cpu()}% | RAM: {_vm().percent}%\n\n"
-        f"Disk: {get_readable_file_size(_du(Config.DOWNLOAD_DIR).free)} free "
-        f"[{round(100 - _du(Config.DOWNLOAD_DIR).percent, 1)}%]\n"
+        f"<b>📊 Bot Statistics</b>\n\n"
+        f"<b>CPU:</b> {_cpu()}% | <b>RAM:</b> {_vm().percent}%\n"
+        f"<b>Disk:</b> {get_readable_file_size(disk.free)} free [{round(100 - disk.percent, 1)}%]\n"
+        f"<b>Sent:</b> {get_readable_file_size(net.bytes_sent)}\n"
+        f"<b>Recv:</b> {get_readable_file_size(net.bytes_recv)}"
     )
 
 async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=1):
-    theme = Config.get("STATUS_THEME") or "vj"
     msg = ""
     button = None
 
@@ -315,7 +263,7 @@ async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=
             and task.listener.progress
         ):
             progress = task.progress()
-            msg += f"\n┟ {get_progress_bar_string(progress, theme)} <i>{progress}</i>"
+            msg += f"\n┟ {get_progress_bar_string(progress)} <i>{progress}</i>"
             if task.listener.subname:
                 subsize = f" / {get_readable_file_size(task.listener.subsize)}"
                 ac = len(task.listener.files_to_proceed)
