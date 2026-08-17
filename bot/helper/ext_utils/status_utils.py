@@ -224,27 +224,31 @@ def bot_sys_stats():
 
 
 
-# ── WZML Theme (separate, doesn't affect VJ) ──────────────────────
+# ── WZML Theme (EXACT copy from WZML repo) ──────────────────────
 WZML_FINISHED = "\u2588"  # █
 WZML_UNFINISHED = "\u2592"  # ▒
-WZML_INCOMPLETE = ["\u2581", "\u2582", "\u2583", "\u2584", "\u2585", "\u2586", "\u2587"]  # ▁▂▃▄▅▆▇
+WZML_MULTI = "\u2581 \u2582 \u2583 \u2584 \u2585 \u2586 \u2587".split(" ")  # ▁▂▃▄▅▆▇
 WZML_MAX = 100 // 9
 
 
 def get_wzml_progress(pct):
+    """EXACT WZML progress bar: ⠧█▁▂▃▄▅▆▇▒⠹"""
     pct = float(str(pct).strip("%"))
     p = min(max(pct, 0), 100)
     cFull = int(p // 8)
     cPart = int(p % 8 - 1)
     p_str = WZML_FINISHED * cFull
     if cPart >= 0:
-        p_str += WZML_INCOMPLETE[cPart]
+        p_str += WZML_MULTI[cPart]
     p_str += WZML_UNFINISHED * (WZML_MAX - cFull)
     return f" \u2827{p_str}\u2839"
 
 
+
+
 async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=1):
-    wzml = (Config.get("STATUS_THEME") or "vj") == "wzml"
+    if (Config.get("STATUS_THEME") or "vj") == "wzml":
+        return await _get_wzml_readable_message(sid, is_user, page_no, status, page_step)
     msg = ""
     button = None
 
@@ -285,8 +289,7 @@ async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=
             and task.listener.progress
         ):
             progress = task.progress()
-            pb = get_wzml_progress(progress) if wzml else get_progress_bar_string(progress)
-            msg += f"\n┟ {pb} <i>{progress}</i>"
+            msg += f"\n┟ {get_progress_bar_string(progress)} <i>{progress}</i>"
             if task.listener.subname:
                 subsize = f" / {get_readable_file_size(task.listener.subsize)}"
                 ac = len(task.listener.files_to_proceed)
@@ -368,22 +371,130 @@ async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=
     button = buttons.build_menu(8)
     msg += f"\n┟ <b>CPU</b> → {cpu_percent()}% | <b>F</b> → {get_readable_file_size(disk_usage(DOWNLOAD_DIR).free)} [{round(100 - disk_usage(DOWNLOAD_DIR).percent, 1)}%]"
     msg += f"\n┖ <b>RAM</b> → {virtual_memory().percent}% | <b>UP</b> → {get_readable_time(time() - bot_start_time)}"
-    if wzml:
-        dl_speed = 0
-        up_speed = 0
-        with download_dict_lock:
-            for download in list(download_dict.values()):
-                spd = download.speed()
-                if hasattr(download, 'status'):
-                    st = download.status()
-                    if st in ("Download", "QueueD"):
-                        if 'K' in spd: dl_speed += float(spd.split('K')[0]) * 1024
-                        elif 'M' in spd: dl_speed += float(spd.split('M')[0]) * 1048576
-                    elif st in ("Upload", "UploadToTelegram", "QueueU"):
-                        if 'K' in spd: up_speed += float(spd.split('K')[0]) * 1024
-                        elif 'M' in spd: up_speed += float(spd.split('M')[0]) * 1048576
-                    elif st == "Seed":
-                        if 'K' in spd: up_speed += float(spd.split('K')[0]) * 1024
-                        elif 'M' in spd: up_speed += float(spd.split('M')[0]) * 1048576
-        msg += f"\n\n<b>\U0001f53b DL:</b> {get_readable_file_size(dl_speed)}/s | <b>\U0001f53a UL:</b> {get_readable_file_size(up_speed)}/s"
     return msg, button
+
+
+# ═══════════════════════════════════════════════════════════════════
+# WZML Theme — EXACT format from WZML repo, adapted to Vj-wz arch
+# ═══════════════════════════════════════════════════════════════════
+
+async def _get_wzml_readable_message(sid, is_user, page_no=1, status="All", page_step=1):
+    from ..telegram_helper.bot_commands import BotCommands
+
+    msg = ""
+    button = None
+
+    tasks = await get_specific_tasks(status, sid if is_user else None)
+
+    STATUS_LIMIT = Config.STATUS_LIMIT
+    tasks_no = len(tasks)
+    pages = (max(tasks_no, 1) + STATUS_LIMIT - 1) // STATUS_LIMIT
+    if page_no > pages:
+        page_no = (page_no - 1) % pages + 1
+        status_dict[sid]["page_no"] = page_no
+    elif page_no < 1:
+        page_no = pages - (abs(page_no) % pages)
+        status_dict[sid]["page_no"] = page_no
+    start_position = (page_no - 1) * STATUS_LIMIT
+
+    for index, task in enumerate(
+        tasks[start_position : STATUS_LIMIT + start_position], start=1
+    ):
+        if status != "All":
+            tstatus = status
+        elif iscoroutinefunction(task.status):
+            tstatus = await task.status()
+        else:
+            tstatus = task.status()
+
+        # ╭ Status: Name  (EXACT WZML header)
+        try:
+            msg += f"<b>╭ <a href='{task.listener.message.link}'>{tstatus}</a>: </b>"
+        except Exception:
+            msg += f"<b>╭ {tstatus}: </b>"
+        msg += f"<code>{escape(str(task.name()))}</code>"
+
+        # Downloading / Paused / QueueDl
+        if tstatus in (
+            MirrorStatus.STATUS_DOWNLOAD,
+            MirrorStatus.STATUS_PAUSED,
+            MirrorStatus.STATUS_QUEUEDL,
+        ) and task.listener.progress:
+            progress = task.progress()
+            msg += f"\n<b>├</b>{get_wzml_progress(progress)} {progress}"
+            msg += f"\n<b>├🔄 Process:</b> {get_readable_file_size(task.processed_bytes())} of {task.size()}"
+            msg += f"\n<b>├⚡ Speed:</b> {task.speed()}"
+            elapsed = time() - task.listener.message.date.timestamp()
+            msg += f"\n<b>├⏳ ETA:</b> {task.eta()}"
+            msg += f"<b> | Elapsed: </b>{get_readable_time(elapsed)}"
+            msg += f"\n<b>├⛓️ Engine :</b> {task.engine}"
+            if task.listener.is_torrent or task.listener.is_qbit:
+                try:
+                    msg += f"\n<b>├🌱 Seeders:</b> {task.seeders_num()} | <b>🐌 Leechers:</b> {task.leechers_num()}"
+                except Exception:
+                    pass
+            if task.listener.is_torrent or task.listener.is_qbit or task.listener.is_nzb:
+                msg += f"\n<b>├🧿 Select:</b> <code>/{BotCommands.SelectCommand[1]}_{task.gid()[:12]}</code>"
+            msg += f"\n<b>╰❌ </b><code>/{BotCommands.CancelTaskCommand[1]}_{task.gid()[:12]}</code>"
+
+        elif tstatus == MirrorStatus.STATUS_SEED:
+            msg += f"\n<b>├📦 Size: </b>{task.size()}"
+            msg += f"\n<b>├⛓️ Engine:</b> <code>{task.engine}</code>"
+            msg += f"\n<b>├⚡ Speed: </b>{task.seed_speed()}"
+            msg += f"\n<b>├🔺 Uploaded: </b>{task.uploaded_bytes()}"
+            msg += f"\n<b>├📎 Ratio: </b>{task.ratio()}"
+            msg += f" | <b>⏲️ Time: </b>{task.seeding_time()}"
+            elapsed = time() - task.listener.message.date.timestamp()
+            msg += f"\n<b>├⏳ Elapsed: </b>{get_readable_time(elapsed)}"
+            msg += f"\n<b>╰❌ </b><code>/{BotCommands.CancelTaskCommand[1]}_{task.gid()[:12]}</code>"
+
+        else:
+            msg += f"\n<b>├⛓️ Engine :</b> {task.engine}"
+            msg += f"\n<b>╰📐 Size: </b>{task.size()}"
+
+        msg += "\n\n"
+
+    if len(msg) == 0:
+        if status == "All":
+            return None, None
+        else:
+            msg = f"No Active {status} Tasks!\n\n"
+
+    # ── Bot Stats (EXACT WZML emoji format) ──
+    dl_speed = 0
+    up_speed = 0
+    async with task_dict_lock:
+        for tk in task_dict.values():
+            try:
+                spd = tk.speed()
+                spd_bytes = speed_string_to_bytes(spd)
+                if iscoroutinefunction(tk.status):
+                    st = await tk.status()
+                else:
+                    st = tk.status()
+                if st in (MirrorStatus.STATUS_DOWNLOAD, MirrorStatus.STATUS_QUEUEDL, MirrorStatus.STATUS_PAUSED):
+                    dl_speed += spd_bytes
+                elif st in (MirrorStatus.STATUS_UPLOAD, MirrorStatus.STATUS_SEED):
+                    up_speed += spd_bytes
+            except Exception:
+                pass
+
+    bmsg = f"<b>🖥 CPU:</b> {cpu_percent()}% | <b>💿 FREE:</b> {get_readable_file_size(disk_usage(DOWNLOAD_DIR).free)}"
+    bmsg += f"\n<b>🎮 RAM:</b> {virtual_memory().percent}% | <b>🟢 UPTIME:</b> {get_readable_time(time() - bot_start_time)}"
+    bmsg += f"\n<b>🔻 DL:</b> {get_readable_file_size(dl_speed)}/s | <b>🔺 UL:</b> {get_readable_file_size(up_speed)}/s"
+
+    # ── Buttons (EXACT WZML format) ──
+    buttons = ButtonMaker()
+    if not is_user:
+        buttons.data_button("Statistics", f"status {sid} stats", style=ButtonStyle.PRIMARY)
+    if len(tasks) > STATUS_LIMIT:
+        msg += f"<b>Tasks:</b> {tasks_no} | <b>Page:</b> {page_no}/{pages}\n"
+        buttons.data_button("⏪Previous", f"status {sid} pre")
+        buttons.data_button(f"{page_no}/{pages}", f"status {sid} ov")
+        buttons.data_button("Next⏩", f"status {sid} nex")
+        buttons.data_button("Statistics", f"status {sid} stats", style=ButtonStyle.PRIMARY)
+    buttons.data_button("♻️ Refresh", f"status {sid} ref", style=ButtonStyle.PRIMARY)
+    buttons.data_button("❌ Close", f"status {sid} close")
+    button = buttons.build_menu(3)
+
+    return msg + bmsg, button
