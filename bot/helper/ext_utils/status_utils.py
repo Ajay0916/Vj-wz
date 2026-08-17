@@ -283,66 +283,83 @@ async def _wzml_inner(sid, is_user, page_no=1, status="All", page_step=1):
     for index, task in enumerate(
         tasks[start_position : STATUS_LIMIT + start_position], start=1
     ):
-        if status != "All":
-            tstatus = status
-        elif iscoroutinefunction(task.status):
-            tstatus = await task.status()
-        else:
-            tstatus = task.status()
-
-        # Header: ╭ Status: Name
         try:
-            msg += f"<b>\u256d <a href='{task.listener.message.link}'>{tstatus}</a>: </b>"
-        except Exception:
-            msg += f"<b>\u256d {tstatus}: </b>"
-        msg += f"<code>{escape(str(task.name()))}</code>"
+            if status != "All":
+                tstatus = status
+            elif iscoroutinefunction(task.status):
+                tstatus = await task.status()
+            else:
+                tstatus = task.status()
 
-        # Download / Pause / QueueDl
-        if tstatus not in (MirrorStatus.STATUS_SEED, MirrorStatus.STATUS_SPLIT):
-            if task.listener.progress:
-                progress = task.progress()  # "36.56%" — already formatted
-                msg += f"\n<b>\u251c</b>{get_wzml_progress(progress)} {progress}"
-                # task.processed_bytes() = "40.75MB" — DIRECT, no get_readable_file_size
-                msg += f"\n<b>\u251c\U0001f504 Process:</b> {task.processed_bytes()} of {task.size()}"
-                msg += f"\n<b>\u251c\u26a1 Speed:</b> {task.speed()}"
-                elapsed = time() - task.listener.message.date.timestamp()
-                msg += f"\n<b>\u251c\u23f3 ETA:</b> {task.eta()}"
-                msg += f"<b> | Elapsed: </b>{get_readable_time(elapsed)}"
-                msg += f"\n<b>\u251c\u26d3\ufe0f Engine :</b> {_wzml_engine(task.engine)}"
-                if task.listener.is_torrent or task.listener.is_qbit:
+            # Header: \u256d Status: Name
+            try:
+                msg += f"<b>\u256d <a href='{task.listener.message.link}'>{tstatus}</a>: </b>"
+            except Exception:
+                msg += f"<b>\u256d {tstatus}: </b>"
+            msg += f"<code>{escape(str(task.name()))}</code>"
+
+            # Download / Pause / QueueDl
+            if tstatus not in (MirrorStatus.STATUS_SEED, MirrorStatus.STATUS_SPLIT):
+                if task.listener.progress:
+                    progress = task.progress()
+                    msg += f"\n<b>\u251c</b>{get_wzml_progress(progress)} {progress}"
+                    msg += f"\n<b>\u251c\U0001f504 Process:</b> {task.processed_bytes()} of {task.size()}"
+                    msg += f"\n<b>\u251c\u26a1 Speed:</b> {task.speed()}"
+                    elapsed = time() - task.listener.message.date.timestamp()
+                    msg += f"\n<b>\u251c\u23f3 ETA:</b> {task.eta()}"
+                    msg += f"<b> | Elapsed: </b>{get_readable_time(elapsed)}"
+                    msg += f"\n<b>\u251c\u26d3\ufe0f Engine :</b> {_wzml_engine(task.engine)}"
+                    if task.listener.is_torrent or task.listener.is_qbit:
+                        try:
+                            msg += f"\n<b>\u251c\U0001f331 Seeders:</b> {task.seeders_num()} | <b>\U0001f40c Leechers:</b> {task.leechers_num()}"
+                        except Exception:
+                            pass
+                    if task.listener.is_torrent or task.listener.is_qbit or task.listener.is_nzb:
+                        msg += f"\n<b>\u251c\U0001f9ff Select:</b> <code>/{BotCommands.SelectCommand[1]}_{task.gid()[:12]}</code>"
+                    # Source/User line
                     try:
-                        msg += f"\n<b>\u251c\U0001f331 Seeders:</b> {task.seeders_num()} | <b>\U0001f40c Leechers:</b> {task.leechers_num()}"
+                        chat = task.listener.message.chat
+                        if chat.type != ChatType.PRIVATE:
+                            chatid = str(chat.id)[4:]
+                            msg += f'\n<b>\u251c\U0001f310 Source: </b><a href="https://t.me/c/{chatid}/{task.listener.message.message_id}">{task.listener.message.from_user.first_name}</a> | <b>Id :</b> <code>{task.listener.message.from_user.id}</code>'
+                        else:
+                            msg += f'\n<b>\u251c\U0001f464 User:</b> <code>{task.listener.message.from_user.first_name}</code> | <b>Id:</b> <code>{task.listener.message.from_user.id}</code>'
                     except Exception:
                         pass
-                if task.listener.is_torrent or task.listener.is_qbit or task.listener.is_nzb:
-                    msg += f"\n<b>\u251c\U0001f9ff Select:</b> <code>/{BotCommands.SelectCommand[1]}_{task.gid()[:12]}</code>"
-                # Source/User line
-                try:
-                    if task.listener.message.chat.type != ChatType.PRIVATE:
-                        chatid = str(task.listener.message.chat.id)[4:]
-                        msg += f'\n<b>\u251c\U0001f310 Source: </b><a href="https://t.me/c/{chatid}/{task.listener.message.message_id}">{task.listener.message.from_user.first_name}</a> | <b>Id :</b> <code>{task.listener.message.from_user.id}</code>'
-                    else:
-                        msg += f'\n<b>\u251c\U0001f464 User:</b> <code>{task.listener.message.from_user.first_name}</code> | <b>Id:</b> <code>{task.listener.message.from_user.id}</code>'
-                except Exception:
-                    pass
+                    msg += f"\n<b>\u2570\u274c </b><code>/{BotCommands.CancelTaskCommand[1]}_{task.gid()[:12]}</code>"
+
+                elif tstatus == MirrorStatus.STATUS_SEED:
+                    msg += f"\n<b>\u251c\U0001f4e6 Size: </b>{task.size()}"
+                    msg += f"\n<b>\u251c\u26d3\ufe0f Engine:</b> {_wzml_engine(task.engine)}"
+                    msg += f"\n<b>\u251c\u26a1 Speed: </b>{task.seed_speed()}"
+                    msg += f"\n<b>\u251c\U0001f53a Uploaded: </b>{task.uploaded_bytes()}"
+                    msg += f"\n<b>\u251c\U0001f4ce Ratio: </b>{task.ratio()}"
+                    msg += f" | <b>\u23f2\ufe0f Time: </b>{task.seeding_time()}"
+                    elapsed = time() - task.listener.message.date.timestamp()
+                    msg += f"\n<b>\u251c\u23f3 Elapsed: </b>{get_readable_time(elapsed)}"
+                    msg += f"\n<b>\u2570\u274c </b><code>/{BotCommands.CancelTaskCommand[1]}_{task.gid()[:12]}</code>"
+
+                else:
+                    msg += f"\n<b>\u251c\u26d3\ufe0f Engine :</b> {_wzml_engine(task.engine)}"
+                    msg += f"\n<b>\u2570\U0001f4d0 Size: </b>{task.size()}"
+
+            else:
+                # Seeding
+                msg += f"\n<b>\u251c\U0001f4e6 Size: </b>{task.size()}"
+                msg += f"\n<b>\u251c\u26d3\ufe0f Engine:</b> {_wzml_engine(task.engine)}"
+                msg += f"\n<b>\u251c\u26a1 Speed: </b>{task.seed_speed()}"
+                msg += f"\n<b>\u251c\U0001f53a Uploaded: </b>{task.uploaded_bytes()}"
+                msg += f"\n<b>\u251c\U0001f4ce Ratio: </b>{task.ratio()}"
+                msg += f" | <b>\u23f2\ufe0f Time: </b>{task.seeding_time()}"
+                elapsed = time() - task.listener.message.date.timestamp()
+                msg += f"\n<b>\u251c\u23f3 Elapsed: </b>{get_readable_time(elapsed)}"
                 msg += f"\n<b>\u2570\u274c </b><code>/{BotCommands.CancelTaskCommand[1]}_{task.gid()[:12]}</code>"
 
-        elif tstatus == MirrorStatus.STATUS_SEED:
-            msg += f"\n<b>\u251c\U0001f4e6 Size: </b>{task.size()}"
-            msg += f"\n<b>\u251c\u26d3\ufe0f Engine:</b> {_wzml_engine(task.engine)}"
-            msg += f"\n<b>\u251c\u26a1 Speed: </b>{task.seed_speed()}"
-            msg += f"\n<b>\u251c\U0001f53a Uploaded: </b>{task.uploaded_bytes()}"
-            msg += f"\n<b>\u251c\U0001f4ce Ratio: </b>{task.ratio()}"
-            msg += f" | <b>\u23f2\ufe0f Time: </b>{task.seeding_time()}"
-            elapsed = time() - task.listener.message.date.timestamp()
-            msg += f"\n<b>\u251c\u23f3 Elapsed: </b>{get_readable_time(elapsed)}"
-            msg += f"\n<b>\u2570\u274c </b><code>/{BotCommands.CancelTaskCommand[1]}_{task.gid()[:12]}</code>"
+            msg += "\n<b>_________________________________</b>\n\n"
 
-        else:
-            msg += f"\n<b>\u251c\u26d3\ufe0f Engine :</b> {_wzml_engine(task.engine)}"
-            msg += f"\n<b>\u2570\U0001f4d0 Size: </b>{task.size()}"
-
-        msg += "\n<b>_________________________________</b>\n\n"
+        except Exception:
+            # If this task crashes, skip it and continue with others
+            continue
 
     if len(msg) == 0:
         if status == "All":
