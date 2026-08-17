@@ -138,6 +138,7 @@ class Config:
     SEARCH_PLUGINS = []
     SET_COMMANDS = True
     STATUS_LIMIT = 10
+    STATUS_THEME = "vj"
     STATUS_UPDATE_INTERVAL = 15
     STOP_DUPLICATE = False
     STREAMWISH_API = ""

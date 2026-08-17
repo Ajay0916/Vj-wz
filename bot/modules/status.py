@@ -219,6 +219,35 @@ async def status_pages(_, query):
         button.data_button("Back", f"status {data[1]} ref")
         await edit_message(message, msg, button.build_menu())
 
+    elif data[2] == "close":
+        async with task_dict_lock:
+            if key in status_dict:
+                try:
+                    await delete_message(status_dict[key]["message"])
+                except Exception:
+                    pass
+                del status_dict[key]
+                if obj := intervals["status"].get(key):
+                    obj.cancel()
+                    del intervals["status"][key]
+
+    elif data[2] == "stats":
+        from psutil import cpu_percent as _cpu, virtual_memory as _vm, disk_usage as _du, net_io_counters as _net
+        net = _net()
+        disk = _du(Config.DOWNLOAD_DIR)
+        msg = f"""<b>📊 Bot Statistics</b>
+
+<b>🖥 CPU:</b> {_cpu()}%
+<b>🎮 RAM:</b> {_vm().percent}% ({get_readable_file_size(_vm().used)} / {get_readable_file_size(_vm().total)})
+<b>💿 Disk:</b> {get_readable_file_size(disk.free)} free [{round(100 - disk.percent, 1)}%]
+<b>📤 Sent:</b> {get_readable_file_size(net.bytes_sent)}
+<b>📥 Recv:</b> {get_readable_file_size(net.bytes_recv)}
+
+Made with ❤️ by Ajay"""
+        button = ButtonMaker()
+        button.data_button("Back", f"status {data[1]} ref")
+        await edit_message(message, msg, button.build_menu())
+
     try:
         await query.answer()
     except QueryIdInvalid:
