@@ -460,7 +460,7 @@ async def _wzml_inner(sid, is_user, page_no=1, status="All", page_step=1):
             if task.listener.progress:
                 progress = task.progress()
                 msg += f"\n<b>\u251c</b>{get_wzml_progress(progress)} {progress}"
-                msg += f"\n<b>\u251c\U0001f504 Process:</b> {get_readable_file_size(task.processed_bytes())} of {task.size()}"
+                msg += f"\n<b>\u251c\U0001f504 Process:</b> {task.processed_bytes()} of {task.size()}"
                 msg += f"\n<b>\u251c\u26a1 Speed:</b> {task.speed()}"
                 elapsed = time() - task.listener.message.date.timestamp()
                 msg += f"\n<b>\u251c\u23f3 ETA:</b> {task.eta()}"
