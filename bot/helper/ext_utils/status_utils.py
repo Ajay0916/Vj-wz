@@ -377,8 +377,37 @@ async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=
 # WZML Theme — EXACT format from WZML repo, adapted to Vj-wz arch
 # ═══════════════════════════════════════════════════════════════════
 
+# WZML Engine emoji mapping (bold + emoji, matches WZML repo EngineStatus)
+_WZML_ENGINE_EMOJI = {
+    "Aria2": "\U0001f4f6",
+    "AioHttp": "\U0001f310",
+    "Google": "\u267b\ufe0f",
+    "qBit": "\U0001f9a0",
+    "WzPyro": "\U0001f4a5",
+    "MegaSDK": "\u2b55",
+    "yt-dlp": "\U0001f31f",
+    "ffmpeg": "\u2702\ufe0f",
+    "7z": "\U0001f6e0\ufe0f",
+    "RClone": "\U0001f504",
+    "SABnzbd": "\U0001f4e6",
+    "JDownloader": "\U0001f50c",
+    "QSystem": "\U0001f504",
+    "Youtube": "\U0001f3ac",
+    "Metadata": "\U0001f3a8",
+    "Uphoster": "\u2601\ufe0f",
+}
+
+def _wzml_engine(engine_str):
+    """Wrap engine name in bold + emoji for WZML theme."""
+    for key, emoji in _WZML_ENGINE_EMOJI.items():
+        if key.lower() in engine_str.lower():
+            return f"<b>{engine_str} {emoji}</b>"
+    return f"<b>{engine_str}</b>\u200b"
+
+
 async def _get_wzml_readable_message(sid, is_user, page_no=1, status="All", page_step=1):
     from ..telegram_helper.bot_commands import BotCommands
+    from pyrogram.enums import ChatType
 
     msg = ""
     button = None
@@ -406,51 +435,63 @@ async def _get_wzml_readable_message(sid, is_user, page_no=1, status="All", page
         else:
             tstatus = task.status()
 
-        # ╭ Status: Name  (EXACT WZML header)
         try:
-            msg += f"<b>╭ <a href='{task.listener.message.link}'>{tstatus}</a>: </b>"
+            msg += f"<b>\u256d <a href='{task.listener.message.link}'>{tstatus}</a>: </b>"
         except Exception:
-            msg += f"<b>╭ {tstatus}: </b>"
+            msg += f"<b>\u256d {tstatus}: </b>"
         msg += f"<code>{escape(str(task.name()))}</code>"
 
-        # Downloading / Paused / QueueDl
-        if tstatus in (
-            MirrorStatus.STATUS_DOWNLOAD,
-            MirrorStatus.STATUS_PAUSED,
-            MirrorStatus.STATUS_QUEUEDL,
-        ) and task.listener.progress:
-            progress = task.progress()
-            msg += f"\n<b>├</b>{get_wzml_progress(progress)} {progress}"
-            msg += f"\n<b>├🔄 Process:</b> {get_readable_file_size(task.processed_bytes())} of {task.size()}"
-            msg += f"\n<b>├⚡ Speed:</b> {task.speed()}"
-            elapsed = time() - task.listener.message.date.timestamp()
-            msg += f"\n<b>├⏳ ETA:</b> {task.eta()}"
-            msg += f"<b> | Elapsed: </b>{get_readable_time(elapsed)}"
-            msg += f"\n<b>├⛓️ Engine :</b> {task.engine}"
-            if task.listener.is_torrent or task.listener.is_qbit:
+        # Show progress for all statuses EXCEPT seed/split (EXACT WZML logic)
+        if tstatus not in (MirrorStatus.STATUS_SEED, MirrorStatus.STATUS_SPLIT):
+            if task.listener.progress:
+                progress = task.progress()
+                msg += f"\n<b>\u251c</b>{get_wzml_progress(progress)} {progress}"
+                msg += f"\n<b>\u251c\U0001f504 Process:</b> {get_readable_file_size(task.processed_bytes())} of {task.size()}"
+                msg += f"\n<b>\u251c\u26a1 Speed:</b> {task.speed()}"
+                elapsed = time() - task.listener.message.date.timestamp()
+                msg += f"\n<b>\u251c\u23f3 ETA:</b> {task.eta()}"
+                msg += f"<b> | Elapsed: </b>{get_readable_time(elapsed)}"
+                msg += f"\n<b>\u251c\u26d3\ufe0f Engine :</b> {_wzml_engine(task.engine)}"
+                if task.listener.is_torrent or task.listener.is_qbit:
+                    try:
+                        msg += f"\n<b>\u251c\U0001f331 Seeders:</b> {task.seeders_num()} | <b>\U0001f40c Leechers:</b> {task.leechers_num()}"
+                    except Exception:
+                        pass
+                if task.listener.is_torrent or task.listener.is_qbit or task.listener.is_nzb:
+                    msg += f"\n<b>\u251c\U0001f9ff Select:</b> <code>/{BotCommands.SelectCommand[1]}_{task.gid()[:12]}</code>"
+
+                # Source/User line (EXACT WZML)
                 try:
-                    msg += f"\n<b>├🌱 Seeders:</b> {task.seeders_num()} | <b>🐌 Leechers:</b> {task.leechers_num()}"
+                    if task.listener.message.chat.type != ChatType.PRIVATE:
+                        chatid = str(task.listener.message.chat.id)[4:]
+                        msg += f'\n<b>\u251c\U0001f310 Source: </b><a href="https://t.me/c/{chatid}/{task.listener.message.message_id}">{task.listener.message.from_user.first_name}</a> | <b>Id :</b> <code>{task.listener.message.from_user.id}</code>'
+                    else:
+                        msg += f'\n<b>\u251c\U0001f464 User:</b> <code>{task.listener.message.from_user.first_name}</code> | <b>Id:</b> <code>{task.listener.message.from_user.id}</code>'
                 except Exception:
                     pass
-            if task.listener.is_torrent or task.listener.is_qbit or task.listener.is_nzb:
-                msg += f"\n<b>├🧿 Select:</b> <code>/{BotCommands.SelectCommand[1]}_{task.gid()[:12]}</code>"
-            msg += f"\n<b>╰❌ </b><code>/{BotCommands.CancelTaskCommand[1]}_{task.gid()[:12]}</code>"
 
-        elif tstatus == MirrorStatus.STATUS_SEED:
-            msg += f"\n<b>├📦 Size: </b>{task.size()}"
-            msg += f"\n<b>├⛓️ Engine:</b> <code>{task.engine}</code>"
-            msg += f"\n<b>├⚡ Speed: </b>{task.seed_speed()}"
-            msg += f"\n<b>├🔺 Uploaded: </b>{task.uploaded_bytes()}"
-            msg += f"\n<b>├📎 Ratio: </b>{task.ratio()}"
-            msg += f" | <b>⏲️ Time: </b>{task.seeding_time()}"
-            elapsed = time() - task.listener.message.date.timestamp()
-            msg += f"\n<b>├⏳ Elapsed: </b>{get_readable_time(elapsed)}"
-            msg += f"\n<b>╰❌ </b><code>/{BotCommands.CancelTaskCommand[1]}_{task.gid()[:12]}</code>"
+                msg += f"\n<b>\u2570\u274c </b><code>/{BotCommands.CancelTaskCommand[1]}_{task.gid()[:12]}</code>"
+
+            elif tstatus == MirrorStatus.STATUS_SEED:
+                msg += f"\n<b>\u251c\U0001f4e6 Size: </b>{task.size()}"
+                msg += f"\n<b>\u251c\u26d3\ufe0f Engine:</b> {_wzml_engine(task.engine)}"
+                msg += f"\n<b>\u251c\u26a1 Speed: </b>{task.seed_speed()}"
+                msg += f"\n<b>\u251c\U0001f53a Uploaded: </b>{task.uploaded_bytes()}"
+                msg += f"\n<b>\u251c\U0001f4ce Ratio: </b>{task.ratio()}"
+                msg += f" | <b>\u23f2\ufe0f Time: </b>{task.seeding_time()}"
+                elapsed = time() - task.listener.message.date.timestamp()
+                msg += f"\n<b>\u251c\u23f3 Elapsed: </b>{get_readable_time(elapsed)}"
+                msg += f"\n<b>\u2570\u274c </b><code>/{BotCommands.CancelTaskCommand[1]}_{task.gid()[:12]}</code>"
+
+            else:
+                msg += f"\n<b>\u251c\u26d3\ufe0f Engine :</b> {_wzml_engine(task.engine)}"
+                msg += f"\n<b>\u2570\U0001f4d0 Size: </b>{task.size()}"
 
         else:
-            msg += f"\n<b>├⛓️ Engine :</b> {task.engine}"
-            msg += f"\n<b>╰📐 Size: </b>{task.size()}"
+            # Seeding (already handled above)
+            pass
 
+        msg += f"\n<b>_________________________________</b>"
         msg += "\n\n"
 
     if len(msg) == 0:
@@ -459,7 +500,7 @@ async def _get_wzml_readable_message(sid, is_user, page_no=1, status="All", page
         else:
             msg = f"No Active {status} Tasks!\n\n"
 
-    # ── Bot Stats (EXACT WZML emoji format) ──
+    # Bot Stats (EXACT WZML emoji format)
     dl_speed = 0
     up_speed = 0
     async with task_dict_lock:
@@ -478,22 +519,22 @@ async def _get_wzml_readable_message(sid, is_user, page_no=1, status="All", page
             except Exception:
                 pass
 
-    bmsg = f"<b>🖥 CPU:</b> {cpu_percent()}% | <b>💿 FREE:</b> {get_readable_file_size(disk_usage(DOWNLOAD_DIR).free)}"
-    bmsg += f"\n<b>🎮 RAM:</b> {virtual_memory().percent}% | <b>🟢 UPTIME:</b> {get_readable_time(time() - bot_start_time)}"
-    bmsg += f"\n<b>🔻 DL:</b> {get_readable_file_size(dl_speed)}/s | <b>🔺 UL:</b> {get_readable_file_size(up_speed)}/s"
+    bmsg = f"<b>\U0001f5a5 CPU:</b> {cpu_percent()}% | <b>\U0001f4bf FREE:</b> {get_readable_file_size(disk_usage(DOWNLOAD_DIR).free)}"
+    bmsg += f"\n<b>\U0001f3ae RAM:</b> {virtual_memory().percent}% | <b>\U0001f7e2 UPTIME:</b> {get_readable_time(time() - bot_start_time)}"
+    bmsg += f"\n<b>\U0001f53b DL:</b> {get_readable_file_size(dl_speed)}/s | <b>\U0001f53a UL:</b> {get_readable_file_size(up_speed)}/s"
 
-    # ── Buttons (EXACT WZML format) ──
+    # Buttons (EXACT WZML format)
     buttons = ButtonMaker()
     if not is_user:
         buttons.data_button("Statistics", f"status {sid} stats", style=ButtonStyle.PRIMARY)
     if len(tasks) > STATUS_LIMIT:
         msg += f"<b>Tasks:</b> {tasks_no} | <b>Page:</b> {page_no}/{pages}\n"
-        buttons.data_button("⏪Previous", f"status {sid} pre")
+        buttons.data_button("\u23ea Previous", f"status {sid} pre")
         buttons.data_button(f"{page_no}/{pages}", f"status {sid} ov")
-        buttons.data_button("Next⏩", f"status {sid} nex")
+        buttons.data_button("Next \u23e9", f"status {sid} nex")
         buttons.data_button("Statistics", f"status {sid} stats", style=ButtonStyle.PRIMARY)
-    buttons.data_button("♻️ Refresh", f"status {sid} ref", style=ButtonStyle.PRIMARY)
-    buttons.data_button("❌ Close", f"status {sid} close")
+    buttons.data_button("\u267b\ufe0f Refresh", f"status {sid} ref", style=ButtonStyle.PRIMARY)
+    buttons.data_button("\u274c Close", f"status {sid} close")
     button = buttons.build_menu(3)
 
     return msg + bmsg, button
