@@ -116,6 +116,7 @@ BOOL_VARS = [
 # Config vars with preset choice buttons (rendered directly like BOOL_VARS).
 CHOICE_VARS = {
     "SEARCH_RESULT_HOST": [("Telegraph", "telegraph"), ("Rentry", "rentry")],
+    "STATUS_THEME": [("VJ (Flat)", "vj"), ("Weebz (Tree)", "weebz")],
 }
 
 DEFAULT_DESP = {
@@ -128,6 +129,7 @@ DEFAULT_DESP = {
     "BOT_PM": "Send files/links to bot owner PM. Default: False.",
     "CMD_SUFFIX": "Text appended to all bot commands. Useful for running multiple bot instances.",
     "COLORED_BTNS": "Use colored inline buttons. Default: False.",
+    "STATUS_THEME": "Status message theme: vj (flat ┠┖ style) or weebz (tree ╭├╰ with emojis). Default: vj.",
     "DEFAULT_LANG": "Default bot language code. Default: en.",
     "DATABASE_URL": "MongoDB connection string for persistent storage.",
     "DEFAULT_UPLOAD": "Default upload destination: gd (Google Drive) or rc (rclone). Default: rc.",

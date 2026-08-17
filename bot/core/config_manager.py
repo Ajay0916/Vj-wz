@@ -47,6 +47,7 @@ class Config:
     DISABLE_API = False
     DISABLE_HELPER = False
     DISABLE_HYPER = False
+    STATUS_THEME = "vj"
     DISABLE_LIMITS = False
     DISABLE_QUEUE = False
     DISABLE_RCLONE = False
