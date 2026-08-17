@@ -219,7 +219,7 @@ def bot_sys_stats():
         f"<b>CPU:</b> {_cpu()}% | <b>RAM:</b> {_vm().percent}%\n"
         f"<b>Disk:</b> {get_readable_file_size(disk.free)} free [{round(100 - disk.percent, 1)}%]\n"
         f"<b>Sent:</b> {get_readable_file_size(net.bytes_sent)}\n"
-        f"<b>Recv:</b> {get_readable_file_size(net.bytes_recv)}"
+        f"<b>Recv:</b> {get_readable_file_size(net.bytes_recv)}\n\nMade with ❤️ by Ajay"
     )
 
 
