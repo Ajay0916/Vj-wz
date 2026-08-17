@@ -227,7 +227,7 @@ def bot_sys_stats():
 # ── WZML Theme (EXACT copy from WZML repo) ──────────────────────
 WZML_FINISHED = "\u2588"  # █
 WZML_UNFINISHED = "\u2592"  # ▒
-WZML_MULTI = "\u2581 \u2582 \u2583 \u2584 \u2585 \u2586 \u2587".split(" ")  # ▁▂▃▄▅▆▇
+WZML_MULTI = ["▤", "▤", "▦", "▦", "▦", "▩", "▩"]  # weebz style incomplete
 WZML_MAX = 100 // 9
 
 
