@@ -309,6 +309,8 @@ NEW_ONOFF_VARS = [
     "DISABLE_GOOGLE",
     "DISABLE_API",
     "DISABLE_SESSION",
+    "DISABLE_HELPER",
+    "DISABLE_HYPER",
 ]
 
 
@@ -471,16 +473,10 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
                 [
                     "AS_DOCUMENT",
                     "EQUAL_SPLITS",
-                    "HYPER_CHUNK",
-                    "HYPER_PIPELINE",
-                    "HYPER_THREADS",
+
                     "LEECH_CAPTION",
                     "LEECH_DUMP_CHAT",
                     "LINKS_LOG_ID",
-                    "HELPER_TOKENS",
-                    "HELPER_STRINGS",
-                    "HELPER_BOT_PROXIES",
-                    "HELPER_USER_PROXIES",
                     "LEECH_FONT",
                     "LEECH_LIMIT",
                     "LEECH_PREFIX",
@@ -489,7 +485,6 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
                     "MEDIA_GROUP",
                     "MEDIA_STORE",
                     "EXCLUDED_EXTENSIONS",
-                    "USE_HYPER",
                 ]
             )
         if Config.DISABLE_IMAGES:
@@ -499,6 +494,14 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
         if Config.DISABLE_API:
             hidden_vars.update(
                 ["STREAMWISH_API", "PROTECTED_API", "DEBRID_LINK_API", "INSTADL_API", "FILELION_API"]
+            )
+        if Config.DISABLE_HELPER:
+            hidden_vars.update(
+                ["HELPER_TOKENS", "HELPER_STRINGS", "HELPER_BOT_PROXIES", "HELPER_USER_PROXIES"]
+            )
+        if Config.DISABLE_HYPER:
+            hidden_vars.update(
+                ["USE_HYPER", "HYPER_CHUNK", "HYPER_PIPELINE", "HYPER_THREADS", "HYPER_LIMIT"]
             )
         if Config.DISABLE_UPHOSTER:
             hidden_vars.update(

@@ -45,6 +45,8 @@ class Config:
     DISABLE_SESSION = False
     DISABLE_GOOGLE = False
     DISABLE_API = False
+    DISABLE_HELPER = False
+    DISABLE_HYPER = False
     DISABLE_LIMITS = False
     DISABLE_QUEUE = False
     DISABLE_RCLONE = False
