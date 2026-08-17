@@ -116,6 +116,7 @@ BOOL_VARS = [
 # Config vars with preset choice buttons (rendered directly like BOOL_VARS).
 CHOICE_VARS = {
     "SEARCH_RESULT_HOST": [("Telegraph", "telegraph"), ("Rentry", "rentry")],
+    "STATUS_THEME": [("VJ (Flat)", "vj"), ("WZML (Tree)", "wzml")],
 }
 
 DEFAULT_DESP = {

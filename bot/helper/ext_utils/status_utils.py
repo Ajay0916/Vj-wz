@@ -207,7 +207,191 @@ def get_progress_bar_string(pct):
     return f"[{p_str}]"
 
 
+# ═══════════════════════════════════════════════════════════════════
+# WZML Theme — separate functions, does NOT affect VJ code
+# ═══════════════════════════════════════════════════════════════════
+
+WZML_FINISHED = "\u25a0"   # ■
+WZML_UNFINISHED = "\u25a1" # □
+WZML_MULTI = ["\u25a4", "\u25a4", "\u25a6", "\u25a6", "\u25a6", "\u25a9", "\u25a9"]
+WZML_MAX = 11
+
+_WZML_ENGINE_EMOJI = {
+    "Aria2": "\U0001f4f6", "AioHttp": "\U0001f310", "Google": "\u267b\ufe0f",
+    "qBit": "\U0001f9a0", "WzPyro": "\U0001f4a5", "MegaSDK": "\u2b55",
+    "yt-dlp": "\U0001f31f", "ffmpeg": "\u2702\ufe0f", "7z": "\U0001f6e0\ufe0f",
+    "RClone": "\U0001f504", "SABnzbd": "\U0001f4e6", "JDownloader": "\U0001f50c",
+    "QSystem": "\U0001f504", "Youtube": "\U0001f3ac", "Metadata": "\U0001f3a8",
+    "Uphoster": "\u2601\ufe0f",
+}
+
+
+def get_wzml_progress(pct):
+    pct = float(str(pct).strip("%"))
+    p = min(max(pct, 0), 100)
+    cFull = int(p // 8)
+    cPart = int(p % 8 - 1)
+    p_str = WZML_FINISHED * cFull
+    if cPart >= 0:
+        p_str += WZML_MULTI[cPart]
+    p_str += WZML_UNFINISHED * (WZML_MAX - cFull)
+    return f" \u2827{p_str}\u2839"
+
+
+def _wzml_engine(engine_str):
+    for key, emoji in _WZML_ENGINE_EMOJI.items():
+        if key.lower() in engine_str.lower():
+            return f"<b>{engine_str} {emoji}</b>"
+    return f"<b>{engine_str}</b>\u200b"
+
+
+async def _get_wzml_readable_message(sid, is_user, page_no=1, status="All", page_step=1):
+    from ... import LOGGER
+    from ..telegram_helper.bot_commands import BotCommands
+    from pyrogram.enums import ChatType
+    import traceback as _tb
+
+    try:
+        return await _wzml_inner(sid, is_user, page_no, status, page_step)
+    except Exception as e:
+        LOGGER.error(f"WZML theme error: {e}\n{_tb.format_exc()}")
+        return None, None
+
+
+async def _wzml_inner(sid, is_user, page_no=1, status="All", page_step=1):
+    from ..telegram_helper.bot_commands import BotCommands
+    from pyrogram.enums import ChatType
+
+    msg = ""
+    button = None
+
+    tasks = await get_specific_tasks(status, sid if is_user else None)
+
+    STATUS_LIMIT = int(Config.STATUS_LIMIT or 10)
+    page_no = int(page_no or 1)
+    page_step = int(page_step or 1)
+    tasks_no = len(tasks)
+    pages = (max(tasks_no, 1) + STATUS_LIMIT - 1) // STATUS_LIMIT
+    if page_no > pages:
+        page_no = (page_no - 1) % pages + 1
+        status_dict[sid]["page_no"] = page_no
+    elif page_no < 1:
+        page_no = pages - (abs(page_no) % pages)
+        status_dict[sid]["page_no"] = page_no
+    start_position = (page_no - 1) * STATUS_LIMIT
+
+    for index, task in enumerate(
+        tasks[start_position : STATUS_LIMIT + start_position], start=1
+    ):
+        if status != "All":
+            tstatus = status
+        elif iscoroutinefunction(task.status):
+            tstatus = await task.status()
+        else:
+            tstatus = task.status()
+
+        # Header: ╭ Status: Name
+        try:
+            msg += f"<b>\u256d <a href='{task.listener.message.link}'>{tstatus}</a>: </b>"
+        except Exception:
+            msg += f"<b>\u256d {tstatus}: </b>"
+        msg += f"<code>{escape(str(task.name()))}</code>"
+
+        # Download / Pause / QueueDl
+        if tstatus not in (MirrorStatus.STATUS_SEED, MirrorStatus.STATUS_SPLIT):
+            if task.listener.progress:
+                progress = task.progress()  # "36.56%" — already formatted
+                msg += f"\n<b>\u251c</b>{get_wzml_progress(progress)} {progress}"
+                # task.processed_bytes() = "40.75MB" — DIRECT, no get_readable_file_size
+                msg += f"\n<b>\u251c\U0001f504 Process:</b> {task.processed_bytes()} of {task.size()}"
+                msg += f"\n<b>\u251c\u26a1 Speed:</b> {task.speed()}"
+                elapsed = time() - task.listener.message.date.timestamp()
+                msg += f"\n<b>\u251c\u23f3 ETA:</b> {task.eta()}"
+                msg += f"<b> | Elapsed: </b>{get_readable_time(elapsed)}"
+                msg += f"\n<b>\u251c\u26d3\ufe0f Engine :</b> {_wzml_engine(task.engine)}"
+                if task.listener.is_torrent or task.listener.is_qbit:
+                    try:
+                        msg += f"\n<b>\u251c\U0001f331 Seeders:</b> {task.seeders_num()} | <b>\U0001f40c Leechers:</b> {task.leechers_num()}"
+                    except Exception:
+                        pass
+                if task.listener.is_torrent or task.listener.is_qbit or task.listener.is_nzb:
+                    msg += f"\n<b>\u251c\U0001f9ff Select:</b> <code>/{BotCommands.SelectCommand[1]}_{task.gid()[:12]}</code>"
+                # Source/User line
+                try:
+                    if task.listener.message.chat.type != ChatType.PRIVATE:
+                        chatid = str(task.listener.message.chat.id)[4:]
+                        msg += f'\n<b>\u251c\U0001f310 Source: </b><a href="https://t.me/c/{chatid}/{task.listener.message.message_id}">{task.listener.message.from_user.first_name}</a> | <b>Id :</b> <code>{task.listener.message.from_user.id}</code>'
+                    else:
+                        msg += f'\n<b>\u251c\U0001f464 User:</b> <code>{task.listener.message.from_user.first_name}</code> | <b>Id:</b> <code>{task.listener.message.from_user.id}</code>'
+                except Exception:
+                    pass
+                msg += f"\n<b>\u2570\u274c </b><code>/{BotCommands.CancelTaskCommand[1]}_{task.gid()[:12]}</code>"
+
+        elif tstatus == MirrorStatus.STATUS_SEED:
+            msg += f"\n<b>\u251c\U0001f4e6 Size: </b>{task.size()}"
+            msg += f"\n<b>\u251c\u26d3\ufe0f Engine:</b> {_wzml_engine(task.engine)}"
+            msg += f"\n<b>\u251c\u26a1 Speed: </b>{task.seed_speed()}"
+            msg += f"\n<b>\u251c\U0001f53a Uploaded: </b>{task.uploaded_bytes()}"
+            msg += f"\n<b>\u251c\U0001f4ce Ratio: </b>{task.ratio()}"
+            msg += f" | <b>\u23f2\ufe0f Time: </b>{task.seeding_time()}"
+            elapsed = time() - task.listener.message.date.timestamp()
+            msg += f"\n<b>\u251c\u23f3 Elapsed: </b>{get_readable_time(elapsed)}"
+            msg += f"\n<b>\u2570\u274c </b><code>/{BotCommands.CancelTaskCommand[1]}_{task.gid()[:12]}</code>"
+
+        else:
+            msg += f"\n<b>\u251c\u26d3\ufe0f Engine :</b> {_wzml_engine(task.engine)}"
+            msg += f"\n<b>\u2570\U0001f4d0 Size: </b>{task.size()}"
+
+        msg += "\n<b>_________________________________</b>\n\n"
+
+    if len(msg) == 0:
+        if status == "All":
+            return None, None
+        else:
+            msg = f"No Active {status} Tasks!\n\n"
+
+    # DL/UL speed
+    dl_speed = 0
+    up_speed = 0
+    async with task_dict_lock:
+        for tk in task_dict.values():
+            try:
+                spd = tk.speed()
+                spd_bytes = speed_string_to_bytes(spd)
+                if iscoroutinefunction(tk.status):
+                    st = await tk.status()
+                else:
+                    st = tk.status()
+                if st in (MirrorStatus.STATUS_DOWNLOAD, MirrorStatus.STATUS_QUEUEDL, MirrorStatus.STATUS_PAUSED):
+                    dl_speed += spd_bytes
+                elif st in (MirrorStatus.STATUS_UPLOAD, MirrorStatus.STATUS_SEED):
+                    up_speed += spd_bytes
+            except Exception:
+                pass
+
+    bmsg = f"<b>\U0001f5a5 CPU:</b> {cpu_percent()}% | <b>\U0001f4bf FREE:</b> {get_readable_file_size(disk_usage(DOWNLOAD_DIR).free)}"
+    bmsg += f"\n<b>\U0001f3ae RAM:</b> {virtual_memory().percent}% | <b>\U0001f7e2 UPTIME:</b> {get_readable_time(time() - bot_start_time)}"
+    bmsg += f"\n<b>\U0001f53b DL:</b> {get_readable_file_size(dl_speed)}/s | <b>\U0001f53a UL:</b> {get_readable_file_size(up_speed)}/s"
+
+    # Buttons (3-col, WZML style)
+    buttons = ButtonMaker()
+    if not is_user:
+        buttons.data_button("Statistics", f"status {sid} ov", style=ButtonStyle.PRIMARY)
+    if len(tasks) > STATUS_LIMIT:
+        msg += f"<b>Tasks:</b> {tasks_no} | <b>Page:</b> {page_no}/{pages}\n"
+        buttons.data_button("\u23ea Previous", f"status {sid} pre")
+        buttons.data_button(f"{page_no}/{pages}", f"status {sid} ov")
+        buttons.data_button("Next \u23e9", f"status {sid} nex")
+        buttons.data_button("Statistics", f"status {sid} ov", style=ButtonStyle.PRIMARY)
+    buttons.data_button("\u267b\ufe0f Refresh", f"status {sid} ref", style=ButtonStyle.PRIMARY)
+    buttons.data_button("\u274c Close", f"status {sid} close")
+    button = buttons.build_menu(3)
+
+    return msg + bmsg, button
+
 async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=1):
+    if (Config.get("STATUS_THEME") or "vj") == "wzml":
+        return await _get_wzml_readable_message(sid, is_user, page_no, status, page_step)
     msg = ""
     button = None
 
