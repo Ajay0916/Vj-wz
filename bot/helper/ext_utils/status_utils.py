@@ -257,10 +257,10 @@ async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=
     STATUS_LIMIT = Config.STATUS_LIMIT
     tasks_no = len(tasks)
     pages = (max(tasks_no, 1) + STATUS_LIMIT - 1) // STATUS_LIMIT
-    if page_no > pages:
+    if int(page_no) > pages:
         page_no = (page_no - 1) % pages + 1
         status_dict[sid]["page_no"] = page_no
-    elif page_no < 1:
+    elif int(page_no) < 1:
         page_no = pages - (abs(page_no) % pages)
         status_dict[sid]["page_no"] = page_no
     start_position = (page_no - 1) * STATUS_LIMIT
@@ -408,19 +408,33 @@ def _wzml_engine(engine_str):
 async def _get_wzml_readable_message(sid, is_user, page_no=1, status="All", page_step=1):
     from ..telegram_helper.bot_commands import BotCommands
     from pyrogram.enums import ChatType
+    from ... import LOGGER
+    import traceback as _tb
+    try:
+        return await _wzml_inner(sid, is_user, page_no, status, page_step)
+    except Exception as e:
+        LOGGER.error(f"WZML theme render error: {e}\n{_tb.format_exc()}")
+        return None, None
+
+
+async def _wzml_inner(sid, is_user, page_no=1, status="All", page_step=1):
+    from ..telegram_helper.bot_commands import BotCommands
+    from pyrogram.enums import ChatType
 
     msg = ""
     button = None
 
     tasks = await get_specific_tasks(status, sid if is_user else None)
 
-    STATUS_LIMIT = Config.STATUS_LIMIT
+    STATUS_LIMIT = int(Config.STATUS_LIMIT or 10)
+    page_no = int(page_no or 1)
+    page_step = int(page_step or 1)
     tasks_no = len(tasks)
     pages = (max(tasks_no, 1) + STATUS_LIMIT - 1) // STATUS_LIMIT
-    if page_no > pages:
+    if int(page_no) > pages:
         page_no = (page_no - 1) % pages + 1
         status_dict[sid]["page_no"] = page_no
-    elif page_no < 1:
+    elif int(page_no) < 1:
         page_no = pages - (abs(page_no) % pages)
         status_dict[sid]["page_no"] = page_no
     start_position = (page_no - 1) * STATUS_LIMIT
