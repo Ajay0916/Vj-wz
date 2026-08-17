@@ -364,7 +364,6 @@ async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=
         for label, status_value in list(STATUSES.items()):
             if status_value != status:
                 buttons.data_button(label, f"status {sid} st {status_value}")
-    buttons.data_button("📊 Stats", f"status {sid} stats", position="footer", style=ButtonStyle.PRIMARY)
     buttons.data_button(
         "♻️ Refresh", f"status {sid} ref", position="header", style=ButtonStyle.PRIMARY
     )
