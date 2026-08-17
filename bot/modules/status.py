@@ -221,7 +221,7 @@ async def status_pages(_, query):
 
     elif data[2] == "stats":
         from psutil import cpu_percent as _cpu, virtual_memory as _vm, disk_usage as _du, net_io_counters as _net
-        from ..helper.ext_utils.bot_utils import get_readable_file_size
+        from ..helper.ext_utils.status_utils import get_readable_file_size
         net = _net()
         disk = _du(Config.DOWNLOAD_DIR)
         msg = f"""📊 <b>Bot Statistics</b>
