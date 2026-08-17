@@ -202,8 +202,8 @@ def get_progress_bar_string(pct, theme="vj"):
     pct = float(str(pct).strip("%"))
     p = min(max(pct, 0), 100)
     if theme == "weebz":
-        WEEBZ_FINISHED = "▰"
-        WEEBZ_UNFINISHED = "▱"
+        WEEBZ_FINISHED = "●"
+        WEEBZ_UNFINISHED = "○"
         WEEBZ_MAX = 100 // 9  # = 11
         cFull = int(p // 8)
         cPart = int(p % 8 - 1)
