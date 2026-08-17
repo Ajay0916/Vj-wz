@@ -219,22 +219,6 @@ async def status_pages(_, query):
         button.data_button("Back", f"status {data[1]} ref")
         await edit_message(message, msg, button.build_menu())
 
-    elif data[2] == "stats":
-        from psutil import cpu_percent as _cpu, virtual_memory as _vm, disk_usage as _du, net_io_counters as _net
-        from ..helper.ext_utils.status_utils import get_readable_file_size
-        net = _net()
-        disk = _du(Config.DOWNLOAD_DIR)
-        msg = f"""📊 <b>Bot Statistics</b>
-
-┠ <b>CPU:</b> {_cpu()}%
-┠ <b>RAM:</b> {_vm().percent}% ({get_readable_file_size(_vm().used)} / {get_readable_file_size(_vm().total)})
-┠ <b>Disk:</b> {get_readable_file_size(disk.free)} free [{round(100 - disk.percent, 1)}%]
-┠ <b>Sent:</b> {get_readable_file_size(net.bytes_sent)}
-┖ <b>Recv:</b> {get_readable_file_size(net.bytes_recv)}"""
-        button = ButtonMaker()
-        button.data_button("Back", f"status {data[1]} ref")
-        await edit_message(message, msg, button.build_menu())
-
     try:
         await query.answer()
     except QueryIdInvalid:
