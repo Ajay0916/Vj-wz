@@ -212,6 +212,17 @@ def get_progress_bar_string(pct, theme="vj"):
             p_str += WEEBZ_PROGRESS_INCOMPLETE[cPart]
         p_str += WEEBZ_UNFINISHED * (WEEBZ_MAX - cFull)
         return f"⠧{p_str}⠹"
+    elif theme == "theme3":
+        WEEBZ_FINISHED = "▰"
+        WEEBZ_UNFINISHED = "▱"
+        WEEBZ_MAX = 100 // 9  # = 11
+        cFull = int(p // 8)
+        cPart = int(p % 8 - 1)
+        p_str = WEEBZ_FINISHED * cFull
+        if cPart >= 0:
+            p_str += WEEBZ_PROGRESS_INCOMPLETE[cPart]
+        p_str += WEEBZ_UNFINISHED * (WEEBZ_MAX - cFull)
+        return f"⠧{p_str}⠹"
     else:
         cFull = int(p // 8)
         cPart = int(p % 8 - 1)
@@ -263,6 +274,7 @@ def bot_sys_stats():
     )
 
 async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=1):
+    theme = Config.get("STATUS_THEME") or "vj"
     msg = ""
     button = None
 
