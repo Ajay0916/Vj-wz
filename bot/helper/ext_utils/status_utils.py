@@ -4,7 +4,7 @@ from pyrogram.enums import ButtonStyle
 from re import findall
 from time import time
 
-from psutil import cpu_percent, disk_usage, virtual_memory, net_io_counters
+from psutil import cpu_percent, disk_usage, virtual_memory
 
 from ... import (
     DOWNLOAD_DIR,
@@ -222,43 +222,7 @@ def bot_sys_stats():
         f"<b>Recv:</b> {get_readable_file_size(net.bytes_recv)}"
     )
 
-
-# WZML Theme defaults
-WZML_FINISHED = "\u2588"  # █
-WZML_UNFINISHED = "\u2592"  # ▒
-WZML_INCOMPLETE = ["\u2581", "\u2582", "\u2583", "\u2584", "\u2585", "\u2586", "\u2587"]  # ▁▂▃▄▅▆▇
-WZML_MAX = 100 // 9  # 11
-
-
-def get_wzml_progress_bar(pct):
-    """WZML-style progress bar: ⠧█▁▂▃▄▅▆▇▒⠹"""
-    pct = float(str(pct).strip("%"))
-    p = min(max(pct, 0), 100)
-    cFull = int(p // 8)
-    cPart = int(p % 8 - 1)
-    p_str = WZML_FINISHED * cFull
-    if cPart >= 0:
-        p_str += WZML_INCOMPLETE[cPart]
-    p_str += WZML_UNFINISHED * (WZML_MAX - cFull)
-    return f" \u2827{p_str}\u2839"
-
-
-def bot_sys_stats():
-    from psutil import disk_usage as _du, virtual_memory as _vm, cpu_percent as _cpu, net_io_counters as _net
-    from ...core.config_manager import Config
-    from ..ext_utils.bot_utils import get_readable_file_size
-    net = _net()
-    disk = _du(Config.DOWNLOAD_DIR)
-    return (
-        f"<b>\u2826 Bot Statistics</b>\n\n"
-        f"<b>CPU:</b> {_cpu()}% | <b>RAM:</b> {_vm().percent}%\n"
-        f"<b>Disk:</b> {get_readable_file_size(disk.free)} free [{round(100 - disk.percent, 1)}%]\n"
-        f"<b>Sent:</b> {get_readable_file_size(net.bytes_sent)}\n"
-        f"<b>Recv:</b> {get_readable_file_size(net.bytes_recv)}"
-    )
-
 async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=1):
-    theme = Config.get("STATUS_THEME") or "vj"
     msg = ""
     button = None
 
@@ -375,35 +339,10 @@ async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=
             if status_value != status:
                 buttons.data_button(label, f"status {sid} st {status_value}")
     buttons.data_button("📊 Stats", f"status {sid} stats", position="footer", style=ButtonStyle.PRIMARY)
-    buttons.data_button("📊 Stats", f"status {sid} stats", position="footer", style=ButtonStyle.PRIMARY)
     buttons.data_button(
         "♻️ Refresh", f"status {sid} ref", position="header", style=ButtonStyle.PRIMARY
     )
     button = buttons.build_menu(8)
     msg += f"\n┟ <b>CPU</b> → {cpu_percent()}% | <b>F</b> → {get_readable_file_size(disk_usage(DOWNLOAD_DIR).free)} [{round(100 - disk_usage(DOWNLOAD_DIR).percent, 1)}%]"
     msg += f"\n┖ <b>RAM</b> → {virtual_memory().percent}% | <b>UP</b> → {get_readable_time(time() - bot_start_time)}"
-    # Calculate DL/UL speeds
-    dl_speed = 0
-    up_speed = 0
-    with download_dict_lock:
-        for download in list(download_dict.values()):
-            spd = download.speed()
-            if hasattr(download, 'status'):
-                st = download.status()
-                if st in ("Download", "QueueD"):
-                    if 'K' in spd:
-                        dl_speed += float(spd.split('K')[0]) * 1024
-                    elif 'M' in spd:
-                        dl_speed += float(spd.split('M')[0]) * 1048576
-                elif st in ("Upload", "UploadToTelegram", "QueueU"):
-                    if 'K' in spd:
-                        up_speed += float(spd.split('K')[0]) * 1024
-                    elif 'M' in spd:
-                        up_speed += float(spd.split('M')[0]) * 1048576
-                elif st == "Seed":
-                    if 'K' in spd:
-                        up_speed += float(spd.split('K')[0]) * 1024
-                    elif 'M' in spd:
-                        up_speed += float(spd.split('M')[0]) * 1048576
-    msg += f"\n\n<b>🔻 DL:</b> {get_readable_file_size(dl_speed)}/s | <b>🔺 UL:</b> {get_readable_file_size(up_speed)}/s"
     return msg, button
