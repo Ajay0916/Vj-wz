@@ -4,7 +4,7 @@ from pyrogram.enums import ButtonStyle
 from re import findall
 from time import time
 
-from psutil import cpu_percent, disk_usage, virtual_memory
+from psutil import cpu_percent, disk_usage, virtual_memory, net_io_counters
 
 from ... import (
     DOWNLOAD_DIR,
@@ -195,17 +195,69 @@ def speed_string_to_bytes(size_text: str):
     return size
 
 
-def get_progress_bar_string(pct):
+WEEBZ_PROGRESS_INCOMPLETE = ['◔', '◔', '◑', '◑', '◑', '◕', '◕']
+
+
+def get_progress_bar_string(pct, theme="vj"):
     pct = float(str(pct).strip("%"))
     p = min(max(pct, 0), 100)
-    cFull = int(p // 8)
-    cPart = int(p % 8 - 1)
-    p_str = "■" * cFull
-    if cPart >= 0:
-        p_str += ["▤", "▥", "▦", "▧", "▨", "▩", "■"][cPart]
-    p_str += "□" * (12 - cFull)
-    return f"[{p_str}]"
+    if theme == "weebz":
+        cFull = int(p // 8)
+        cPart = int(p % 8 - 1)
+        p_str = "▰" * cFull
+        if cPart >= 0:
+            p_str += WEEBZ_PROGRESS_INCOMPLETE[cPart]
+        p_str += "▱" * (12 - cFull)
+        return f"⠧{p_str}⠹"
+    else:
+        cFull = int(p // 8)
+        cPart = int(p % 8 - 1)
+        p_str = "■" * cFull
+        if cPart >= 0:
+            p_str += ["▤", "▥", "▦", "▧", "▨", "▩", "■"][cPart]
+        p_str += "□" * (12 - cFull)
+        return f"[{p_str}]"
 
+
+
+def bot_sys_stats():
+    """Popup statistics for Statistics button."""
+    dl_speed = 0
+    up_speed = 0
+    from ... import download_dict
+    with download_dict_lock:
+        for download in list(download_dict.values()):
+            spd = download.speed()
+            if hasattr(download, 'status'):
+                st = download.status()
+                if st in ("Download", "QueueD"):
+                    if 'K' in spd:
+                        dl_speed += float(spd.split('K')[0]) * 1024
+                    elif 'M' in spd:
+                        dl_speed += float(spd.split('M')[0]) * 1048576
+                elif st in ("Upload", "UploadToTelegram", "QueueU"):
+                    if 'K' in spd:
+                        up_speed += float(spd.split('K')[0]) * 1024
+                    elif 'M' in spd:
+                        up_speed += float(spd.split('M')[0]) * 1048576
+                elif st == "Seed":
+                    if 'K' in spd:
+                        up_speed += float(spd.split('K')[0]) * 1024
+                    elif 'M' in spd:
+                        up_speed += float(spd.split('M')[0]) * 1048576
+    from psutil import disk_usage as _du, virtual_memory as _vm, cpu_percent as _cpu, net_io_counters as _net
+    from ...core.config_manager import Config
+    from ..ext_utils.bot_utils import get_readable_file_size, get_readable_time
+    from time import time as _time
+    net = _net()
+    return (
+        f"<b>Bot Statistics</b>\n"
+        f"Sent: {get_readable_file_size(net.bytes_sent)} | "
+        f"Recv: {get_readable_file_size(net.bytes_recv)}\n"
+        f"CPU: {_cpu()}% | RAM: {_vm().percent}%\n\n"
+        f"Disk: {get_readable_file_size(_du(Config.DOWNLOAD_DIR).free)} free "
+        f"[{round(100 - _du(Config.DOWNLOAD_DIR).percent, 1)}%]\n"
+    )
 
 async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=1):
     msg = ""
@@ -248,7 +300,7 @@ async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=
             and task.listener.progress
         ):
             progress = task.progress()
-            msg += f"\n┟ {get_progress_bar_string(progress)} <i>{progress}</i>"
+            msg += f"\n┟ {get_progress_bar_string(progress, theme)} <i>{progress}</i>"
             if task.listener.subname:
                 subsize = f" / {get_readable_file_size(task.listener.subsize)}"
                 ac = len(task.listener.files_to_proceed)
@@ -323,6 +375,7 @@ async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=
         for label, status_value in list(STATUSES.items()):
             if status_value != status:
                 buttons.data_button(label, f"status {sid} st {status_value}")
+    buttons.data_button("📊 Stats", f"status {sid} stats", position="footer", style=ButtonStyle.PRIMARY)
     buttons.data_button(
         "♻️ Refresh", f"status {sid} ref", position="header", style=ButtonStyle.PRIMARY
     )
