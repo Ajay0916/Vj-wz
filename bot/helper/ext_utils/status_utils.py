@@ -217,9 +217,11 @@ WZML_PROGRESS_STYLES = {
     1: {"name": "Default",   "filled": "\u25a0", "empty": "\u25a1", "multi": ["\u25a4", "\u25a4", "\u25a6", "\u25a6", "\u25a6", "\u25a9", "\u25a9"]},
     2: {"name": "Dots",      "filled": "\u2b24", "empty": "\u25cc", "multi": ["\u25d4", "\u25d4", "\u25d1", "\u25d1", "\u25d1", "\u25d5", "\u25d5"]},
     3: {"name": "Circles",   "filled": "\u2b24", "empty": "\u25cc", "multi": ["\u25cc", "\u25cc", "\u25ce", "\u25ce", "\u25ce", "\u25cd", "\u25cd"]},
-    4: {"name": "Diamonds",  "filled": "\u25c6", "empty": "\u25c7", "multi": ["\u25c7", "\u25c7", "\u25c8", "\u25c8", "\u25c6", "\u25c6", "\u25c6"]},
+    4: {"name": "Waves",     "filled": "\u224b", "empty": "\u223f", "multi": ["\u223f", "\u223c", "\u223c", "\u2248", "\u2248", "\u224b", "\u224b"]},
     5: {"name": "Stars",     "filled": "\u2605", "empty": "\u2606", "multi": ["\u2606", "\u2727", "\u272c", "\u272e", "\u2605", "\u2605", "\u2605"]},
     6: {"name": "Hearts",    "filled": "\u2665", "empty": "\u2661", "multi": ["\u2661", "\u2767", "\u2767", "\u2766", "\u2766", "\u2765", "\u2765"]},
+    7: {"name": "Shade",     "filled": "\u2588", "empty": "\u2591", "multi": ["\u2591", "\u2591", "\u2592", "\u2592", "\u2592", "\u2593", "\u2593"]},
+    8: {"name": "Music",     "filled": "\u266c", "empty": "\u2669", "multi": ["\u2669", "\u2669", "\u266a", "\u266a", "\u266b", "\u266b", "\u266c"]},
 }
 
 _WZML_ENGINE_EMOJI = {
