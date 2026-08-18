@@ -367,24 +367,23 @@ async def _wzml_inner(sid, is_user, page_no=1, status="All", page_step=1):
         else:
             msg = f"No Active {status} Tasks!\n\n"
 
-    # DL/UL speed
+    # DL/UL speed (no lock — already held by caller send_status_message)
     dl_speed = 0
     up_speed = 0
-    async with task_dict_lock:
-        for tk in task_dict.values():
-            try:
-                spd = tk.speed()
-                spd_bytes = speed_string_to_bytes(spd)
-                if iscoroutinefunction(tk.status):
-                    st = await tk.status()
-                else:
-                    st = tk.status()
-                if st in (MirrorStatus.STATUS_DOWNLOAD, MirrorStatus.STATUS_QUEUEDL, MirrorStatus.STATUS_PAUSED):
-                    dl_speed += spd_bytes
-                elif st in (MirrorStatus.STATUS_UPLOAD, MirrorStatus.STATUS_SEED):
-                    up_speed += spd_bytes
-            except Exception:
-                pass
+    for tk in task_dict.values():
+        try:
+            spd = tk.speed()
+            spd_bytes = speed_string_to_bytes(spd)
+            if iscoroutinefunction(tk.status):
+                st = await tk.status()
+            else:
+                st = tk.status()
+            if st in (MirrorStatus.STATUS_DOWNLOAD, MirrorStatus.STATUS_QUEUEDL, MirrorStatus.STATUS_PAUSED):
+                dl_speed += spd_bytes
+            elif st in (MirrorStatus.STATUS_UPLOAD, MirrorStatus.STATUS_SEED):
+                up_speed += spd_bytes
+        except Exception:
+            pass
 
     bmsg = f"<b>\U0001f5a5 CPU:</b> {cpu_percent()}% | <b>\U0001f4bf FREE:</b> {get_readable_file_size(disk_usage(DOWNLOAD_DIR).free)}"
     bmsg += f"\n<b>\U0001f3ae RAM:</b> {virtual_memory().percent}% | <b>\U0001f7e2 UPTIME:</b> {get_readable_time(time() - bot_start_time)}"
