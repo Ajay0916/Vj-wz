@@ -325,6 +325,7 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
     if key is None:
         buttons.data_button("Config Variables", "botset var")
         buttons.data_button("Module Settings", "botset setonoff")
+        buttons.data_button("Themes", "botset themes")
         buttons.data_button("Private Files", "botset private open")
         if not Config.DISABLE_TORRENTS:
             buttons.data_button("Qbit Settings", "botset qbit")
@@ -549,19 +550,6 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
                 buttons.data_button(f"✓ {label}", f"botset toggleonoff {k} on")
             else:
                 buttons.data_button(label, f"botset toggleonoff {k} off")
-        # Theme settings
-        current_theme = Config.STATUS_THEME or "vj"
-        for label, val in CHOICES["STATUS_THEME"]:
-            if val == current_theme:
-                buttons.data_button(f"✓ Theme: {label}", f"botset setvar STATUS_THEME {val}")
-            else:
-                buttons.data_button(f"Theme: {label}", f"botset setvar STATUS_THEME {val}")
-        current_style = Config.WZML_PROGRESS_STYLE or 1
-        for label, val in CHOICES["WZML_PROGRESS_STYLE"]:
-            if val == current_style:
-                buttons.data_button(f"✓ {label}", f"botset setvar WZML_PROGRESS_STYLE {val}")
-            else:
-                buttons.data_button(label, f"botset setvar WZML_PROGRESS_STYLE {val}")
         buttons.data_button("Page 2 ⏭", "botset setonoff2")
         buttons.data_button("Back", "botset back", position="footer")
         buttons.data_button(
@@ -582,7 +570,26 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
             "Close", "botset close", position="footer", style=ButtonStyle.DANGER
         )
         msg = "⌬ <b><u>Module Settings</u></b> | Page 2"
-
+    elif key == "themes":
+        # Status Theme choice
+        current_theme = Config.STATUS_THEME or "vj"
+        for label, val in CHOICES["STATUS_THEME"]:
+            if val == current_theme:
+                buttons.data_button(f"✓ {label}", f"botset setvar STATUS_THEME {val}")
+            else:
+                buttons.data_button(label, f"botset setvar STATUS_THEME {val}")
+        # Progress Bar Style choice
+        current_style = Config.WZML_PROGRESS_STYLE or 1
+        for label, val in CHOICES["WZML_PROGRESS_STYLE"]:
+            if val == current_style:
+                buttons.data_button(f"✓ {label}", f"botset setvar WZML_PROGRESS_STYLE {val}")
+            else:
+                buttons.data_button(label, f"botset setvar WZML_PROGRESS_STYLE {val}")
+        buttons.data_button("Back", "botset back", position="footer")
+        buttons.data_button(
+            "Close", "botset close", position="footer", style=ButtonStyle.DANGER
+        )
+        msg = "⌬ <b><u>Themes Settings</u></b>"
     elif key == "api_result":
         host = str(Config.get("SEARCH_RESULT_HOST") or "telegraph")
         buttons.data_button(
@@ -1327,6 +1334,7 @@ async def edit_bot_settings(client, query):
         "nzb",
         "nzbserver",
         "setonoff",
+        "themes",
         "setonoff2",
         "api_result",
     ] or data[1].startswith("nzbser"):
