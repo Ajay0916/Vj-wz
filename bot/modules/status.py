@@ -234,7 +234,7 @@ async def status_pages(_, query):
     elif data[2] == "stats":
         from psutil import net_io_counters as _net
         net = _net()
-        disk = disk_usage(Config.DOWNLOAD_DIR)
+        disk = disk_usage(DOWNLOAD_DIR)
         msg = f"""<b>\U0001f4ca Bot Statistics</b>
 
 <b>\U0001f5a5 CPU:</b> {cpu_percent()}%
