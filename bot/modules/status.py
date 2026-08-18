@@ -236,13 +236,13 @@ async def status_pages(_, query):
         net = _net()
         disk = disk_usage(DOWNLOAD_DIR)
         popup = (
-            f"📊 Bot Stats\n\n"
-            f"🖥 CPU: {cpu_percent()}%\n"
-            f"🎮 RAM: {virtual_memory().percent}%\n"
-            f"💿 Disk: {get_readable_file_size(disk.free)} free [{round(100 - disk.percent, 1)}%]\n"
-            f"📤 Sent: {get_readable_file_size(net.bytes_sent)}\n"
-            f"📥 Recv: {get_readable_file_size(net.bytes_recv)}\n\n"
-            f"Made with \u2764\ufe0f by Ajay"
+            f"📊 𝗕𝗼𝘁 𝗦𝘁𝗮𝘁𝗶𝗰𝘀\n\n"
+            f"⚙️ 𝗖𝗣𝗨: {cpu_percent()}%\n"
+            f"🧠 𝗥𝗔𝗠: {virtual_memory().percent}%\n"
+            f"🗄 𝗗𝗶𝘀𝗸: {get_readable_file_size(disk.free)} free [{round(100 - disk.percent, 1)}%]\n"
+            f"📤 𝗦𝗲𝗻𝘁: {get_readable_file_size(net.bytes_sent)}\n"
+            f"📥 𝗥𝗲𝗰𝗲𝗶𝘃𝗲𝗱: {get_readable_file_size(net.bytes_recv)}\n\n"
+            f"🤖 Made with \u2764\ufe0f by Ajay"
         )
         try:
             await query.answer(popup, show_alert=True)
