@@ -117,6 +117,7 @@ BOOL_VARS = [
 CHOICE_VARS = {
     "SEARCH_RESULT_HOST": [("Telegraph", "telegraph"), ("Rentry", "rentry")],
     "STATUS_THEME": [("VJ (Flat)", "vj"), ("WZML (Tree)", "wzml")],
+    "WZML_PROGRESS_STYLE": [("1-Default", 1), ("2-Dots", 2), ("3-Circles", 3), ("4-Blocks", 4), ("5-Stars", 5), ("6-Hearts", 6)],
 }
 
 DEFAULT_DESP = {
@@ -132,6 +133,8 @@ DEFAULT_DESP = {
     "DEFAULT_LANG": "Default bot language code. Default: en.",
     "DATABASE_URL": "MongoDB connection string for persistent storage.",
     "DEFAULT_UPLOAD": "Default upload destination: gd (Google Drive) or rc (rclone). Default: rc.",
+    "STATUS_THEME": "Status message theme: VJ (Flat) or WZML (Tree). Default: VJ.",
+    "WZML_PROGRESS_STYLE": "WZML progress bar style (1-6). Only works when STATUS_THEME=wzml. Default: 1.",
     "DELETE_LINKS": "Auto-delete source links/messages on task start. Default: False.",
     "DEBRID_LINK_API": "Debrid-link.com API key for premium hoster support.",
     "DISABLE_TORRENTS": "Disable all torrent downloads. Default: False.",

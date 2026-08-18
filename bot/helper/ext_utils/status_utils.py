@@ -211,10 +211,16 @@ def get_progress_bar_string(pct):
 # WZML Theme — separate functions, does NOT affect VJ code
 # ═══════════════════════════════════════════════════════════════════
 
-WZML_FINISHED = "\u25a0"   # ■
-WZML_UNFINISHED = "\u25a1" # □
-WZML_MULTI = ["\u25a4", "\u25a4", "\u25a6", "\u25a6", "\u25a6", "\u25a9", "\u25a9"]
 WZML_MAX = 11
+
+WZML_PROGRESS_STYLES = {
+    1: {"name": "Default",   "filled": "\u25a0", "empty": "\u25a1", "multi": ["\u25a4", "\u25a4", "\u25a6", "\u25a6", "\u25a6", "\u25a9", "\u25a9"]},
+    2: {"name": "Dots",      "filled": "\u25d5", "empty": "\u25cc", "multi": ["\u25d4", "\u25d4", "\u25d1", "\u25d1", "\u25d1", "\u25d5", "\u25d5"]},
+    3: {"name": "Circles",   "filled": "\u25cd", "empty": "\u25cc", "multi": ["\u25cc", "\u25cc", "\u25ce", "\u25ce", "\u25ce", "\u25cd", "\u25cd"]},
+    4: {"name": "Blocks",    "filled": "\u25b0", "empty": "\u25b1", "multi": ["\u25b1", "\u25b1", "\u25b0", "\u25b0", "\u25b0", "\u25b0", "\u25b0"]},
+    5: {"name": "Stars",     "filled": "\u2605", "empty": "\u2606", "multi": ["\u2606", "\u2606", "\u2605", "\u2605", "\u2605", "\u2605", "\u2605"]},
+    6: {"name": "Hearts",    "filled": "\u2665", "empty": "\u2661", "multi": ["\u2661", "\u2661", "\u2665", "\u2665", "\u2665", "\u2665", "\u2665"]},
+}
 
 _WZML_ENGINE_EMOJI = {
     "Aria2": "\U0001f4f6", "AioHttp": "\U0001f310", "Google": "\u267b\ufe0f",
@@ -231,10 +237,11 @@ def get_wzml_progress(pct):
     p = min(max(pct, 0), 100)
     cFull = int(p // 8)
     cPart = int(p % 8 - 1)
-    p_str = WZML_FINISHED * cFull
+    style = WZML_PROGRESS_STYLES.get(Config.WZML_PROGRESS_STYLE or 1, WZML_PROGRESS_STYLES[1])
+    p_str = style["filled"] * cFull
     if cPart >= 0:
-        p_str += WZML_MULTI[cPart]
-    p_str += WZML_UNFINISHED * (WZML_MAX - cFull)
+        p_str += style["multi"][min(cPart, len(style["multi"]) - 1)]
+    p_str += style["empty"] * (WZML_MAX - cFull)
     return f" \u2827{p_str}\u2839"
 
 
