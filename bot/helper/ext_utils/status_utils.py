@@ -227,7 +227,7 @@ WZML_PROGRESS_STYLES = {
     3: {"name": "Circles",   "filled": "\u2b24", "empty": "\u25cc", "multi": ["\u25cc", "\u25cc", "\u25ce", "\u25ce", "\u25ce", "\u25cd", "\u25cd"]},
     4: {"name": "Waves",     "filled": "\u224b", "empty": "\u223f", "multi": ["\u223f", "\u223c", "\u223c", "\u2248", "\u2248", "\u224b", "\u224b"]},
     5: {"name": "Stars",     "filled": "\u2605", "empty": "\u2606", "multi": ["\u2606", "\u2727", "\u272c", "\u272e", "\u2605", "\u2605", "\u2605"]},
-    6: {"name": "Hearts",    "filled": "\u2665", "empty": "\u2661", "multi": ["\u2661", "\u2767", "\u2767", "\u2766", "\u2766", "\u2765", "\u2765"]},
+    6: {"name": "Hearts",    "filled": "\u2665\ufe0e", "empty": "\u2661\ufe0e", "multi": ["\u2661\ufe0e", "\u2767\ufe0e", "\u2767\ufe0e", "\u2766\ufe0e", "\u2766\ufe0e", "\u2765\ufe0e", "\u2765\ufe0e"]},
     7: {"name": "Shade",     "filled": "\u2588", "empty": "\u2591", "multi": ["\u2591", "\u2591", "\u2592", "\u2592", "\u2592", "\u2593", "\u2593"]},
     8: {"name": "Music",     "filled": "\u266c", "empty": "\u2669", "multi": ["\u2669", "\u2669", "\u266a", "\u266a", "\u266b", "\u266b", "\u266c"]},
     9: {"name": "Flowers",   "filled": "\u273d", "empty": "\u273f", "multi": ["\u273f", "\u273f", "\u2740", "\u2740", "\u273e", "\u273e", "\u273d"]},
