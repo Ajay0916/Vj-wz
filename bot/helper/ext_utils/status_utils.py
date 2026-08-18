@@ -315,7 +315,7 @@ async def _wzml_inner(sid, is_user, page_no=1, status="All", page_step=1):
                         except Exception:
                             pass
                     if task.listener.is_torrent or task.listener.is_qbit or task.listener.is_nzb:
-                        msg += f"\n<b>\u251c\U0001f9ff Select:</b> <code>/{BotCommands.SelectCommand[1]}_{task.gid()[:12]}</code>"
+                        msg += f"\n<b>\u251c\U0001f9ff Select:</b> <i>/{BotCommands.SelectCommand[1]}_{task.gid()[:12]}</i>"
                     # Source/User line
                     try:
                         chat = task.listener.message.chat
@@ -326,7 +326,7 @@ async def _wzml_inner(sid, is_user, page_no=1, status="All", page_step=1):
                             msg += f'\n<b>\u251c\U0001f464 User:</b> <code>{task.listener.message.from_user.first_name}</code> | <b>Id:</b> <code>{task.listener.message.from_user.id}</code>'
                     except Exception:
                         pass
-                    msg += f"\n<b>\u2570\u274c </b><code>/{BotCommands.CancelTaskCommand[1]}_{task.gid()[:12]}</code>"
+                    msg += f"\n<b>\u2570\u274c </b><i>/{BotCommands.CancelTaskCommand[1]}_{task.gid()[:12]}</i>"
 
                 elif tstatus == MirrorStatus.STATUS_SEED:
                     msg += f"\n<b>\u251c\U0001f4e6 Size: </b>{task.size()}"
@@ -337,7 +337,7 @@ async def _wzml_inner(sid, is_user, page_no=1, status="All", page_step=1):
                     msg += f" | <b>\u23f2\ufe0f Time: </b>{task.seeding_time()}"
                     elapsed = time() - task.listener.message.date.timestamp()
                     msg += f"\n<b>\u251c\u23f3 Elapsed: </b>{get_readable_time(elapsed)}"
-                    msg += f"\n<b>\u2570\u274c </b><code>/{BotCommands.CancelTaskCommand[1]}_{task.gid()[:12]}</code>"
+                    msg += f"\n<b>\u2570\u274c </b><i>/{BotCommands.CancelTaskCommand[1]}_{task.gid()[:12]}</i>"
 
                 else:
                     msg += f"\n<b>\u251c\u26d3\ufe0f Engine :</b> {_wzml_engine(task.engine)}"
@@ -353,7 +353,7 @@ async def _wzml_inner(sid, is_user, page_no=1, status="All", page_step=1):
                 msg += f" | <b>\u23f2\ufe0f Time: </b>{task.seeding_time()}"
                 elapsed = time() - task.listener.message.date.timestamp()
                 msg += f"\n<b>\u251c\u23f3 Elapsed: </b>{get_readable_time(elapsed)}"
-                msg += f"\n<b>\u2570\u274c </b><code>/{BotCommands.CancelTaskCommand[1]}_{task.gid()[:12]}</code>"
+                msg += f"\n<b>\u2570\u274c </b><i>/{BotCommands.CancelTaskCommand[1]}_{task.gid()[:12]}</i>"
 
             msg += "\n<b>_________________________________</b>\n\n"
 
