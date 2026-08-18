@@ -280,7 +280,6 @@ async def _wzml_inner(sid, is_user, page_no=1, status="All", page_step=1):
         status_dict[sid]["page_no"] = page_no
     start_position = (page_no - 1) * STATUS_LIMIT
 
-    task_btns = []
     for index, task in enumerate(
         tasks[start_position : STATUS_LIMIT + start_position], start=1
     ):
@@ -316,8 +315,7 @@ async def _wzml_inner(sid, is_user, page_no=1, status="All", page_step=1):
                         except Exception:
                             pass
                     if task.listener.is_torrent or task.listener.is_qbit or task.listener.is_nzb:
-                        sel_cmd = f"/{BotCommands.SelectCommand[1]}_{task.gid()[:12]}"
-                        task_btns.append(("\U0001f9ff Select", sel_cmd))
+                        msg += f"\n<b>\u251c\U0001f9ff Select:</b> <code>/{BotCommands.SelectCommand[1]}_{task.gid()[:12]}</code>"
                     # Source/User line
                     try:
                         chat = task.listener.message.chat
@@ -328,8 +326,7 @@ async def _wzml_inner(sid, is_user, page_no=1, status="All", page_step=1):
                             msg += f'\n<b>\u251c\U0001f464 User:</b> <code>{task.listener.message.from_user.first_name}</code> | <b>Id:</b> <code>{task.listener.message.from_user.id}</code>'
                     except Exception:
                         pass
-                    cancel_cmd = f"/{BotCommands.CancelTaskCommand[1]}_{task.gid()[:12]}"
-                    task_btns.append(("\u274c Cancel", cancel_cmd))
+                    msg += f"\n<b>\u2570\u274c </b><code>/{BotCommands.CancelTaskCommand[1]}_{task.gid()[:12]}</code>"
 
                 elif tstatus == MirrorStatus.STATUS_SEED:
                     msg += f"\n<b>\u251c\U0001f4e6 Size: </b>{task.size()}"
@@ -340,8 +337,7 @@ async def _wzml_inner(sid, is_user, page_no=1, status="All", page_step=1):
                     msg += f" | <b>\u23f2\ufe0f Time: </b>{task.seeding_time()}"
                     elapsed = time() - task.listener.message.date.timestamp()
                     msg += f"\n<b>\u251c\u23f3 Elapsed: </b>{get_readable_time(elapsed)}"
-                    cancel_cmd = f"/{BotCommands.CancelTaskCommand[1]}_{task.gid()[:12]}"
-                    task_btns.append(("\u274c Cancel", cancel_cmd))
+                    msg += f"\n<b>\u2570\u274c </b><code>/{BotCommands.CancelTaskCommand[1]}_{task.gid()[:12]}</code>"
 
                 else:
                     msg += f"\n<b>\u251c\u26d3\ufe0f Engine :</b> {_wzml_engine(task.engine)}"
@@ -357,8 +353,7 @@ async def _wzml_inner(sid, is_user, page_no=1, status="All", page_step=1):
                 msg += f" | <b>\u23f2\ufe0f Time: </b>{task.seeding_time()}"
                 elapsed = time() - task.listener.message.date.timestamp()
                 msg += f"\n<b>\u251c\u23f3 Elapsed: </b>{get_readable_time(elapsed)}"
-                cancel_cmd = f"/{BotCommands.CancelTaskCommand[1]}_{task.gid()[:12]}"
-                task_btns.append(("\u274c Cancel", cancel_cmd))
+                msg += f"\n<b>\u2570\u274c </b><code>/{BotCommands.CancelTaskCommand[1]}_{task.gid()[:12]}</code>"
 
             msg += "\n<b>_________________________________</b>\n\n"
 
@@ -406,8 +401,6 @@ async def _wzml_inner(sid, is_user, page_no=1, status="All", page_step=1):
         buttons.data_button("📊 Statistics", f"status {sid} stats", style=ButtonStyle.PRIMARY)
     buttons.data_button("\u267b\ufe0f Refresh", f"status {sid} ref", style=ButtonStyle.PRIMARY)
     buttons.data_button("\u274c Close", f"status {sid} close")
-    for btn_text, btn_cmd in task_btns:
-        buttons.switch_button(btn_text, btn_cmd)
     button = buttons.build_menu(3)
 
     return msg + bmsg, button
