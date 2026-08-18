@@ -222,6 +222,8 @@ WZML_PROGRESS_STYLES = {
     6: {"name": "Hearts",    "filled": "\u2665", "empty": "\u2661", "multi": ["\u2661", "\u2767", "\u2767", "\u2766", "\u2766", "\u2765", "\u2765"]},
     7: {"name": "Shade",     "filled": "\u2588", "empty": "\u2591", "multi": ["\u2591", "\u2591", "\u2592", "\u2592", "\u2592", "\u2593", "\u2593"]},
     8: {"name": "Music",     "filled": "\u266c", "empty": "\u2669", "multi": ["\u2669", "\u2669", "\u266a", "\u266a", "\u266b", "\u266b", "\u266c"]},
+    9: {"name": "Flowers",   "filled": "\u273d", "empty": "\u273f", "multi": ["\u273f", "\u273f", "\u2740", "\u2740", "\u273e", "\u273e", "\u273d"]},
+    10: {"name": "Braille",  "filled": "\u283f", "empty": "\u2804", "multi": ["\u2804", "\u2806", "\u2806", "\u280e", "\u280e", "\u283f", "\u283f"]},
 }
 
 _WZML_ENGINE_EMOJI = {
