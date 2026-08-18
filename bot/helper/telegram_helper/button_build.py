@@ -30,6 +30,11 @@ class ButtonMaker:
             InlineKeyboardButton(text=key, callback_data=data, style=_btn_style(style))
         )
 
+    def switch_button(self, key, text, position=None, style=None):
+        self.buttons[position if position in self.buttons else "default"].append(
+            InlineKeyboardButton(text=key, switch_inline_query_current_chat=text, style=_btn_style(style))
+        )
+
     def build_menu(self, b_cols=1, h_cols=8, fb_cols=2, lb_cols=2, f_cols=8):
         def chunk(lst, n):
             return [lst[i : i + n] for i in range(0, len(lst), n)]
