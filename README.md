@@ -1,3 +1,5 @@
+> **📦 Upstream Sync:** [WZML-X `9a3174b`](https://github.com/SilentDemonSD/WZML-X/commit/9a3174b) — Last synced: 18 Aug 2026
+
 <p align="center">
    <img src="docs/WZML-X.png" alt="WZML-X logo" width="420">
 </p>
