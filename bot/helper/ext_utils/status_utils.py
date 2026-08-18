@@ -212,7 +212,7 @@ def get_progress_bar_string(pct):
         if cPart >= 0:
             p_str += ["▤", "▥", "▦", "▧", "▨", "▩", "■"][cPart]
         p_str += "□" * (12 - cFull)
-    return f"[{p_str}]"
+    return f"<code>[{p_str}]</code>"
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -254,7 +254,7 @@ def get_wzml_progress(pct):
     if cPart >= 0:
         p_str += style["multi"][min(cPart, len(style["multi"]) - 1)]
     p_str += style["empty"] * (WZML_MAX - cFull)
-    return f" \u2827{p_str}\u2839"
+    return f" <code>\u2827{p_str}\u2839</code>"
 
 
 def _wzml_engine(engine_str):
