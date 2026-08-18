@@ -235,18 +235,20 @@ async def status_pages(_, query):
         from psutil import net_io_counters as _net
         net = _net()
         disk = disk_usage(DOWNLOAD_DIR)
-        msg = f"""<b>\U0001f4ca Bot Statistics</b>
-
-<b>\U0001f5a5 CPU:</b> {cpu_percent()}%
-<b>\U0001f3ae RAM:</b> {virtual_memory().percent}% ({get_readable_file_size(virtual_memory().used)} / {get_readable_file_size(virtual_memory().total)})
-<b>\U0001f4bf Disk:</b> {get_readable_file_size(disk.free)} free [{round(100 - disk.percent, 1)}%]
-<b>\U0001f4e4 Sent:</b> {get_readable_file_size(net.bytes_sent)}
-<b>\U0001f4e5 Recv:</b> {get_readable_file_size(net.bytes_recv)}
-
-Made with \u2764\ufe0f by Ajay"""
-        button = ButtonMaker()
-        button.data_button("Back", f"status {data[1]} ref")
-        await edit_message(query.message, msg, button.build_menu())
+        popup = (
+            f"📊 Bot Stats\n\n"
+            f"🖥 CPU: {cpu_percent()}%\n"
+            f"🎮 RAM: {virtual_memory().percent}%\n"
+            f"💿 Disk: {get_readable_file_size(disk.free)} free [{round(100 - disk.percent, 1)}%]\n"
+            f"📤 Sent: {get_readable_file_size(net.bytes_sent)}\n"
+            f"📥 Recv: {get_readable_file_size(net.bytes_recv)}\n\n"
+            f"Made with \u2764\ufe0f by Ajay"
+        )
+        try:
+            await query.answer(popup, show_alert=True)
+        except QueryIdInvalid:
+            pass
+        return
 
     try:
         await query.answer()

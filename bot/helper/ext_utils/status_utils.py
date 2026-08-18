@@ -396,7 +396,7 @@ async def _wzml_inner(sid, is_user, page_no=1, status="All", page_step=1):
     if len(tasks) > STATUS_LIMIT:
         msg += f"<b>Tasks:</b> {tasks_no} | <b>Page:</b> {page_no}/{pages}\n"
         buttons.data_button("\u23ea Previous", f"status {sid} pre")
-        buttons.data_button(f"{page_no}/{pages}", f"status {sid} ov")
+        buttons.data_button(f"{page_no}/{pages}", f"status {sid} ref")
         buttons.data_button("Next \u23e9", f"status {sid} nex")
         buttons.data_button("Statistics", f"status {sid} stats", style=ButtonStyle.PRIMARY)
     buttons.data_button("\u267b\ufe0f Refresh", f"status {sid} ref", style=ButtonStyle.PRIMARY)
