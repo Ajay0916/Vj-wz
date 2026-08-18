@@ -218,8 +218,8 @@ WZML_PROGRESS_STYLES = {
     2: {"name": "Dots",      "filled": "\u2b24", "empty": "\u25cc", "multi": ["\u25d4", "\u25d4", "\u25d1", "\u25d1", "\u25d1", "\u25d5", "\u25d5"]},
     3: {"name": "Circles",   "filled": "\u2b24", "empty": "\u25cc", "multi": ["\u25cc", "\u25cc", "\u25ce", "\u25ce", "\u25ce", "\u25cd", "\u25cd"]},
     4: {"name": "Blocks",    "filled": "\u25b0", "empty": "\u25b1", "multi": ["\u25b1", "\u25b1", "\u25b0", "\u25b0", "\u25b0", "\u25b0", "\u25b0"]},
-    5: {"name": "Stars",     "filled": "\u2605", "empty": "\u2606", "multi": ["\u2606", "\u2727", "\u2727", "\u2726", "\u2726", "\u2605", "\u2605"]},
-    6: {"name": "Hearts",    "filled": "\u2665", "empty": "\u2661", "multi": ["\u2661", "\u25b1", "\u25b1", "\u25b0", "\u25b0", "\u25b0", "\u2665"]},
+    5: {"name": "Stars",     "filled": "\u2605", "empty": "\u2606", "multi": ["\u25a4", "\u25a4", "\u25a6", "\u25a6", "\u25a6", "\u25a9", "\u25a9"]},
+    6: {"name": "Hearts",    "filled": "\u2665", "empty": "\u2661", "multi": ["\u25a4", "\u25a4", "\u25a6", "\u25a6", "\u25a6", "\u25a9", "\u25a9"]},
 }
 
 _WZML_ENGINE_EMOJI = {
