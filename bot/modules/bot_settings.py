@@ -117,7 +117,7 @@ BOOL_VARS = [
 CHOICE_VARS = {
     "SEARCH_RESULT_HOST": [("Telegraph", "telegraph"), ("Rentry", "rentry")],
     "STATUS_THEME": [("VJ (Flat)", "vj"), ("WZML (Tree)", "wzml")],
-    "WZML_PROGRESS_STYLE": [("1-Default", 1), ("2-Dots", 2), ("3-Circles", 3), ("4-Waves", 4), ("5-Stars", 5), ("6-Hearts", 6), ("7-Shade", 7), ("8-Music", 8), ("9-Flowers", 9), ("10-Braille", 10)],
+    "WZML_PROGRESS_STYLE": [("1 ■ Default", 1), ("2 ● Dots", 2), ("3 ⬤ Circles", 3), ("4 ∿ Waves", 4), ("5 ★ Stars", 5), ("6 ♥ Hearts", 6), ("7 ░ Shade", 7), ("8 ♪ Music", 8), ("9 ✿ Flowers", 9), ("10 ⠿ Braille", 10)],
 }
 
 DEFAULT_DESP = {
