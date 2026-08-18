@@ -242,7 +242,7 @@ async def status_pages(_, query):
             f"🗄 𝗗𝗶𝘀𝗸: {get_readable_file_size(disk.free)} free [{round(100 - disk.percent, 1)}%]\n"
             f"📤 𝗦𝗲𝗻𝘁: {get_readable_file_size(net.bytes_sent)}\n"
             f"📥 𝗥𝗲𝗰𝗲𝗶𝘃𝗲𝗱: {get_readable_file_size(net.bytes_recv)}\n\n"
-            f"🤖 Made with \u2764\ufe0f by Ajay"
+            f"Made with \u2764\ufe0f by Ajay"
         )
         try:
             await query.answer(popup, show_alert=True)
