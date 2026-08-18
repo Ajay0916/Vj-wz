@@ -121,6 +121,7 @@ CHOICE_VARS = {
 }
 
 DEFAULT_DESP = {
+    "DISABLE_THEMES": "Disable theme system entirely. Default: False.",
     "AS_DOCUMENT": "Send files as document instead of media. Default: False.",
     "AUTHORIZED_CHATS": "User/Chat IDs authorized to use the bot. Space-separated. Supports thread IDs with | separator.",
     "BASE_URL": "Public URL for torrent web file selection. Format: http://ip or http://ip:port.",
@@ -149,6 +150,7 @@ DEFAULT_DESP = {
     "DISABLE_RSS": "Disable RSS feed monitoring. Saves CPU cycles. Default: False.",
     "DISABLE_SEARCH": "Disable torrent search plugins. Saves network I/O. Default: False.",
     "DISABLE_YTDLP": "Disable YouTube/YT-DLP downloads. Default: False.",
+    "DISABLE_THEMES": "Disable theme system. VJ + default style locked. Default: False.",
     "EQUAL_SPLITS": "Split files into equal parts of LEECH_SPLIT_SIZE. Default: False.",
     "EXCLUDED_EXTENSIONS": "File extensions to exclude from upload/clone. Space-separated.",
     "FFMPEG_CMDS": "Custom FFmpeg command presets. Dict format.",
@@ -315,6 +317,7 @@ NEW_ONOFF_VARS = [
     "DISABLE_SESSION",
     "DISABLE_HELPER",
     "DISABLE_HYPER",
+    "DISABLE_THEMES",
 ]
 
 
@@ -416,6 +419,8 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
         hidden_vars = set()
         if Config.DISABLE_RSS:
             hidden_vars.update(["RSS_CHAT", "RSS_DELAY", "RSS_SIZE_LIMIT"])
+        if Config.DISABLE_THEMES:
+            hidden_vars.update(["STATUS_THEME", "WZML_PROGRESS_STYLE"])
         if Config.DISABLE_SEARCH:
             hidden_vars.update(
                 [

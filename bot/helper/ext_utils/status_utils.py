@@ -200,7 +200,7 @@ def get_progress_bar_string(pct):
     p = min(max(pct, 0), 100)
     cFull = int(p // 8)
     cPart = int(p % 8 - 1)
-    style_id = Config.WZML_PROGRESS_STYLE or 1
+    style_id = 1 if Config.DISABLE_THEMES else (Config.WZML_PROGRESS_STYLE or 1)
     if style_id in WZML_PROGRESS_STYLES:
         style = WZML_PROGRESS_STYLES[style_id]
         p_str = style["filled"] * cFull
@@ -425,7 +425,7 @@ async def _wzml_inner(sid, is_user, page_no=1, status="All", page_step=1):
     return msg + bmsg, button
 
 async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=1):
-    if (Config.get("STATUS_THEME") or "vj") == "wzml":
+    if not Config.DISABLE_THEMES and (Config.get("STATUS_THEME") or "vj") == "wzml":
         return await _get_wzml_readable_message(sid, is_user, page_no, status, page_step)
     msg = ""
     button = None
