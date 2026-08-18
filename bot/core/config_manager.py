@@ -23,6 +23,7 @@ class Config:
     DEFAULT_UPLOAD = "rc"
     DELETE_LINKS = False
     DEBRID_LINK_API = ""
+    DISABLE_THEMES = False
     DISABLE_TORRENTS = False
     DISABLE_LEECH = False
     DISABLE_BULK = False
