@@ -1638,6 +1638,7 @@ async def api_buttons(user_id, method, page=1):
     for text, callback in nav:
         buttons.data_button(text, callback, position="footer")
     buttons.data_button("Cancel", f"torser {user_id} cancel", position="footer")
+    buttons.data_button("Restart t-API 🔁", f"torser {user_id} restartapi", position="footer")
     return buttons.build_menu(2)
 
 
@@ -2053,6 +2054,18 @@ async def torrent_search_update(_, query):
                 f"<b>Searching for <i>{key}</i>\nTorrent Site:- <i>{site.capitalize()}</i></b>",
             )
             await search(key, site, message, method)
+    elif data[2] == "restartapi":
+        await query.answer("Restarting t-API...", show_alert=True)
+        api_url = Config.SEARCH_API_LINK.rstrip("/")
+        api_key = Config.API_PIN or ""
+        try:
+            from niquests import AsyncSession
+            async with AsyncSession() as client:
+                headers = _api_headers()
+                await client.get(f"{api_url}/restart", headers=headers, timeout=10)
+            await edit_message(message, "✅ t-API restart triggered!\nSites will refresh in ~20s.")
+        except Exception as e:
+            await edit_message(message, f"❌ Restart failed: {e}")
     else:
         await query.answer()
         FILTER_STATE.pop(user_id, None)
