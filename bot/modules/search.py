@@ -496,7 +496,7 @@ async def get_result(search_results, key, message, method):
                         msg += f"<b>Quality: </b>{subres['quality']} | <b>Type: </b>{subres['type']} | "
                         msg += f"<b>Size: </b>{subres['size']}<br>"
                         if subres.get("torrent"):
-                            _dl = _dl_link(subres["torrent"], result.get("name") or "", subres.get("extension") or "")
+                            _dl = _dl_link(subres["torrent"], result.get("name") or "", subres.get("extension") or "", subres.get("short") or "")
                             msg += "<a href='{}'>Direct Link</a>".format(_dl)
                             msg += " | <a href='{}'>Share</a>".format(_share_link(_dl))
                         if subres.get("torrent") and subres.get("magnet"):
