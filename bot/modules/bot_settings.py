@@ -615,6 +615,7 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
                     "shortener.txt",
                     "categories.txt",
                     "cookies.txt",
+                    "terabox.txt",
                     ".netrc",
                 ]
             ]
