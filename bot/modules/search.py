@@ -185,6 +185,7 @@ PAGE2_SITES = {
 # dedicated button, so it shouldn't flood every "search all" result.
 ALL_SITES_EXCLUDE = {
     "audiobookbay",
+    "downloadly",
 }
 
 
