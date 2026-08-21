@@ -21,6 +21,7 @@ _LOCKER_HOSTS = (
     "fboom.me", "douploads.net", "hxfile.co", "dropapk.to", "uploadboy.com",
     "upload.ee", "ddownload.com", "wdupload.com", "dailyuploads.net",
     "4funbox.co", "mega.nz",
+    "downloadly.ir",
 )
 
 
