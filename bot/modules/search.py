@@ -2053,7 +2053,7 @@ async def torrent_search_update(_, query):
             buttons=confirm_buttons.build_menu(2),
         )
     elif data[2] == "restartapi_go":
-        await query.answer("Restarting API...", show_alert=True)
+        await query.answer("Restarting API...")
         try:
             import asyncio as _aio
             from niquests import AsyncSession
