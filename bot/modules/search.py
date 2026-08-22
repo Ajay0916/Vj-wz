@@ -2034,7 +2034,7 @@ async def torrent_search_update(_, query):
         await edit_message(
             message,
             f"<i>Are you sure you want to restart the API?\n<code>{api_url}</code></i>",
-            reply_markup=confirm_buttons.build_menu(2),
+            buttons=confirm_buttons.build_menu(2),
         )
     elif data[2] == "restartapi_go":
         await query.answer("Restarting API...", show_alert=True)
