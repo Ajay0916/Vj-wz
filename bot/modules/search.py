@@ -954,9 +954,11 @@ def _api_extra_params(opts, method, is_all=False):
         elif opts.get("page") in ("0",) or (
             isinstance(opts.get("page"), str) and "-" in str(opts.get("page", ""))
         ):
-            # Multi-page searches need more time per site — slow sites
-            # (FlareSolverr fallbacks) get cut off by the 40s deadline.
             params.append("timeout=300")
+        else:
+            # Single-page searches: raise from 40s to 120s so slow sites
+            # with FlareSolverr fallbacks still return full results.
+            params.append("timeout=120")
         fmt = opts.get("format")
         if fmt and "," not in str(fmt):
             params.append(f"format={quote(fmt)}")
