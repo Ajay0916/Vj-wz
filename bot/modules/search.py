@@ -773,6 +773,7 @@ _WORD_FLAGS = {
 _FLAG_ONLY = {
     "-f": "fresh",
     "-du": "dedup",
+    "-r": "restart_api",
     "-auto": "auto_leech",
     "-ex": "exact",
     "-ad": "adult",
@@ -1671,6 +1672,21 @@ async def torrent_search(_, message):
     key, opts = _parse_search_cmd(message.text)
     if opts.get("help"):
         await send_message(message, SEARCH_HELP_TEXT)
+        return
+    if opts.get("restart_api"):
+        confirm_buttons = ButtonMaker()
+        confirm_buttons.data_button(
+            "Yes!", f"torser {user_id} restartapi_go", style=ButtonStyle.SUCCESS
+        )
+        confirm_buttons.data_button(
+            "No!", f"torser {user_id} restartapi_no", style=ButtonStyle.DANGER
+        )
+        api_url = Config.SEARCH_API_LINK.rstrip("/") if Config.SEARCH_API_LINK else ""
+        msg = await send_message(
+            message,
+            f"<i>Are you sure you want to restart the API?\n<code>{api_url}</code></i>",
+            buttons=confirm_buttons.build_menu(2),
+        )
         return
     first_tok = (message.text or "").split()
     if len(first_tok) > 1 and first_tok[1].startswith("-"):
