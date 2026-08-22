@@ -951,6 +951,12 @@ def _api_extra_params(opts, method, is_all=False):
             # (40s) skip slow sites - wait up to 10 min so every site
             # returns results. -to always wins when set explicitly.
             params.append("timeout=600")
+        elif opts.get("page") in ("0",) or (
+            isinstance(opts.get("page"), str) and "-" in str(opts.get("page", ""))
+        ):
+            # Multi-page searches need more time per site — slow sites
+            # (FlareSolverr fallbacks) get cut off by the 40s deadline.
+            params.append("timeout=300")
         fmt = opts.get("format")
         if fmt and "," not in str(fmt):
             params.append(f"format={quote(fmt)}")
