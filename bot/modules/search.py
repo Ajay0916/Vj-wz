@@ -2095,11 +2095,31 @@ async def torrent_search_update(_, query):
                 )
                 hdata = health.json() if health.status_code == 200 else {}
                 version = hdata.get("version", "unknown")
-                text = f"<b>✅ API Restarted!</b>\n"
+                status = await client.get(
+                    f"{Config.SEARCH_API_LINK.rstrip('/')}/api/v1/status",
+                    headers=headers,
+                    timeout=10,
+                )
+                sdata = status.json() if status.status_code == 200 else {}
+                total = sdata.get("sites", 0)
+                healthy = sdata.get("healthy_sites", 0)
+                blocked = sdata.get("blocked_sites", 0)
+                text = "<b>✅ API Restarted!</b>\n"
                 if version != "unknown":
                     text += f"<b>Version:</b> <code>{version}</code>\n"
                 if commit:
-                    text += f"<b>Commit:</b> <code>{commit}</code>"
+                    text += f"<b>Commit:</b> <code>{commit}</code>\n"
+                if blocked == 0 and total > 0:
+                    text += f"<b>Sites:</b> ✅ All {total} OK"
+                elif total > 0:
+                    bad = [
+                        name
+                        for name, info in (sdata.get("sites_detail") or {}).items()
+                        if info.get("blocked") or info.get("fail_count", 0) >= 5
+                    ]
+                    text += f"<b>Sites:</b> {healthy}/{total} OK"
+                    if bad:
+                        text += "\n<b>Down:</b> " + ", ".join(bad[:8])
                 else:
                     text = text.rstrip("\n")
                 await edit_message(message, text)
