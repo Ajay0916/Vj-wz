@@ -2074,17 +2074,35 @@ async def torrent_search_update(_, query):
     elif data[2] == "restartapi_go":
         await query.answer("Restarting t-API...", show_alert=True)
         try:
+            import asyncio as _aio
             from niquests import AsyncSession
             async with AsyncSession() as client:
                 headers = _api_headers()
-                await client.get(
+                resp = await client.get(
                     f"{Config.SEARCH_API_LINK.rstrip('/')}/restart",
                     headers=headers,
-                    timeout=10,
+                    timeout=30,
                 )
-            await edit_message(
-                message, "✅ t-API restart triggered!\nSites will refresh in ~20s."
-            )
+                body = resp.json() if resp.status_code == 200 else {}
+                commit = body.get("message", "").replace("Updated to ", "").split(".")[0]
+                await edit_message(
+                    message,
+                    "<i>🔄 Restarting t-API...\nPlease wait ~20 seconds.</i>",
+                )
+                await _aio.sleep(15)
+                health = await client.get(
+                    f"{Config.SEARCH_API_LINK.rstrip('/')}/health", timeout=10
+                )
+                hdata = health.json() if health.status_code == 200 else {}
+                version = hdata.get("version", "unknown")
+                text = f"<b>✅ t-API Restarted!</b>\n"
+                if version != "unknown":
+                    text += f"<b>Version:</b> <code>{version}</code>\n"
+                if commit:
+                    text += f"<b>Commit:</b> <code>{commit}</code>"
+                else:
+                    text = text.rstrip("\n")
+                await edit_message(message, text)
         except Exception as e:
             await edit_message(message, f"❌ Restart failed: {e}")
     elif data[2] == "restartapi_no":
