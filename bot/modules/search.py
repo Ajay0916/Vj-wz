@@ -2052,7 +2052,7 @@ async def torrent_search_update(_, query):
                 commit = body.get("message", "").replace("Updated to ", "").split(".")[0]
                 await edit_message(
                     message,
-                    "<i>🔄 Restarting API...\nPlease wait ~20 seconds.</i>",
+                    "<i>🔄 Restarting API...\nTesting all sites, please wait...</i>",
                 )
                 await _aio.sleep(15)
                 health = await client.get(
@@ -2060,31 +2060,31 @@ async def torrent_search_update(_, query):
                 )
                 hdata = health.json() if health.status_code == 200 else {}
                 version = hdata.get("version", "unknown")
-                status = await client.get(
-                    f"{Config.SEARCH_API_LINK.rstrip('/')}/api/v1/status",
+                test = await client.get(
+                    f"{Config.SEARCH_API_LINK.rstrip('/')}/api/v1/test/all",
+                    params={"skip_search": 1},
                     headers=headers,
-                    timeout=10,
+                    timeout=60,
                 )
-                sdata = status.json() if status.status_code == 200 else {}
-                total = sdata.get("sites", 0)
-                healthy = sdata.get("healthy_sites", 0)
-                blocked = sdata.get("blocked_sites", 0)
+                tdata = test.json() if test.status_code == 200 else {}
+                results = tdata.get("sites", [])
+                ok = sum(1 for r in results if r.get("plain", {}).get("http_code") == 200)
+                cf = sum(1 for r in results if r.get("plain", {}).get("status") == "CF_BLOCKED")
+                down = [r["site"] for r in results if r.get("plain", {}).get("http_code", 0) != 200]
                 text = "<b>✅ API Restarted!</b>\n"
                 if version != "unknown":
                     text += f"<b>Version:</b> <code>{version}</code>\n"
                 if commit:
                     text += f"<b>Commit:</b> <code>{commit}</code>\n"
-                if blocked == 0 and total > 0:
-                    text += f"<b>Sites:</b> ✅ All {total} OK"
-                elif total > 0:
-                    bad = [
-                        name
-                        for name, info in (sdata.get("sites_detail") or {}).items()
-                        if info.get("blocked") or info.get("fail_count", 0) >= 5
-                    ]
-                    text += f"<b>Sites:</b> {healthy}/{total} OK"
-                    if bad:
-                        text += "\n<b>Down:</b> " + ", ".join(bad[:8])
+                if not down and ok > 0:
+                    cf_note = f" ({cf} CF)" if cf else ""
+                    text += f"<b>Sites:</b> ✅ All {ok} OK{cf_note}"
+                elif ok > 0:
+                    cf_note = f" ({cf} CF)" if cf else ""
+                    text += f"<b>Sites:</b> {ok}/{len(results)} OK{cf_note}\n"
+                    text += "<b>Down:</b> " + ", ".join(down[:8])
+                    if len(down) > 8:
+                        text += f" +{len(down) - 8} more"
                 else:
                     text = text.rstrip("\n")
                 await edit_message(message, text)
