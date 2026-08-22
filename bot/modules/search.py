@@ -2068,11 +2068,11 @@ async def torrent_search_update(_, query):
         await query.answer()
         await edit_message(
             message,
-            f"<i>Are you sure you want to restart t-API?\n<code>{api_url}</code></i>",
+            f"<i>Are you sure you want to restart the API?\n<code>{api_url}</code></i>",
             reply_markup=confirm_buttons.build_menu(2),
         )
     elif data[2] == "restartapi_go":
-        await query.answer("Restarting t-API...", show_alert=True)
+        await query.answer("Restarting API...", show_alert=True)
         try:
             import asyncio as _aio
             from niquests import AsyncSession
@@ -2087,7 +2087,7 @@ async def torrent_search_update(_, query):
                 commit = body.get("message", "").replace("Updated to ", "").split(".")[0]
                 await edit_message(
                     message,
-                    "<i>🔄 Restarting t-API...\nPlease wait ~20 seconds.</i>",
+                    "<i>🔄 Restarting API...\nPlease wait ~20 seconds.</i>",
                 )
                 await _aio.sleep(15)
                 health = await client.get(
@@ -2095,7 +2095,7 @@ async def torrent_search_update(_, query):
                 )
                 hdata = health.json() if health.status_code == 200 else {}
                 version = hdata.get("version", "unknown")
-                text = f"<b>✅ t-API Restarted!</b>\n"
+                text = f"<b>✅ API Restarted!</b>\n"
                 if version != "unknown":
                     text += f"<b>Version:</b> <code>{version}</code>\n"
                 if commit:
