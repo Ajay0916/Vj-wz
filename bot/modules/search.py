@@ -2021,41 +2021,6 @@ async def torrent_search_update(_, query):
         await edit_message(message, _searching_msg(key, site, f"\nFilters:- <i>{summary}</i>"))
         await search(key, site, message, "apisearch", "all", "all", language, format_, size)
         FILTER_STATE.pop(user_id, None)
-    elif data[2] != "cancel":
-        await query.answer()
-        site = data[2]
-        method = data[3]
-        if method == "apisearch":
-            if site == "all":
-                button = api_categories(user_id, site)
-                await edit_message(message, "Choose site:", button)
-            elif site in BOOK_SITES:
-                button = filter_format_buttons(user_id, site, "all")
-                await edit_message(
-                    message,
-                    filter_format_text(key, site, "all"),
-                    button,
-                )
-            else:
-                await edit_message(message, _searching_msg(key, site))
-                await search(key, site, message, "apisearch")
-        elif method.startswith("api"):
-            if key is None:
-                if method == "apirecent":
-                    endpoint = "Recent"
-                elif method == "apitrend":
-                    endpoint = "Trending"
-                await edit_message(message, _listing_msg(site, endpoint))
-                await search(key, site, message, method)
-            else:
-                await edit_message(message, _searching_msg(key, site))
-                await search(key, site, message, method)
-        else:
-            await edit_message(
-                message,
-                f"<b>Searching for <i>{key}</i>\nTorrent Site:- <i>{site.capitalize()}</i></b>",
-            )
-            await search(key, site, message, method)
     elif data[2] == "restartapi":
         confirm_buttons = ButtonMaker()
         confirm_buttons.data_button(
@@ -2128,6 +2093,42 @@ async def torrent_search_update(_, query):
     elif data[2] == "restartapi_no":
         await query.answer("Cancelled!")
         await delete_message(message)
+    elif data[2] != "cancel":
+        await query.answer()
+        site = data[2]
+        method = data[3]
+        if method == "apisearch":
+            if site == "all":
+                button = api_categories(user_id, site)
+                await edit_message(message, "Choose site:", button)
+            elif site in BOOK_SITES:
+                button = filter_format_buttons(user_id, site, "all")
+                await edit_message(
+                    message,
+                    filter_format_text(key, site, "all"),
+                    button,
+                )
+            else:
+                await edit_message(message, _searching_msg(key, site))
+                await search(key, site, message, "apisearch")
+        elif method.startswith("api"):
+            if key is None:
+                if method == "apirecent":
+                    endpoint = "Recent"
+                elif method == "apitrend":
+                    endpoint = "Trending"
+                await edit_message(message, _listing_msg(site, endpoint))
+                await search(key, site, message, method)
+            else:
+                await edit_message(message, _searching_msg(key, site))
+                await search(key, site, message, method)
+        else:
+            await edit_message(
+                message,
+                f"<b>Searching for <i>{key}</i>\nTorrent Site:- <i>{site.capitalize()}</i></b>",
+            )
+            await search(key, site, message, method)
+
     else:
         await query.answer()
         FILTER_STATE.pop(user_id, None)
