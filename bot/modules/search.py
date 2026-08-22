@@ -12,7 +12,7 @@ from ..helper.ext_utils.bot_utils import new_task
 from ..helper.ext_utils.status_utils import get_readable_file_size
 from ..helper.ext_utils.telegraph_helper import telegraph
 from ..helper.telegram_helper.button_build import ButtonMaker
-from ..helper.telegram_helper.message_utils import edit_message, send_message
+from ..helper.telegram_helper.message_utils import delete_message, edit_message, send_message
 
 _LOCKER_HOSTS = (
     "nitroflare.com", "uploadgig.com", "rapidgator.net", "keep2share.cc",
@@ -2057,17 +2057,39 @@ async def torrent_search_update(_, query):
             )
             await search(key, site, message, method)
     elif data[2] == "restartapi":
-        await query.answer("Restarting t-API...", show_alert=True)
+        confirm_buttons = ButtonMaker()
+        confirm_buttons.data_button(
+            "Yes!", f"torser {user_id} restartapi_go", style=ButtonStyle.SUCCESS
+        )
+        confirm_buttons.data_button(
+            "No!", f"torser {user_id} restartapi_no", style=ButtonStyle.DANGER
+        )
         api_url = Config.SEARCH_API_LINK.rstrip("/")
-        api_key = Config.API_PIN or ""
+        await query.answer()
+        await edit_message(
+            message,
+            f"<i>Are you sure you want to restart t-API?\n<code>{api_url}</code></i>",
+            reply_markup=confirm_buttons.build_menu(2),
+        )
+    elif data[2] == "restartapi_go":
+        await query.answer("Restarting t-API...", show_alert=True)
         try:
             from niquests import AsyncSession
             async with AsyncSession() as client:
                 headers = _api_headers()
-                await client.get(f"{api_url}/restart", headers=headers, timeout=10)
-            await edit_message(message, "✅ t-API restart triggered!\nSites will refresh in ~20s.")
+                await client.get(
+                    f"{Config.SEARCH_API_LINK.rstrip('/')}/restart",
+                    headers=headers,
+                    timeout=10,
+                )
+            await edit_message(
+                message, "✅ t-API restart triggered!\nSites will refresh in ~20s."
+            )
         except Exception as e:
             await edit_message(message, f"❌ Restart failed: {e}")
+    elif data[2] == "restartapi_no":
+        await query.answer("Cancelled!")
+        await delete_message(message)
     else:
         await query.answer()
         FILTER_STATE.pop(user_id, None)
