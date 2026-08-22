@@ -2068,9 +2068,9 @@ async def torrent_search_update(_, query):
                 )
                 tdata = test.json() if test.status_code == 200 else {}
                 results = tdata.get("sites", [])
-                ok = sum(1 for r in results if r.get("plain", {}).get("http_code") == 200)
-                cf = sum(1 for r in results if r.get("plain", {}).get("status") == "CF_BLOCKED")
-                down = [r["site"] for r in results if r.get("plain", {}).get("http_code", 0) != 200]
+                ok = sum(1 for r in results if r.get("plain", {}).get("reachable") is True)
+                cf = sum(1 for r in results if r.get("plain", {}).get("cf_challenge") is True)
+                down = [r["site"] for r in results if r.get("plain", {}).get("reachable") is not True]
                 text = "<b>✅ API Restarted!</b>\n"
                 if version != "unknown":
                     text += f"<b>Version:</b> <code>{version}</code>\n"
