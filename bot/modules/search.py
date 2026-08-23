@@ -481,12 +481,14 @@ PAGE2_SITES = {
     "yts",
 }
 
-# Dedicated-button sites never flood grouped searches. BT4G remains
-# available through its own button only.
+# Dedicated/special sites never flood grouped searches. They remain available
+# through their own individual site buttons only.
 ALL_SITES_EXCLUDE = {
     "audiobookbay",
     "downloadly",
     "bt4g",
+    "nyaasi",
+    "yts",
 }
 
 
