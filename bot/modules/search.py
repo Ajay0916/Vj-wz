@@ -474,15 +474,18 @@ def _group_sites_param(group, full_all=False):
     return ",".join(s for s in SITES if s in members and s != "all")
 
 
-# Site button ordering: page 1 = all + important general + course sites,
-# page 2 = anime/movie/book sites. Any site not listed here stays on page 1.
+# Site button ordering: page 1 = All + general/course/book sites,
+# page 2 = every dedicated/special individual button.
 PAGE2_SITES = {
+    "audiobookbay",
+    "downloadly",
+    "bt4g",
     "nyaasi",
     "yts",
 }
 
 # Dedicated/special sites never flood grouped searches. They remain available
-# through their own individual site buttons only.
+# through their own individual Page-2 buttons only.
 ALL_SITES_EXCLUDE = {
     "audiobookbay",
     "downloadly",
