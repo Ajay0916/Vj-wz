@@ -261,9 +261,15 @@ async def _api_site_status_text(live=False):
             async with AsyncSession() as client:
                 response = await client.get(
                     f"{Config.SEARCH_API_LINK}/api/v1/test/all",
-                    params={"skip_search": 0, "limit": 1},
+                    params={
+                        "skip_search": 0,
+                        "limit": 1,
+                        "check_links": 1,
+                        "max_link_checks": 3,
+                        "link_timeout": 20,
+                    },
                     headers=_api_headers(),
-                    timeout=240,
+                    timeout=600,
                 )
             if response.status_code != 200:
                 detail = ""
@@ -298,13 +304,48 @@ async def _api_site_status_text(live=False):
         reachable = sum(
             bool(row.get("plain", {}).get("reachable")) for row in rows
         )
+        audits = [
+            row.get("search_test", {}).get("link_audit") or {}
+            for row in rows
+        ]
+        links_checked = sum(int(item.get("checked") or 0) for item in audits)
+        links_valid = sum(int(item.get("valid") or 0) for item in audits)
+        links_invalid = sum(int(item.get("invalid") or 0) for item in audits)
+        links_unknown = sum(int(item.get("unknown") or 0) for item in audits)
+        magnets_valid = sum(int(item.get("magnet_syntax_valid") or 0) for item in audits)
+        hashes_valid = sum(int(item.get("infohash_syntax_valid") or 0) for item in audits)
+        validity_counts = Counter(
+            str(item.get("validity") or "not_checked") for item in audits
+        )
+        link_issues = []
+        for row in rows:
+            audit = row.get("search_test", {}).get("link_audit") or {}
+            if str(audit.get("validity") or "") in ("partial", "fail"):
+                link_issues.append((row, audit))
         elapsed = _format_seconds(int(time.monotonic() - started))
         lines = [
             "<b>🔴 API Live Status</b>",
             f"<b>Search OK:</b> ✅ {len(grouped['ok'])}/{len(rows)}",
             f"<b>Base Reachable:</b> {reachable}/{len(rows)}",
+            f"<b>Links Probed:</b> {links_checked}",
+            f"<b>Links Valid:</b> ✅ {links_valid} | ⚠️ {links_unknown} | ❌ {links_invalid}",
+            "<b>Audit:</b> "
+            f"✅ {validity_counts['pass']} | ⚠️ {validity_counts['partial']} | "
+            f"❌ {validity_counts['fail']} | ❓ {validity_counts['inconclusive']}",
+            f"<b>Magnet/Hash Syntax:</b> 🧲 {magnets_valid} | #️⃣ {hashes_valid}",
             f"<b>Duration:</b> {elapsed}",
         ]
+        if link_issues:
+            lines.append("\n<b>🔗 Link Issues</b>")
+            for row, audit in link_issues[:10]:
+                lines.append(
+                    f"• <code>{escape(str(row.get('site') or 'unknown'))}</code> — "
+                    f"✅ {audit.get('valid', 0)}/{audit.get('checked', 0)}, "
+                    f"❌ {audit.get('invalid', 0)}, ❓ {audit.get('unknown', 0)}"
+                )
+            remaining = len(link_issues) - 10
+            if remaining > 0:
+                lines.append(f"• +{remaining} more")
 
         if grouped["timeout"]:
             names = ", ".join(
@@ -330,8 +371,10 @@ async def _api_site_status_text(live=False):
             if remaining > 0:
                 lines.append(f"• +{remaining} more")
 
-        if len(grouped["ok"]) == len(rows):
-            lines.append("\n✅ All enabled sites passed live search.")
+        if len(grouped["ok"]) == len(rows) and not link_issues:
+            lines.append("\n✅ All enabled sites passed live search + link audit.")
+        elif len(grouped["ok"]) == len(rows):
+            lines.append("\n✅ Search passed for all sites; review link issues above.")
         return "\n".join(lines)
 
     sites = list(SITE_STATUS.values())
