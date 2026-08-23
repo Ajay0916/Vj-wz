@@ -272,14 +272,20 @@ def _site_display_name(site):
     return name
 
 
-def _group_sites_param(group):
-    """Comma-separated enabled site ids for a group button, or "" for All."""
+def _group_sites_param(group, full_all=False):
+    """Enabled site IDs for a group.
+
+    The All button searches general sites only. ``full_all=True`` (from -a)
+    searches every enabled site across general/course/book/dedicated groups.
+    """
     if not SITES:
         return ""
     if group == "all":
+        if full_all:
+            return ",".join(s for s in SITES if s != "all")
+        excluded = ALL_SITES_EXCLUDE | COURSE_SITES | BOOK_GROUP_SITES
         return ",".join(
-            s for s in SITES
-            if s != "all" and s not in ALL_SITES_EXCLUDE
+            s for s in SITES if s != "all" and s not in excluded
         )
     members = GROUP_SITES.get(group)
     if not members:
@@ -339,13 +345,11 @@ async def search(
             LOGGER.info(f"API Searching: {key} from {site} (limit={limit}){extra}")
             if site in GROUP_NAMES or "," in site:
                 api = f"{Config.SEARCH_API_LINK}/api/v1/all/search?query={quote(key)}&limit={limit}"
-                group_sites = _group_sites_param(site)
+                group_sites = _group_sites_param(
+                    site, bool(opts.get("all_sites"))
+                )
                 if not group_sites and "," in site:
                     group_sites = site
-                if not group_sites and opts.get("all_sites") and SITES:
-                    group_sites = ",".join(
-                        s for s in SITES if s != "all" and s not in ALL_SITES_EXCLUDE
-                    )
                 hide = opts.get("hide_sites")
                 if hide:
                     hidden = {
