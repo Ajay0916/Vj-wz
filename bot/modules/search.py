@@ -3,6 +3,7 @@ import re
 import time
 from niquests import AsyncSession
 from html import escape
+from collections import Counter
 from secrets import token_hex
 from urllib.parse import quote
 from pyrogram.enums import ButtonStyle
