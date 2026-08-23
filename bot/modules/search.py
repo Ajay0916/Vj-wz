@@ -274,8 +274,13 @@ def _site_display_name(site):
 
 def _group_sites_param(group):
     """Comma-separated enabled site ids for a group button, or "" for All."""
-    if group == "all" or not SITES:
+    if not SITES:
         return ""
+    if group == "all":
+        return ",".join(
+            s for s in SITES
+            if s != "all" and s not in ALL_SITES_EXCLUDE
+        )
     members = GROUP_SITES.get(group)
     if not members:
         return ""
@@ -407,11 +412,11 @@ async def search(
             if opts.get("timeout"):
                 req_timeout = int(opts["timeout"]) + 60
             elif method == "apisearch" and opts.get("all_sites"):
-                req_timeout = 900
+                req_timeout = 960
             else:
-                req_timeout = 60
+                req_timeout = 180
             if page_spec and page_spec not in ("1",) and (page_spec == "0" or "-" in page_spec):
-                req_timeout = max(req_timeout, 300)
+                req_timeout = max(req_timeout, 360)
             async with AsyncSession(timeout=req_timeout) as client:
                 if method == "apisearch" and ((page_spec and page_spec != "1") or multi_query):
                     # -p spec (N | 0 | A-B) is passed to the API, which
@@ -452,6 +457,10 @@ async def search(
                         search_results = dict(search_results)
                         search_results["data"] = _dedup_rows(search_results.get("data") or [])
                         search_results["total"] = len(search_results["data"])
+            if not isinstance(search_results, dict):
+                raise RuntimeError("Invalid response from search API")
+            search_results.setdefault("data", [])
+            search_results.setdefault("total", len(search_results["data"]))
             if isinstance(search_results, dict):
                 api_error = search_results.get("error") or search_results.get("detail")
                 if api_error:
@@ -684,6 +693,36 @@ async def get_result(search_results, key, message, method):
                             msg += f"• {escape(str(f))[:90]}<br>"
                         if len(files) > 3:
                             msg += f"<i>+{len(files) - 3} more</i><br>"
+                    api_parts = result.get("parts")
+                    if isinstance(api_parts, list):
+                        part_links = []
+                        for part_no, part in enumerate(
+                            (item for item in api_parts if isinstance(item, dict)), 1
+                        ):
+                            part_url = part.get("url") or part.get("download")
+                            if not part_url:
+                                continue
+                            part_name = (
+                                part.get("label")
+                                or part.get("name")
+                                or part.get("title")
+                                or f"Download Part {part_no}"
+                            )
+                            part_dl = _dl_link(
+                                part_url,
+                                part_name,
+                                part.get("extension") or "",
+                                part.get("short") or "",
+                            )
+                            part_links.append(
+                                "<a href='{}'>{}</a> | <a href='{}'>Share</a>".format(
+                                    part_dl,
+                                    escape(str(part_name)),
+                                    _share_link(part_dl),
+                                )
+                            )
+                        if part_links:
+                            msg += "<b>Download Links:</b><br>" + "<br>".join(part_links) + "<br>"
                     _links = []
                     if result.get("torrent"):
                         _dl = _dl_link(result["torrent"], result.get("name") or "", result.get("extension") or "", result.get("short") or "")
@@ -783,7 +822,28 @@ def _rentry_blocks(search_results, key, method):
             line += " — " + " — ".join(parts)
         if tags:
             line += " — " + " • ".join(tags)
+        api_parts = [
+            part for part in (result.get("parts") or [])
+            if isinstance(part, dict) and (part.get("url") or part.get("download"))
+        ]
         links = []
+        for part_no, part in enumerate(api_parts, 1):
+            part_url = part.get("url") or part.get("download")
+            part_name = (
+                part.get("label")
+                or part.get("name")
+                or part.get("title")
+                or f"Download Part {part_no}"
+            )
+            safe_part_name = re.sub(r"([\[\]()*_`])", r"\\\1", str(part_name))
+            dl = _dl_link(
+                part_url,
+                part_name,
+                part.get("extension") or "",
+                part.get("short") or "",
+            )
+            links.append(f"[📥 {safe_part_name}]({dl})")
+            links.append(f"[📤 Share]({_share_link(dl)})")
         if result.get("torrent"):
             dl = _dl_link(
                 result["torrent"],
@@ -1864,8 +1924,8 @@ async def torrent_search(_, message):
         )
         return
     if direct_site:
-        if SITES is None and Config.SEARCH_API_LINK:
-            api_ready = await _refresh_sites()
+        if Config.SEARCH_API_LINK:
+            await _refresh_sites()
         if SITES is None:
             await send_message(
                 message, "Search API is unavailable right now. Try again in a bit."
@@ -1976,13 +2036,14 @@ async def _need_state(message, user_id, site=None):
 async def torrent_search_update(_, query):
     user_id = query.from_user.id
     message = query.message
-    key, _ = _parse_search_cmd(message.reply_to_message.text)
+    origin_text = getattr(message.reply_to_message, "text", None) or ""
+    key, _ = _parse_search_cmd(origin_text)
     key = key or None
     data = query.data.split()
     if user_id != int(data[1]):
         await query.answer("Not Yours!", show_alert=True)
         return
-    if len(data) < 4 and data[2] not in ("fretry", "fsites", "cancel"):
+    if len(data) < 4 and data[2] not in ("fretry", "fsites", "cancel", "restartapi"):
         await query.answer("This search menu is stale.", show_alert=True)
         return
     if data[2] == "apipage":
