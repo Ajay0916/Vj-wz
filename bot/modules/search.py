@@ -2147,7 +2147,7 @@ async def torrent_search_update(_, query):
     origin_text = getattr(message.reply_to_message, "text", None) or ""
     key, _ = _parse_search_cmd(origin_text)
     key = key or _recover_origin_key(message, user_id) or None
-    if len(data) < 4 and data[2] not in ("fretry", "fsites", "cancel", "restartapi"):
+    if len(data) < 4 and data[2] not in ("fretry", "fsites", "cancel", "restartapi", "restartapi_go", "restartapi_no"):
         await query.answer("This search menu is stale.", show_alert=True)
         return
     if data[2] == "apipage":
