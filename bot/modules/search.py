@@ -263,7 +263,7 @@ async def _api_site_status_text(live=False):
                     f"{Config.SEARCH_API_LINK}/api/v1/test/all",
                     params={
                         "skip_search": 0,
-                        "limit": 1,
+                        "limit": 3,
                         "check_links": 1,
                         "max_link_checks": 3,
                         "link_timeout": 20,
@@ -317,6 +317,11 @@ async def _api_site_status_text(live=False):
         validity_counts = Counter(
             str(item.get("validity") or "not_checked") for item in audits
         )
+        sites_with_results = sum(
+            int((row.get("search_test") or {}).get("results", 0) > 0)
+            for row in rows
+        )
+        probed_sites = sum(int(item.get("checked", 0) > 0) for item in audits)
         link_issues = []
         for row in rows:
             audit = row.get("search_test", {}).get("link_audit") or {}
@@ -326,7 +331,9 @@ async def _api_site_status_text(live=False):
         lines = [
             "<b>🔴 API Live Status</b>",
             f"<b>Search OK:</b> ✅ {len(grouped['ok'])}/{len(rows)}",
+            f"<b>Results:</b> ✅ {sites_with_results}/{len(rows)}",
             f"<b>Base Reachable:</b> {reachable}/{len(rows)}",
+            f"<b>Sites Probed:</b> ✅ {probed_sites}/{len(rows)}",
             f"<b>Links Probed:</b> {links_checked}",
             f"<b>Links Valid:</b> ✅ {links_valid} | ⚠️ {links_unknown} | ❌ {links_invalid}",
             "<b>Audit:</b> "
@@ -372,7 +379,10 @@ async def _api_site_status_text(live=False):
                 lines.append(f"• +{remaining} more")
 
         if len(grouped["ok"]) == len(rows) and not link_issues:
-            lines.append("\n✅ All enabled sites passed live search + link audit.")
+            if payload.get("coverage_complete"):
+                lines.append("\n✅ Full coverage passed: real result + verified download path for every site.")
+            else:
+                lines.append("\n✅ All enabled sites passed live search + link audit.")
         elif len(grouped["ok"]) == len(rows):
             lines.append("\n✅ Search passed for all sites; review link issues above.")
         return "\n".join(lines)
