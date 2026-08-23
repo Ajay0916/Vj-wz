@@ -175,6 +175,91 @@ def _failure_buttons(user_id, key, site, method, category="all", quality="",
     return buttons.build_menu(2)
 
 
+def _format_seconds(value):
+    try:
+        seconds = max(0, int(value or 0))
+    except (TypeError, ValueError):
+        seconds = 0
+    minutes, seconds = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {minutes}m"
+    if minutes:
+        return f"{minutes}m {seconds}s"
+    return f"{seconds}s"
+
+
+async def _api_site_status_text():
+    """Fresh, short health report for `/s --status`."""
+    if not Config.SEARCH_API_LINK:
+        return "❌ Search API is not configured."
+    if not await _refresh_sites():
+        return "❌ Search API unavailable right now."
+
+    sites = list(SITE_STATUS.values())
+    if not sites:
+        return "⚠️ Site status is unavailable right now."
+
+    manual = [item for item in sites if item.get("manual_blocked")]
+    cooling = [
+        item for item in sites
+        if not item.get("manual_blocked")
+        and (item.get("blocked") or int(item.get("cooldown_remaining") or 0) > 0)
+    ]
+    recent_fails = [
+        item for item in sites
+        if not item.get("manual_blocked")
+        and item not in cooling
+        and int(item.get("fail_count") or 0) > 0
+    ]
+    healthy_count = len(sites) - len(manual) - len(cooling) - len(recent_fails)
+    lines = [
+        "<b>🩺 API Site Status</b>",
+        f"<b>Healthy:</b> ✅ {healthy_count}/{len(sites)}",
+    ]
+
+    if cooling:
+        lines.append("\n<b>⏳ Cooling Down</b>")
+        for item in cooling[:10]:
+            remaining = _format_seconds(item.get("cooldown_remaining"))
+            fails = int(item.get("fail_count") or 0)
+            error = str(item.get("last_error") or "").strip()
+            row = (
+                f"• <code>{escape(str(item.get('site') or 'unknown'))}</code> — "
+                f"{remaining}, fails: {fails}"
+            )
+            if error:
+                row += f"\n  <i>{escape(error[:90])}</i>"
+            lines.append(row)
+        if len(cooling) > 10:
+            lines.append(f"• +{len(cooling) - 10} more")
+
+    if recent_fails:
+        lines.append("\n<b>⚠️ Recent Failures</b>")
+        for item in recent_fails[:8]:
+            error = str(item.get("last_error") or "").strip()
+            row = (
+                f"• <code>{escape(str(item.get('site') or 'unknown'))}</code> — "
+                f"fails: {int(item.get('fail_count') or 0)}"
+            )
+            if error:
+                row += f"\n  <i>{escape(error[:90])}</i>"
+            lines.append(row)
+        if len(recent_fails) > 8:
+            lines.append(f"• +{len(recent_fails) - 8} more")
+
+    if manual:
+        names = ", ".join(
+            escape(str(item.get("site") or "unknown")) for item in manual[:12]
+        )
+        extra = f" +{len(manual) - 12}" if len(manual) > 12 else ""
+        lines.append(f"\n<b>⛔ Disabled:</b> <code>{names}{extra}</code>")
+
+    if not cooling and not recent_fails and not manual:
+        lines.append("\n✅ All sites are healthy.")
+    return "\n".join(lines)
+
+
 def _site_display_name(site):
     if site in GROUP_NAMES:
         return GROUP_NAMES[site]
@@ -832,6 +917,7 @@ _FLAG_ONLY = {
     "-nv": "no_video",
     "-ov": "only_video",
     "--help": "help",
+    "--status": "status",
 }
 
 _PRESETS = {
@@ -1426,7 +1512,8 @@ SEARCH_HELP_TEXT = (
     "• <code>-se &lt;n&gt;</code> → season filter: <code>-se 5</code> (S05)\n"
     "• <code>-ep &lt;n&gt;</code> → episode filter: <code>-ep 3</code> (S01E03 ke sath best)\n"
     "• <code>-auto</code> → best (top seeders) result DIRECT leech\n"
-    "&nbsp;&nbsp;&nbsp;&nbsp;Leech args passthrough: <code>-sp 2GB -n Name -d</code>\n\n"
+    "&nbsp;&nbsp;&nbsp;&nbsp;Leech args passthrough: <code>-sp 2GB -n Name -d</code>\n"
+    "• <code>--status</code> → API site health report\n\n"
     "Presets (Hindi movies):\n"
     "• <code>-hd</code> → hindi + 1080p | <code>-4k</code> → 4K\n"
     "• <code>-480</code>/<code>-720</code>/<code>-1080</code> → resolution\n"
@@ -1732,6 +1819,9 @@ async def torrent_search(_, message):
     key, opts = _parse_search_cmd(message.text)
     if opts.get("help"):
         await send_message(message, SEARCH_HELP_TEXT)
+        return
+    if opts.get("status"):
+        await send_message(message, await _api_site_status_text())
         return
     if opts.get("restart_api"):
         confirm_buttons = ButtonMaker()
