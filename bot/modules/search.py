@@ -1270,6 +1270,11 @@ def _parse_search_cmd(text):
             opts[_WORD_FLAGS[parts[i - 1]]] = part
             i -= 2
             continue
+        if part == "-au":
+            # Bare -au means: use the main search key as the author query.
+            opts["author"] = True
+            i -= 1
+            continue
         if part in _FLAG_ONLY:
             opts[_FLAG_ONLY[part]] = True
             i -= 1
@@ -1319,6 +1324,9 @@ def _parse_search_cmd(text):
 
     key = _restore(key)
     opts = {k: _restore(v) for k, v in opts.items()}
+    if opts.get("author") is True:
+        opts["author_only"] = True
+        opts["author"] = key
     return key, opts
 
 
@@ -1397,6 +1405,9 @@ def _api_extra_params(opts, method, is_all=False):
             params.append("fresh=1")
         if opts.get("dedup"):
             params.append("dedup=1")
+        author = opts.get("author")
+        if author:
+            params.append(f"author={quote(author)}")
         include = opts.get("include")
         if include and "," not in str(include):
             params.append(f"include={quote(include)}")
@@ -1559,17 +1570,33 @@ def _format_matches(item, fmt):
 
 
 def _author_matches(item, author):
-    """Match a book result by author (authors field + author + name fallback)."""
-    a = str(author or "").lower().replace("_", " ").strip()
-    if not a:
+    """Match a complete author name, not merely any overlapping first name."""
+    words = [
+        w.lower()
+        for w in re.findall(r"\w+", str(author or "").replace("_", " "))
+        if len(w) > 1
+    ]
+    if not words:
         return True
-    text = " ".join(
-        str(x) for x in (item.get("authors") or [])
-    )
-    if item.get("author"):
-        text += " " + str(item["author"])
-    text += " " + str(item.get("name") or "")
-    return a in text.lower().replace("_", " ")
+    authors = item.get("authors")
+    if not isinstance(authors, list):
+        authors = [authors] if authors else []
+    def normalized(value):
+        return re.sub(r"[^\w]+", " ", str(value or "").lower()).strip()
+
+    author_text = normalized(" ".join([
+        *(str(author) for author in authors),
+        str(item.get("author") or ""),
+    ]))
+    context_text = normalized(" ".join([
+        str(item.get("name") or ""),
+        str(item.get("info") or ""),
+        str(item.get("publisher") or ""),
+    ]))
+    if len(words) == 1:
+        return words[0] in author_text or words[0] in context_text
+    phrases = (" ".join(words), " ".join(reversed(words)))
+    return any(phrase in author_text for phrase in phrases) or phrases[0] in context_text
 
 
 ADULT_KEYWORDS = (
@@ -1703,9 +1730,8 @@ def _apply_client_filters(results, opts, query=""):
             out = [r for r in out if any(_format_matches(r, f) for f in formats)]
     author = opts.get("author")
     if author:
-        words = _words(author, underscore=True)
-        if words:
-            out = [r for r in out if any(_author_matches(r, w) for w in words)]
+        phrases = _words(author, underscore=True)
+        out = [r for r in out if any(all(_author_matches(r, w) for w in phrase.split()) for phrase in phrases)]
     language = opts.get("language")
     if language and "," in str(language):
         langs = _words(language)
@@ -1797,7 +1823,7 @@ SEARCH_HELP_TEXT = (
     "• <code>-mx &lt;size&gt;</code> → max size cap: <code>2GB</code>\n"
     "• <code>-w &lt;format&gt;</code> → file type: <code>mkv</code>, <code>mp4</code>, <code>pdf</code>\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Multi: <code>-w pdf,epub,mobi</code>\n"
-    "• <code>-au &lt;author&gt;</code> → author filter (books): <code>-au james</code>, multi-word: <code>-au james_clear</code>\n"
+    "• <code>-au</code> → main key ko author-only search karo: <code>/s james clear -l 0 -p 0 -au</code>\n"
     "• <code>-ex</code> → exact title match (books): <code>-ex</code>\n"
     "• <code>-S &lt;sort&gt;</code> → <code>seeders</code>, <code>size</code>, <code>date</code>\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;<code>quality</code> bhi: <code>-S quality</code>\n"
