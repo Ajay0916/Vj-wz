@@ -152,6 +152,29 @@ def _site_status(site):
     return SITE_STATUS.get(site) or {}
 
 
+def _failure_buttons(user_id, key, site, method, category="all", quality="",
+                     language="all", format_="all", size="all"):
+    """Retry / alternate-site / source actions for a failed API search."""
+    SEARCH_FAILURES[user_id] = {
+        "key": key,
+        "site": site,
+        "method": method,
+        "category": category,
+        "quality": quality,
+        "language": language,
+        "format": format_,
+        "size": size,
+    }
+    buttons = ButtonMaker()
+    buttons.data_button("🔁 Retry", f"torser {user_id} fretry")
+    buttons.data_button("🌐 Other Sites", f"torser {user_id} fsites {method}")
+    base_url = str(_site_status(site).get("url") or "")
+    if base_url:
+        buttons.url_button("🔗 Open Site", base_url)
+    buttons.data_button("Cancel", f"torser {user_id} cancel", position="footer")
+    return buttons.build_menu(2)
+
+
 def _site_display_name(site):
     if site in GROUP_NAMES:
         return GROUP_NAMES[site]
@@ -352,12 +375,20 @@ async def search(
                         await edit_message(
                             message,
                             f"{escape(str(api_error))}\nTorrent Site:- <i>{_site_display_name(site)}</i>",
+                            _failure_buttons(
+                                user_id, key, site, method, category, quality,
+                                language, format_, size,
+                            ),
                         )
                     return
             if search_results["total"] == 0:
                 await edit_message(
                     message,
                     f"No result found for <i>{key or 'results'}</i>\nTorrent Site:- <i>{_site_display_name(site)}</i>",
+                    _failure_buttons(
+                        user_id, key, site, method, category, quality,
+                        language, format_, size,
+                    ),
                 )
                 return
             relaxed_filters = search_results.get("relaxed_filters")
@@ -368,6 +399,10 @@ async def search(
                 await edit_message(
                     message,
                     f"No result found for <i>{key or 'results'}</i> with the applied filters\nTorrent Site:- <i>{_site_display_name(site)}</i>",
+                    _failure_buttons(
+                        user_id, key, site, method, category, quality,
+                        language, format_, size,
+                    ),
                 )
                 return
             msg = f"<b>Found {min(len(search_results), TELEGRAPH_LIMIT)}</b>"
@@ -382,7 +417,14 @@ async def search(
             if relaxed_filters:
                 msg += " <i>(filters relaxed)</i>"
         except Exception as e:
-            await edit_message(message, str(e))
+            await edit_message(
+                message,
+                str(e),
+                _failure_buttons(
+                    user_id, key, site, method, category, quality,
+                    language, format_, size,
+                ) if method.startswith("api") else None,
+            )
             return
     else:
         LOGGER.info(f"PLUGINS Searching: {key} from {site}")
@@ -738,6 +780,7 @@ FILTER_SIZES = ["all", "small", "medium", "large"]
 # In-memory filter state (user_id -> dict) so the second filter page can use
 # short callbacks (Telegram callback_data is limited to 64 bytes).
 FILTER_STATE = {}
+SEARCH_FAILURES = {}
 
 # Per-command search options set with /search -l <N> -s <S> -p <spec> -f
 # (keyed by (user_id, msg_id) because callbacks only carry the original
@@ -1840,7 +1883,11 @@ async def torrent_search_update(_, query):
     data = query.data.split()
     if user_id != int(data[1]):
         await query.answer("Not Yours!", show_alert=True)
-    elif data[2] == "apipage":
+        return
+    if len(data) < 4 and data[2] not in ("fretry", "fsites", "cancel"):
+        await query.answer("This search menu is stale.", show_alert=True)
+        return
+    if data[2] == "apipage":
         await query.answer()
         page = int(data[3]) if len(data) > 3 and data[3].isdigit() else 1
         method = data[4] if len(data) > 4 else "apisearch"
@@ -2118,6 +2165,22 @@ async def torrent_search_update(_, query):
     elif data[2] == "restartapi_no":
         await query.answer("Cancelled!")
         await delete_message(message)
+    elif data[2] == "fretry":
+        ctx = SEARCH_FAILURES.get(user_id)
+        if not ctx:
+            await query.answer("Search context expired.", show_alert=True)
+            return
+        await query.answer("Retrying...")
+        await edit_message(message, _searching_msg(ctx["key"], ctx["site"]))
+        await search(
+            ctx["key"], ctx["site"], message, ctx["method"], ctx["category"],
+            ctx["quality"], ctx["language"], ctx["format"], ctx["size"],
+        )
+    elif data[2] == "fsites":
+        await query.answer()
+        method = data[3] if len(data) > 3 else "apisearch"
+        button = await api_buttons(user_id, method)
+        await edit_message(message, "Choose another site:", button)
     elif data[2] != "cancel":
         await query.answer()
         site = data[2]
@@ -2153,7 +2216,6 @@ async def torrent_search_update(_, query):
                 f"<b>Searching for <i>{key}</i>\nTorrent Site:- <i>{site.capitalize()}</i></b>",
             )
             await search(key, site, message, method)
-
     else:
         await query.answer()
         FILTER_STATE.pop(user_id, None)
