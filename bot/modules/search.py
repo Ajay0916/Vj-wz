@@ -1,4 +1,6 @@
+import asyncio
 import re
+import time
 from niquests import AsyncSession
 from html import escape
 from secrets import token_hex
@@ -81,9 +83,66 @@ def _api_headers():
 PLUGINS = []
 SITES = None
 SITE_STATUS = {}
+SEARCH_ORIGINS = {}
 TELEGRAPH_LIMIT = 9999999
 # rentry.co hard cap is 200K chars; chunk below it.
 RENTRY_CHUNK = 180000
+STATE_MAX_ENTRIES = 1000
+STATE_TTL_SECONDS = 6 * 3600
+_STATE_TOUCHED = {}
+
+
+def _state_touched(mapping):
+    """Return the timestamp map owned by one lookup table."""
+    return _STATE_TOUCHED.setdefault(id(mapping), {})
+
+
+def _remember_state(mapping, key, value):
+    """Bound callback lookup tables so long-running bots cannot leak memory."""
+    touched = _state_touched(mapping)
+    now = time.monotonic()
+    for state_key, seen_at in list(touched.items()):
+        if now - seen_at > STATE_TTL_SECONDS:
+            touched.pop(state_key, None)
+            mapping.pop(state_key, None)
+    if key in mapping:
+        mapping.pop(key)
+    while len(mapping) >= STATE_MAX_ENTRIES:
+        oldest = min(touched, key=touched.get, default=None)
+        if oldest is None:
+            break
+        mapping.pop(oldest, None)
+        touched.pop(oldest, None)
+    mapping[key] = value
+    touched[key] = now
+
+
+def _drop_state(mapping, key):
+    mapping.pop(key, None)
+    _STATE_TOUCHED.get(id(mapping), {}).pop(key, None)
+
+
+def _recover_origin_key(message, user_id):
+    """Recover the query even when Telegram drops the reply chain."""
+    origin = getattr(message, "reply_to_message", None)
+    candidates = []
+    if origin is not None and getattr(origin, "id", None):
+        candidates.extend((origin.id, (user_id, origin.id)))
+    if getattr(message, "id", None):
+        candidates.append(message.id)
+    for candidate in candidates:
+        key = SEARCH_ORIGINS.get(candidate)
+        if key:
+            return key
+    return (SEARCH_FAILURES.get(user_id) or {}).get("key")
+
+
+def _safe_html_attr(url):
+    return escape(str(url or "#"), quote=True)
+
+
+def _safe_markdown_url(url):
+    return quote(str(url or "#"), safe="/:?&=%#@!~()'*,;-_.").replace("(", "%28").replace(")", "%29")
 
 
 async def _refresh_sites():
@@ -276,7 +335,7 @@ def _group_sites_param(group, full_all=False):
     """Enabled site IDs for a group.
 
     The All button searches general sites only. ``full_all=True`` (from -a)
-    searches every enabled site across general/course/book/dedicated groups.
+    adds Courses and Books groups; dedicated-button sites remain excluded.
     """
     if not SITES:
         return ""
@@ -300,8 +359,8 @@ PAGE2_SITES = {
     "yts",
 }
 
-# Sites excluded from -a (all-sites) search: audiobookbay has its own
-# dedicated button, so it shouldn't flood every "search all" result.
+# Dedicated-button sites never flood grouped searches. BT4G remains
+# available through its own button only.
 ALL_SITES_EXCLUDE = {
     "audiobookbay",
     "downloadly",
@@ -350,6 +409,7 @@ async def search(
                 )
                 if not group_sites and "," in site:
                     group_sites = site
+                requested_group_sites = group_sites
                 hide = opts.get("hide_sites")
                 if hide:
                     hidden = {
@@ -357,16 +417,22 @@ async def search(
                         for s in str(hide).split(",")
                         if s.strip()
                     }
-                    if not group_sites and SITES:
-                        # All-button / default combo: honour -hs by searching
-                        # every enabled site except the hidden ones.
-                        group_sites = ",".join(s for s in SITES if s != "all")
+                    if not requested_group_sites:
+                        requested_group_sites = _group_sites_param(
+                            "all", bool(opts.get("all_sites"))
+                        )
                     group_sites = ",".join(
                         s
-                        for s in group_sites.split(",")
+                        for s in requested_group_sites.split(",")
                         if s.strip().lower() not in hidden
                     )
-                if group_sites:
+                    if not group_sites:
+                        await edit_message(
+                            message,
+                            "Saari sites hide ho gayi hain — <code>-hs</code> list check karo.",
+                        )
+                        return
+                elif requested_group_sites:
                     api += f"&sites={quote(group_sites)}"
                 elif hide:
                     await edit_message(
@@ -541,11 +607,22 @@ async def search(
             pattern=key, plugins=[site], category="all"
         )
         search_id = search.id
+        plugin_deadline = time.monotonic() + 900
         while True:
             result_status = await TorrentManager.qbittorrent.search.status(search_id)
+            if not result_status:
+                if time.monotonic() >= plugin_deadline:
+                    await TorrentManager.qbittorrent.search.delete(search_id)
+                    raise RuntimeError("Plugin search timed out")
+                await asyncio.sleep(0.5)
+                continue
             status = result_status[0].status
             if status != "Running":
                 break
+            if time.monotonic() >= plugin_deadline:
+                await TorrentManager.qbittorrent.search.delete(search_id)
+                raise RuntimeError("Plugin search timed out")
+            await asyncio.sleep(0.5)
         dict_search_results = await TorrentManager.qbittorrent.search.results(
             id=search_id, limit=TELEGRAPH_LIMIT
         )
@@ -644,7 +721,7 @@ async def get_result(search_results, key, message, method):
         if method.startswith("api"):
             try:
                 if result.get("name"):
-                    msg += f"<code><a href='{result.get('url') or '#'}'>{escape(result['name'])}</a></code><br>"
+                    msg += f"<code><a href='{_safe_html_attr(result.get('url'))}'>{escape(result['name'])}</a></code><br>"
                 if "torrents" in result.keys():
                     for subres in result["torrents"]:
                         msg += f"<b>Quality: </b>{subres['quality']} | <b>Type: </b>{subres['type']} | "
@@ -703,6 +780,7 @@ async def get_result(search_results, key, message, method):
                     api_parts = result.get("parts")
                     if isinstance(api_parts, list):
                         part_links = []
+                        part_urls = set()
                         for part_no, part in enumerate(
                             (item for item in api_parts if isinstance(item, dict)), 1
                         ):
@@ -721,6 +799,7 @@ async def get_result(search_results, key, message, method):
                                 part.get("extension") or "",
                                 part.get("short") or "",
                             )
+                            part_urls.add(str(part_url).strip())
                             part_links.append(
                                 "<a href='{}'>{}</a> | <a href='{}'>Share</a>".format(
                                     part_dl,
@@ -735,7 +814,7 @@ async def get_result(search_results, key, message, method):
                         _dl = _dl_link(result["torrent"], result.get("name") or "", result.get("extension") or "", result.get("short") or "")
                         _links.append("<a href='{}'>Direct Link</a>".format(_dl))
                         _links.append("<a href='{}'>Share</a>".format(_share_link(_dl)))
-                    if result.get("download"):
+                    if result.get("download") and str(result["download"]).strip() not in part_urls:
                         _alt = _dl_link(result["download"], result.get("name") or "", result.get("extension") or "", result.get("download_short") or "")
                         _links.append("<a href='{}'>Alt Link</a>".format(_alt))
                         _links.append("<a href='{}'>Share</a>".format(_share_link(_alt)))
@@ -750,7 +829,11 @@ async def get_result(search_results, key, message, method):
                         msg += "<br><br>"
                     else:
                         msg += "<br>"
-            except Exception:
+            except Exception as e:
+                LOGGER.warning(
+                    "Result render skipped index=%d site=%s error=%s",
+                    index, result.get("site"), e
+                )
                 continue
         else:
             msg += f"<a href='{result.descrLink}'>{escape(result.fileName)}</a><br>"
@@ -824,7 +907,7 @@ def _rentry_blocks(search_results, key, method):
         for t in ("site", "category", "quality", "language", "format", "date", "uploader"):
             if result.get(t):
                 tags.append(str(result[t]))
-        line = f"{index}. **[{name}]({url})**"
+        line = f"{index}. **[{name}]({_safe_markdown_url(url)})**"
         if parts:
             line += " — " + " — ".join(parts)
         if tags:
@@ -834,6 +917,7 @@ def _rentry_blocks(search_results, key, method):
             if isinstance(part, dict) and (part.get("url") or part.get("download"))
         ]
         links = []
+        part_urls = set()
         for part_no, part in enumerate(api_parts, 1):
             part_url = part.get("url") or part.get("download")
             part_name = (
@@ -851,6 +935,7 @@ def _rentry_blocks(search_results, key, method):
             )
             links.append(f"[📥 {safe_part_name}]({dl})")
             links.append(f"[📤 Share]({_share_link(dl)})")
+            part_urls.add(str(part_url).strip())
         if result.get("torrent"):
             dl = _dl_link(
                 result["torrent"],
@@ -860,7 +945,7 @@ def _rentry_blocks(search_results, key, method):
             )
             links.append(f"[📥 Direct Link]({dl})")
             links.append(f"[📤 Share]({_share_link(dl)})")
-        if result.get("download"):
+        if result.get("download") and str(result["download"]).strip() not in part_urls:
             alt = _dl_link(
                 result["download"],
                 result.get("name") or "",
@@ -1495,7 +1580,10 @@ def _apply_client_filters(results, opts, query=""):
     bounds = _year_bounds(opts.get("year"))
     if bounds:
         lo, hi = bounds
-        out = [r for r in out if lo <= (_result_year(r) or -1) <= hi]
+        out = [
+            r for r in out
+            if _result_year(r) is None or lo <= _result_year(r) <= hi
+        ]
     season = opts.get("season")
     episode = opts.get("episode")
     if season is not None or episode is not None:
@@ -1557,10 +1645,10 @@ SEARCH_HELP_TEXT = (
     "• <code>-nv</code> → video results hatao (1080p/mkv/webrip) - courses ke liye useful\n"
     "• <code>-ov</code> → SIRF video results (movies/webseries/TV): 480p/720p/1080p/4K/mkv/WEB-DL/S01E02 sab - anime/cartoon nahi - <code>-nv</code> ka ulta\n"
     "• <code>-g &lt;site&gt;</code> → direct search, buttons skip\n"
-    "&nbsp;&nbsp;&nbsp;&nbsp;Groups: <code>all</code> (17 sites), <code>books</code>, <code>courses</code>\n"
+    "&nbsp;&nbsp;&nbsp;&nbsp;Groups: <code>all</code> (general sites), <code>books</code>, <code>courses</code>\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Multiple: <code>1337x,tgx,yts</code>\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Hide sites: <code>-hs 1337x,tgx</code> (ulta <code>-g</code>)\n"
-    "• <code>-a</code> → SAB sites ek sath (31: general + books + courses)\n"
+    "• <code>-a</code> → general + courses + books ek sath\n"
     "• <code>-q &lt;quality&gt;</code> → <code>480</code>, <code>720</code>, <code>1080</code>, <code>4k</code>\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Multi: <code>-q 1080p,4k</code>\n"
     "• <code>-lng &lt;lang&gt;</code> → <code>hindi</code>, <code>english</code>, <code>tamil</code>, <code>telugu</code>, <code>dual</code>\n"
@@ -1915,12 +2003,13 @@ async def torrent_search(_, message):
         )
         return
     if opts:
-        SEARCH_OPTS[(user_id, message.id)] = opts
-        SEARCH_OPTS[user_id] = opts
-        SEARCH_OPTS[message.id] = opts
+        _remember_state(SEARCH_OPTS, (user_id, message.id), opts)
+        _remember_state(SEARCH_OPTS, message.id, opts)
     else:
-        SEARCH_OPTS.pop(user_id, None)
-        SEARCH_OPTS.pop(message.id, None)
+        _drop_state(SEARCH_OPTS, (user_id, message.id))
+        _drop_state(SEARCH_OPTS, message.id)
+    _remember_state(SEARCH_ORIGINS, (user_id, message.id), key or None)
+    _remember_state(SEARCH_ORIGINS, message.id, key or None)
     direct_site = opts.get("site")
     if direct_site and not key:
         await send_message(
@@ -1957,8 +2046,8 @@ async def torrent_search(_, message):
             # The direct-search message's reply_to_message is not reliable
             # (Pyrogram may drop it), so also key the options by this
             # message id - _search_opts falls back to src.id.
-            SEARCH_OPTS[searching.id] = opts
-            SEARCH_OPTS[user_id] = opts
+            _remember_state(SEARCH_OPTS, searching.id, opts)
+            _remember_state(SEARCH_ORIGINS, searching.id, key)
             await search(key, direct_site, searching, "apisearch")
         return
     # Bare "/search" (or "/search -l 5" with no key) keeps the old
@@ -2043,13 +2132,21 @@ async def _need_state(message, user_id, site=None):
 async def torrent_search_update(_, query):
     user_id = query.from_user.id
     message = query.message
-    origin_text = getattr(message.reply_to_message, "text", None) or ""
-    key, _ = _parse_search_cmd(origin_text)
-    key = key or None
     data = query.data.split()
-    if user_id != int(data[1]):
+    if len(data) < 3:
+        await query.answer("Invalid action.", show_alert=True)
+        return
+    try:
+        owner_id = int(data[1])
+    except (IndexError, ValueError):
+        await query.answer("Invalid action.", show_alert=True)
+        return
+    if user_id != owner_id:
         await query.answer("Not Yours!", show_alert=True)
         return
+    origin_text = getattr(message.reply_to_message, "text", None) or ""
+    key, _ = _parse_search_cmd(origin_text)
+    key = key or _recover_origin_key(message, user_id) or None
     if len(data) < 4 and data[2] not in ("fretry", "fsites", "cancel", "restartapi"):
         await query.answer("This search menu is stale.", show_alert=True)
         return
@@ -2071,7 +2168,7 @@ async def torrent_search_update(_, query):
         await query.answer()
         site = data[3] if len(data) > 3 else "all"
         category = data[4] if len(data) > 4 else "all"
-        FILTER_STATE.pop(user_id, None)
+        _drop_state(FILTER_STATE, user_id)
         button = filter_buttons(user_id, site, category, "all", "all", "all")
         await edit_message(
             message,
@@ -2087,14 +2184,14 @@ async def torrent_search_update(_, query):
         await query.answer()
         site, category, quality, language, format_ = _parse_filters(data)
         prev = FILTER_STATE.get(user_id) or {}
-        FILTER_STATE[user_id] = {
+        _remember_state(FILTER_STATE, user_id, {
             "site": site,
             "category": category,
             "quality": quality,
             "language": language,
             "format": format_,
             "size": prev.get("size", "all"),
-        }
+        })
         button = filter_size_buttons(user_id, FILTER_STATE[user_id]["size"])
         await edit_message(
             message,
@@ -2174,14 +2271,14 @@ async def torrent_search_update(_, query):
         group = data[3] if len(data) > 3 else "all"
         method = data[4] if len(data) > 4 else "apisearch"
         if method == "apisearch":
-            FILTER_STATE[user_id] = {
+            _remember_state(FILTER_STATE, user_id, {
                 "site": group,
                 "category": "all",
                 "quality": "all",
                 "language": "all",
                 "format": "all",
                 "size": "all",
-            }
+            })
             button = filter_group_buttons(user_id, group, "all", "all", "all")
             await edit_message(
                 message,
@@ -2290,19 +2387,26 @@ async def torrent_search_update(_, query):
                 commit = body.get("message", "").replace("Updated to ", "").split(".")[0]
                 await edit_message(
                     message,
-                    "<i>🔄 Restarting API...\nTesting all sites, please wait...</i>",
+                    "<i>🔄 Restarting API...\nWaiting until it is ready...</i>",
                 )
-                await _aio.sleep(15)
-                health = await client.get(
-                    f"{Config.SEARCH_API_LINK.rstrip('/')}/health", timeout=10
-                )
-                hdata = health.json() if health.status_code == 200 else {}
-                version = hdata.get("version", "unknown")
+                version = "unknown"
+                for _ in range(90):
+                    await _aio.sleep(2)
+                    try:
+                        health = await client.get(
+                            f"{Config.SEARCH_API_LINK.rstrip('/')}/health", timeout=5
+                        )
+                        if health.status_code == 200:
+                            hdata = health.json()
+                            version = hdata.get("version", "unknown")
+                            break
+                    except Exception:
+                        continue
                 test = await client.get(
                     f"{Config.SEARCH_API_LINK.rstrip('/')}/api/v1/test/all",
                     params={"skip_search": 1},
                     headers=headers,
-                    timeout=60,
+                    timeout=120,
                 )
                 tdata = test.json() if test.status_code == 200 else {}
                 results = tdata.get("sites", [])
@@ -2384,5 +2488,6 @@ async def torrent_search_update(_, query):
             await search(key, site, message, method)
     else:
         await query.answer()
-        FILTER_STATE.pop(user_id, None)
+        _drop_state(FILTER_STATE, user_id)
+        _drop_state(SEARCH_FAILURES, user_id)
         await edit_message(message, "Search has been canceled!")
