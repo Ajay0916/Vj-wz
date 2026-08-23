@@ -281,9 +281,9 @@ def _group_sites_param(group, full_all=False):
     if not SITES:
         return ""
     if group == "all":
-        if full_all:
-            return ",".join(s for s in SITES if s != "all")
-        excluded = ALL_SITES_EXCLUDE | COURSE_SITES | BOOK_GROUP_SITES
+        excluded = ALL_SITES_EXCLUDE
+        if not full_all:
+            excluded = excluded | COURSE_SITES | BOOK_GROUP_SITES
         return ",".join(
             s for s in SITES if s != "all" and s not in excluded
         )
