@@ -228,10 +228,18 @@ def _site_sort_key(item):
     return (page, rank, name.lower())
 
 
+def _search_user_id(message):
+    """Get the requester whether called from a command or callback message."""
+    origin = getattr(message, "reply_to_message", None)
+    user = getattr(origin, "from_user", None) or getattr(message, "from_user", None)
+    return getattr(user, "id", 0)
+
+
 async def search(
     key, site, message, method, category="all", quality="", language="", format_="",
     size="all",
 ):
+    user_id = _search_user_id(message)
     opts = {}
     if method.startswith("api"):
         opts = _search_opts(message)
