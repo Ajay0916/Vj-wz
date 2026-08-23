@@ -186,6 +186,7 @@ PAGE2_SITES = {
 ALL_SITES_EXCLUDE = {
     "audiobookbay",
     "downloadly",
+    "bt4g",
 }
 
 
