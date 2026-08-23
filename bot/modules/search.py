@@ -404,14 +404,17 @@ async def search(
                     api += f"&sites={quote(group_sites)}"
             else:
                 api = f"{Config.SEARCH_API_LINK}/api/v1/recent?site={site}&limit={limit}"
-        api += _api_extra_params(opts, method, is_all=bool(opts.get("all_sites") and method == "apisearch"))
+        api += _api_extra_params(
+            opts, method,
+            is_all=(method == "apisearch" and (site == "all" or bool(opts.get("all_sites")))),
+        )
         try:
             page_spec = str(opts.get("page") or "").strip()
             queries = [q.strip() for q in str(key).split(",") if q.strip()][:3]
             multi_query = method == "apisearch" and len(queries) > 1
             if opts.get("timeout"):
                 req_timeout = int(opts["timeout"]) + 60
-            elif method == "apisearch" and opts.get("all_sites"):
+            elif method == "apisearch" and (site == "all" or opts.get("all_sites")):
                 req_timeout = 960
             else:
                 req_timeout = 180
