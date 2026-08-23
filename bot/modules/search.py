@@ -2122,7 +2122,24 @@ async def torrent_search(_, message):
             message,
             "<i>🔴 Live testing all enabled API sites... 1–4 minutes tak lag sakta hai.</i>",
         )
-        await edit_message(progress, await _api_site_status_text(live=True))
+
+        async def _live_with_progress():
+            task = asyncio.create_task(_api_site_status_text(live=True))
+            started = time.monotonic()
+            while not task.done():
+                await asyncio.sleep(20)
+                if task.done():
+                    break
+                elapsed = int(time.monotonic() - started)
+                await edit_message(
+                    progress,
+                    "<i>🔴 Live testing all enabled API sites...\n"
+                    f"⏳ Elapsed: <code>{elapsed}s</code> | Sites: search + real link probe</i>",
+                )
+            return await task
+
+        report = await _live_with_progress()
+        await edit_message(progress, report)
         return
     if opts.get("restart_api"):
         confirm_buttons = ButtonMaker()
