@@ -248,12 +248,91 @@ def _format_seconds(value):
     return f"{seconds}s"
 
 
-async def _api_site_status_text():
-    """Fresh, short health report for `/s --status`."""
+async def _api_site_status_text(live=False):
+    """Fresh health report for `/s --status` or real-search report for `--live`."""
     if not Config.SEARCH_API_LINK:
         return "❌ Search API is not configured."
     if not await _refresh_sites():
         return "❌ Search API unavailable right now."
+
+    if live:
+        started = time.monotonic()
+        try:
+            async with AsyncSession() as client:
+                response = await client.get(
+                    f"{Config.SEARCH_API_LINK}/api/v1/test/all",
+                    params={"skip_search": 0, "limit": 1},
+                    headers=_api_headers(),
+                    timeout=240,
+                )
+            if response.status_code != 200:
+                detail = ""
+                try:
+                    detail = str(response.json().get("detail") or "")
+                except Exception:
+                    pass
+                return (
+                    f"❌ Live API test failed (HTTP {response.status_code})."
+                    + (f"\n<code>{escape(detail[:160])}</code>" if detail else "")
+                )
+            payload = response.json()
+        except Exception as exc:
+            return f"❌ Live API test failed: <code>{escape(str(exc)[:180])}</code>"
+
+        rows = payload.get("sites") or []
+        if not rows:
+            return "⚠️ Live test returned no sites."
+
+        def state(row):
+            test = row.get("search_test") or {}
+            result = str(test.get("search") or "ERROR").upper()
+            if result == "OK":
+                return "ok"
+            if result == "TIMEOUT":
+                return "timeout"
+            return "failed"
+
+        grouped = {"ok": [], "timeout": [], "failed": []}
+        for row in rows:
+            grouped[state(row)].append(row)
+        reachable = sum(
+            bool(row.get("plain", {}).get("reachable")) for row in rows
+        )
+        elapsed = _format_seconds(int(time.monotonic() - started))
+        lines = [
+            "<b>🔴 API Live Status</b>",
+            f"<b>Search OK:</b> ✅ {len(grouped['ok'])}/{len(rows)}",
+            f"<b>Base Reachable:</b> {reachable}/{len(rows)}",
+            f"<b>Duration:</b> {elapsed}",
+        ]
+
+        if grouped["timeout"]:
+            names = ", ".join(
+                escape(str(row.get("site") or "unknown"))
+                for row in grouped["timeout"][:14]
+            )
+            extra = (
+                f" +{len(grouped['timeout']) - 14}"
+                if len(grouped["timeout"]) > 14 else ""
+            )
+            lines.extend(["", "<b>⏳ Timeouts</b>", f"<code>{names}{extra}</code>"])
+
+        if grouped["failed"]:
+            lines.append("\n<b>❌ Failed</b>")
+            for row in grouped["failed"][:12]:
+                test = row.get("search_test") or {}
+                reason = str(test.get("error") or test.get("search") or "Unknown")
+                lines.append(
+                    f"• <code>{escape(str(row.get('site') or 'unknown'))}</code> — "
+                    f"<i>{escape(reason[:90])}</i>"
+                )
+            remaining = len(grouped["failed"]) - 12
+            if remaining > 0:
+                lines.append(f"• +{remaining} more")
+
+        if len(grouped["ok"]) == len(rows):
+            lines.append("\n✅ All enabled sites passed live search.")
+        return "\n".join(lines)
 
     sites = list(SITE_STATUS.values())
     if not sites:
@@ -1070,6 +1149,7 @@ _FLAG_ONLY = {
     "-ov": "only_video",
     "--help": "help",
     "--status": "status",
+    "--live": "live",
 }
 
 _PRESETS = {
@@ -1668,7 +1748,8 @@ SEARCH_HELP_TEXT = (
     "• <code>-ep &lt;n&gt;</code> → episode filter: <code>-ep 3</code> (S01E03 ke sath best)\n"
     "• <code>-auto</code> → best (top seeders) result DIRECT leech\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Leech args passthrough: <code>-sp 2GB -n Name -d</code>\n"
-    "• <code>--status</code> → API site health report\n\n"
+    "• <code>--status</code> → fast API site health report\n"
+    "• <code>--live</code> → real search test for all enabled sites\n\n"
     "Presets (Hindi movies):\n"
     "• <code>-hd</code> → hindi + 1080p | <code>-4k</code> → 4K\n"
     "• <code>-480</code>/<code>-720</code>/<code>-1080</code> → resolution\n"
@@ -1977,6 +2058,13 @@ async def torrent_search(_, message):
         return
     if opts.get("status"):
         await send_message(message, await _api_site_status_text())
+        return
+    if opts.get("live"):
+        progress = await send_message(
+            message,
+            "<i>🔴 Live testing all enabled API sites... 1–4 minutes tak lag sakta hai.</i>",
+        )
+        await edit_message(progress, await _api_site_status_text(live=True))
         return
     if opts.get("restart_api"):
         confirm_buttons = ButtonMaker()
