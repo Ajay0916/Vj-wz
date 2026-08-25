@@ -585,7 +585,19 @@ async def nzb_leech(client, message):
     if Config.DISABLE_NZB:
         await message.reply("SABnzbd is currently disabled by the Bot Owner.")
         return
-    nzb_id = hydra_nzb_id(message, "/nzbleech")
+    text_parts = message.text.split()
+    nzb_id = None
+    if len(text_parts) > 1 and not text_parts[1].startswith(("http", "ftp", "/")):
+        potential_id = text_parts[1]
+        clean = potential_id.lstrip("-").replace("_", "")
+        if clean.isalnum() and not (potential_id.startswith("-") and clean.isalpha()):
+            nzb_id = potential_id
+            nzb_url = f"{Config.HYDRA_IP.rstrip('/')}/getnzb/api/{nzb_id}?apikey={Config.HYDRA_API_KEY}"
+            extra = " ".join(text_parts[2:])
+            message.text = f"/nzbleech {nzb_url} -e {extra}".strip()
+    else:
+        if "-e" not in message.text:
+            message.text += " -e"
     mirror_task = Mirror(client, message, is_leech=True, is_nzb=True)
     if nzb_id:
         mirror_task.nzb_id = nzb_id
@@ -593,11 +605,4 @@ async def nzb_leech(client, message):
 
 
 async def uphoster(client, message):
-    nzb_id = hydra_nzb_id(message, "/uphoster", force_extract=False)
-    if nzb_id and Config.DISABLE_NZB:
-        await message.reply("SABnzbd is currently disabled by the Bot Owner.")
-        return
-    mirror_task = Mirror(client, message, is_uphoster=True, is_nzb=bool(nzb_id))
-    if nzb_id:
-        mirror_task.nzb_id = nzb_id
-    bot_loop.create_task(mirror_task.new_event())
+    bot_loop.create_task(Mirror(client, message, is_uphoster=True).new_event())

@@ -66,7 +66,7 @@ class BotCommands:
         commands = cls._static_commands.copy()
 
         plugin_manager = get_plugin_manager()
-        if plugin_manager:
+        if plugin_manager and not Config.DISABLE_PLUGINS:
             for plugin_info in plugin_manager.list_plugins():
                 if plugin_info.enabled and plugin_info.commands:
                     for cmd in plugin_info.commands:

@@ -1502,10 +1502,10 @@ async def edit_user_settings(client, query):
     ]:
         await query.answer()
         await update_user_settings(query, data[2])
+    elif data[2] == "mega":
         if Config.DISABLE_MEGA:
             await query.answer("Mega is disabled by the Bot Owner.", show_alert=True)
             return
-    elif data[2] == "mega":
         await query.answer()
         msg, button = await get_user_settings(query.from_user, "mega")
         await edit_message(message, msg, button)
