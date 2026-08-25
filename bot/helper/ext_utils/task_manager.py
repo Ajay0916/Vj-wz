@@ -62,6 +62,8 @@ async def stop_duplicate_check(listener):
 
 
 async def check_running_tasks(listener, state="dl"):
+    if Config.DISABLE_QUEUE:
+        return False, None
     all_limit = safe_int(Config.QUEUE_ALL)
     state_limit = (
         safe_int(Config.QUEUE_DOWNLOAD)
@@ -169,6 +171,9 @@ async def start_from_queued():
 
 
 async def limit_checker(listener, yt_playlist=0):
+    if Config.DISABLE_LIMITS:
+        LOGGER.info("All size limits disabled.")
+        return
     LOGGER.info("Checking Size Limit...")
     if await CustomFilters.sudo("", listener.message):
         LOGGER.info("SUDO User. Skipping Size Limit...")

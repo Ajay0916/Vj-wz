@@ -119,7 +119,8 @@ async def main():
     bot_loop.create_task(get_packages_version())
     bot_loop.create_task(telegraph.create_account())
     bot_loop.create_task(rclone_serve_booter())
-    bot_loop.create_task(search_images())
+    if not Config.DISABLE_IMAGES:
+        bot_loop.create_task(search_images())
 
 
 bot_loop.run_until_complete(main())
@@ -168,7 +169,8 @@ from .modules.plugin_manager import register_plugin_commands
 
 plugin_manager = get_plugin_manager()
 plugin_manager.bot = TgClient.bot
-register_plugin_commands()
+if not Config.DISABLE_PLUGINS:
+    register_plugin_commands()
 
 from pyrogram.filters import regex
 from pyrogram.handlers import CallbackQueryHandler
