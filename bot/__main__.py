@@ -84,6 +84,7 @@ async def main():
     await TgClient.start_bot()
     bot_loop.create_task(TgClient.start_user())
     bot_loop.create_task(TgClient.start_helper_bots())
+    bot_loop.create_task(TgClient.start_stream_bots())
     bot_loop.create_task(TgClient.start_helper_users())
     try:
         await gather(load_configurations(), update_variables())
