@@ -495,7 +495,7 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
         if Config.DISABLE_HELPER:
             hidden_vars.update(["HELPER_TOKENS", "HELPER_STRINGS", "HELPER_BOT_PROXIES", "HELPER_USER_PROXIES"])
         if Config.DISABLE_HYPER:
-            hidden_vars.update(["USE_HYPER", "HYPER_CHUNK", "HYPER_PIPELINE", "HYPER_THREADS", "HYPER_LIMIT"])
+            hidden_vars.update(["USE_HYPER", "HYPER_CHUNK", "HYPER_PIPELINE", "HYPER_THREADS", "HYPER_LIMIT", "CPU_LIMIT", "THROTTLE_SERVICES"])
         if Config.DISABLE_UPHOSTER:
             hidden_vars.update(
                 [
