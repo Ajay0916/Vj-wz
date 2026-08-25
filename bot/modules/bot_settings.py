@@ -451,6 +451,8 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
             hidden_vars.update(["HELPER_TOKENS", "HELPER_STRINGS", "HELPER_BOT_PROXIES", "HELPER_USER_PROXIES"])
         if Config.DISABLE_HYPER:
             hidden_vars.update(["HYPER_CHUNK", "HYPER_PIPELINE", "HYPER_THREADS", "USE_HYPER"])
+        if Config.DISABLE_STREAM:
+            hidden_vars.update(["STREAM_TOKENS", "STREAM_PIPELINE", "STREAM_CHUNK", "STREAM_PER_CLIENT", "STREAM_GATE"])
         conf_dict = {
             k: v for k, v in Config.get_all().items() if not k.startswith("DISABLE_") and k not in hidden_vars
         }
