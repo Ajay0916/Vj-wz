@@ -513,8 +513,6 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
             )
         if Config.DISABLE_IMDB:
             hidden_vars.update(["IMDB_TEMPLATE"])
-        if Config.DISABLE_LIST:
-            hidden_vars.update(["INDEX_URL"])
 
         conf_dict = {
             k: v for k, v in Config.get_all().items() if not k.startswith("DISABLE_") and k not in hidden_vars
