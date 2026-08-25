@@ -396,6 +396,7 @@ PASSWORD_ERROR_MESSAGE = """
 
 
 def get_bot_commands():
+    from ...core.config_manager import Config
     from ...core.plugin_manager import get_plugin_manager
 
     static_commands = {
@@ -431,7 +432,7 @@ def get_bot_commands():
     commands = static_commands.copy()
 
     plugin_manager = get_plugin_manager()
-    if plugin_manager:
+    if plugin_manager and not Config.DISABLE_PLUGINS:
         for plugin_info in plugin_manager.list_plugins():
             if plugin_info.enabled and plugin_info.commands:
                 for cmd in plugin_info.commands:
@@ -447,12 +448,44 @@ def get_bot_commands():
 BOT_COMMANDS = get_bot_commands()
 
 
+DISABLE_COMMANDS = {
+    "DISABLE_JD": {"JdMirror", "JdLeech"},
+    "DISABLE_NZB": {"NzbMirror", "NzbLeech", "NzbSearch"},
+    "DISABLE_RSS": {"Rss"},
+    "DISABLE_SEARCH": {"Search"},
+    "DISABLE_YTDLP": {"Ytdl", "YtdlLeech"},
+    "DISABLE_TORRENTS": {"QbMirror", "QbLeech"},
+    "DISABLE_LEECH": {"Leech", "QbLeech", "JdLeech", "NzbLeech", "YtdlLeech"},
+    "DISABLE_IMAGES": {"AddImage", "Images"},
+    "DISABLE_UPHOSTER": {"UpHoster"},
+    "DISABLE_PLUGINS": {"Plugins"},
+    "DISABLE_SHELL": {"Shell", "AExec", "Exec", "ClearLocals"},
+    "DISABLE_IMDB": {"IMDB"},
+    "DISABLE_LIST": {"List"},
+    "DISABLE_CLONE": {"Clone"},
+    "DISABLE_MEDIAINFO": {"MediaInfo"},
+    "DISABLE_SESSION": {"RestartSessions", "GenPyroSess"},
+    "DISABLE_GOOGLE": {"Clone", "GDClean", "Count"},
+}
+
+
+def disabled_commands():
+    from ...core.config_manager import Config
+
+    hidden = set()
+    for _var, _cmds in DISABLE_COMMANDS.items():
+        if getattr(Config, _var, False):
+            hidden.update(_cmds)
+    return hidden
+
+
 def get_help_string():
     from ..telegram_helper.bot_commands import BotCommands
 
     help_lines = ["NOTE: Try each command without any argument to see more details."]
 
     commands = BotCommands.get_commands()
+    commands = {k: v for k, v in commands.items() if k not in disabled_commands()}
 
     for key, cmds in commands.items():
         cmd_attr = getattr(BotCommands, f"{key}Command", None)

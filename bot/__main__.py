@@ -81,20 +81,24 @@ async def main():
 
     Formatter.converter = changetz
 
-    await gather(
-        TgClient.start_bot(),
-        TgClient.start_user(),
-        TgClient.start_helper_bots(),
-        TgClient.start_helper_users(),
-        TgClient.start_stream_bots(),
-    )
-    await gather(load_configurations(), update_variables())
+    await TgClient.start_bot()
+    bot_loop.create_task(TgClient.start_user())
+    bot_loop.create_task(TgClient.start_helper_bots())
+    bot_loop.create_task(TgClient.start_helper_users())
+    try:
+        await gather(load_configurations(), update_variables())
+    except Exception as e:
+        LOGGER.error(f"load_configurations/update_variables failed: {e}")
 
-    await gather(
-        update_qb_options(),
-        update_aria2_options(),
-        update_nzb_options(),
-    )
+    try:
+        options_tasks = [update_aria2_options()]
+        if not Config.DISABLE_TORRENTS:
+            options_tasks.append(update_qb_options())
+        if not Config.DISABLE_NZB:
+            options_tasks.append(update_nzb_options())
+        await gather(*options_tasks)
+    except Exception as e:
+        LOGGER.error(f"service options update failed: {e}")
     from .core.jdownloader_booter import jdownloader
     from .helper.ext_utils.bot_utils import git_info, search_images
     from .helper.ext_utils.files_utils import clean_all

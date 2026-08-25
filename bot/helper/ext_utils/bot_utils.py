@@ -18,7 +18,7 @@ from aiofiles import open as aiopen
 from aiofiles.os import mkdir
 from aiofiles.os import path as aiopath
 from niquests import AsyncSession
-from pyrogram.enums import ButtonStyle, ChatType
+from pyrogram.enums import ButtonStyle
 from pyrogram.handlers import MessageHandler
 
 from ... import LOGGER, bot_loop, user_data
@@ -168,7 +168,7 @@ def compare_versions(v1, v2):
     )
 
 
-def bt_selection_buttons(id_, message=None):
+def bt_selection_buttons(id_):
     gid = id_[:12] if len(id_) > 25 else id_
     bot_id = _resolve_bot_id()
     pin = derive_pin(id_, bot_id)

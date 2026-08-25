@@ -541,26 +541,23 @@ async def jd_mirror(client, message):
     bot_loop.create_task(Mirror(client, message, is_jd=True).new_event())
 
 
-def hydra_nzb_id(message, cmd, force_extract=True):
-    text_parts = message.text.split()
-    if len(text_parts) > 1 and not text_parts[1].startswith(("http", "ftp", "/")):
-        potential_id = text_parts[1]
-        clean = potential_id.lstrip("-").replace("_", "")
-        if clean.isalnum() and not (potential_id.startswith("-") and clean.isalpha()):
-            nzb_url = f"{Config.HYDRA_IP.rstrip('/')}/getnzb/api/{potential_id}?apikey={Config.HYDRA_API_KEY}"
-            extra = " ".join(text_parts[2:])
-            message.text = f"{cmd} {nzb_url} -e {extra}".strip()
-            return potential_id
-    elif force_extract and "-e" not in message.text:
-        message.text += " -e"
-    return None
-
-
 async def nzb_mirror(client, message):
     if Config.DISABLE_NZB:
         await message.reply("SABnzbd is currently disabled by the Bot Owner.")
         return
-    nzb_id = hydra_nzb_id(message, "/nzbmirror")
+    text_parts = message.text.split()
+    nzb_id = None
+    if len(text_parts) > 1 and not text_parts[1].startswith(("http", "ftp", "/")):
+        potential_id = text_parts[1]
+        clean = potential_id.lstrip("-").replace("_", "")
+        if clean.isalnum() and not (potential_id.startswith("-") and clean.isalpha()):
+            nzb_id = potential_id
+            nzb_url = f"{Config.HYDRA_IP.rstrip('/')}/getnzb/api/{nzb_id}?apikey={Config.HYDRA_API_KEY}"
+            extra = " ".join(text_parts[2:])
+            message.text = f"/nzbmirror {nzb_url} -e {extra}".strip()
+    else:
+        if "-e" not in message.text:
+            message.text += " -e"
     mirror_task = Mirror(client, message, is_nzb=True)
     if nzb_id:
         mirror_task.nzb_id = nzb_id

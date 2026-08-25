@@ -308,6 +308,10 @@ async def edit_plugins_menu(client: Client, query):
 
 
 def register_plugin_commands():
+    from ..core.config_manager import Config
+
+    if Config.DISABLE_PLUGINS:
+        return
     from ..core.handlers import TgClient
     from ..helper.telegram_helper.bot_commands import BotCommands
 

@@ -839,8 +839,12 @@ async def get_user_settings(from_user, stype="main"):
         else:
             sd_msg = "Disabled"
 
-        buttons.data_button("YT Up Tools", f"userset {user_id} yttools")
-        buttons.data_button("Mega Tools", f"userset {user_id} mega")
+        if not Config.DISABLE_YTDLP:
+            buttons.data_button("YT Up Tools", f"userset {user_id} yttools")
+        if not Config.DISABLE_MEGA:
+            buttons.data_button("Mega Tools", f"userset {user_id} mega")
+
+
         if Config.DRIVE_CATEGORY_MODE:
             dc_enabled = user_dict.get("drive_cat_mode", False)
             buttons.data_button(
@@ -1498,6 +1502,9 @@ async def edit_user_settings(client, query):
     ]:
         await query.answer()
         await update_user_settings(query, data[2])
+        if Config.DISABLE_MEGA:
+            await query.answer("Mega is disabled by the Bot Owner.", show_alert=True)
+            return
     elif data[2] == "mega":
         await query.answer()
         msg, button = await get_user_settings(query.from_user, "mega")
