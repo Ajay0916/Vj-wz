@@ -154,6 +154,7 @@ DEFAULT_DESP = {
     "DISABLE_SEARCH": "Disable torrent search plugins. Saves network I/O. Default: False.",
     "DISABLE_YTDLP": "Disable YouTube/YT-DLP downloads. Default: False.",
     "DISABLE_THEMES": "Disable theme system. VJ + default style locked. Default: False.",
+    "DISABLE_STREAM": "Disable streaming feature. Default: False."
     "EQUAL_SPLITS": "Split files into equal parts of LEECH_SPLIT_SIZE. Default: False.",
     "EXCLUDED_EXTENSIONS": "File extensions to exclude from upload/clone. Space-separated.",
     "FFMPEG_CMDS": "Custom FFmpeg command presets. Dict format.",
@@ -322,6 +323,7 @@ NEW_ONOFF_VARS = [
     "DISABLE_HELPER",
     "DISABLE_HYPER",
     "DISABLE_THEMES",
+    "DISABLE_STREAM",
 ]
 
 
