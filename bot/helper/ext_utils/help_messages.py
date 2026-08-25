@@ -587,3 +587,28 @@ def get_help_string():
 
 
 help_string = get_help_string()
+
+
+DISABLE_COMMANDS = {
+    "DISABLE_RSS": ["Rss"],
+    "DISABLE_YTDLP": ["YoutubeSearch", "Ytdl", "YtdlLeech"],
+    "DISABLE_LEECH": ["LeechSet", "SetLeechThumbnail"],
+    "DISABLE_SEARCH": ["Search"],
+    "DISABLE_TORRENTS": ["Search"],
+    "DISABLE_JD": ["JdMirror", "JdLeech"],
+    "DISABLE_NZB": ["NzbMirror", "NzbLeech"],
+    "DISABLE_IMAGES": ["AddImage", "Images"],
+    "DISABLE_UPHOSTER": ["ChangeUphoster"],
+    "DISABLE_PLUGINS": ["Plugins"],
+    "DISABLE_SHELL": ["Shell", "Exec", "AExec", "ClearLocals"],
+    "DISABLE_IMDB": ["Imdb"],
+    "DISABLE_LIST": ["List"],
+    "DISABLE_CLONE": ["Clone"],
+    "DISABLE_MEDIAINFO": ["MediaInfo"],
+    "DISABLE_SESSION": ["GenPyroSess"],
+    "DISABLE_GOOGLE": ["GDClean"],
+    "DISABLE_LIMITS": ["LeechSet", "ThumbnailSet"],
+    "DISABLE_QUEUE": ["Queue"],
+    "DISABLE_RCLONE": ["Rclone"],
+    "DISABLE_API": ["Search"],
+}
