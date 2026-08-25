@@ -1,0 +1,1036 @@
+diff a/bot/modules/search.py b/bot/modules/search.py	(rejected hunks)
+@@ -1,6 +1,9 @@
++import asyncio
+ import re
++import time
+ from niquests import AsyncSession
+ from html import escape
++from collections import Counter
+ from secrets import token_hex
+ from urllib.parse import quote
+ from pyrogram.enums import ButtonStyle
+@@ -81,9 +84,66 @@ def _api_headers():
+ PLUGINS = []
+ SITES = None
+ SITE_STATUS = {}
++SEARCH_ORIGINS = {}
+ TELEGRAPH_LIMIT = 9999999
+ # rentry.co hard cap is 200K chars; chunk below it.
+ RENTRY_CHUNK = 180000
++STATE_MAX_ENTRIES = 1000
++STATE_TTL_SECONDS = 6 * 3600
++_STATE_TOUCHED = {}
++
++
++def _state_touched(mapping):
++    """Return the timestamp map owned by one lookup table."""
++    return _STATE_TOUCHED.setdefault(id(mapping), {})
++
++
++def _remember_state(mapping, key, value):
++    """Bound callback lookup tables so long-running bots cannot leak memory."""
++    touched = _state_touched(mapping)
++    now = time.monotonic()
++    for state_key, seen_at in list(touched.items()):
++        if now - seen_at > STATE_TTL_SECONDS:
++            touched.pop(state_key, None)
++            mapping.pop(state_key, None)
++    if key in mapping:
++        mapping.pop(key)
++    while len(mapping) >= STATE_MAX_ENTRIES:
++        oldest = min(touched, key=touched.get, default=None)
++        if oldest is None:
++            break
++        mapping.pop(oldest, None)
++        touched.pop(oldest, None)
++    mapping[key] = value
++    touched[key] = now
++
++
++def _drop_state(mapping, key):
++    mapping.pop(key, None)
++    _STATE_TOUCHED.get(id(mapping), {}).pop(key, None)
++
++
++def _recover_origin_key(message, user_id):
++    """Recover the query even when Telegram drops the reply chain."""
++    origin = getattr(message, "reply_to_message", None)
++    candidates = []
++    if origin is not None and getattr(origin, "id", None):
++        candidates.extend((origin.id, (user_id, origin.id)))
++    if getattr(message, "id", None):
++        candidates.append(message.id)
++    for candidate in candidates:
++        key = SEARCH_ORIGINS.get(candidate)
++        if key:
++            return key
++    return (SEARCH_FAILURES.get(user_id) or {}).get("key")
++
++
++def _safe_html_attr(url):
++    return escape(str(url or "#"), quote=True)
++
++
++def _safe_markdown_url(url):
++    return quote(str(url or "#"), safe="/:?&=%#@!~()'*,;-_.").replace("(", "%28").replace(")", "%29")
+ 
+ 
+ async def _refresh_sites():
+@@ -152,6 +212,246 @@ def _site_status(site):
+     return SITE_STATUS.get(site) or {}
+ 
+ 
++def _failure_buttons(user_id, key, site, method, category="all", quality="",
++                     language="all", format_="all", size="all"):
++    """Retry / alternate-site / source actions for a failed API search."""
++    SEARCH_FAILURES[user_id] = {
++        "key": key,
++        "site": site,
++        "method": method,
++        "category": category,
++        "quality": quality,
++        "language": language,
++        "format": format_,
++        "size": size,
++    }
++    buttons = ButtonMaker()
++    buttons.data_button("🔁 Retry", f"torser {user_id} fretry")
++    buttons.data_button("🌐 Other Sites", f"torser {user_id} fsites {method}")
++    base_url = str(_site_status(site).get("url") or "")
++    if base_url:
++        buttons.url_button("🔗 Open Site", base_url)
++    buttons.data_button("Cancel", f"torser {user_id} cancel", position="footer")
++    return buttons.build_menu(2)
++
++
++def _format_seconds(value):
++    try:
++        seconds = max(0, int(value or 0))
++    except (TypeError, ValueError):
++        seconds = 0
++    minutes, seconds = divmod(seconds, 60)
++    hours, minutes = divmod(minutes, 60)
++    if hours:
++        return f"{hours}h {minutes}m"
++    if minutes:
++        return f"{minutes}m {seconds}s"
++    return f"{seconds}s"
++
++
++async def _api_site_status_text(live=False):
++    """Fresh health report for `/s --status` or real-search report for `--live`."""
++    if not Config.SEARCH_API_LINK:
++        return "❌ Search API is not configured."
++    if not await _refresh_sites():
++        return "❌ Search API unavailable right now."
++
++    if live:
++        started = time.monotonic()
++        try:
++            async with AsyncSession() as client:
++                response = await client.get(
++                    f"{Config.SEARCH_API_LINK}/api/v1/test/all",
++                    params={
++                        "skip_search": 0,
++                        "limit": 3,
++                        "check_links": 1,
++                        "max_link_checks": 3,
++                        "link_timeout": 20,
++                    },
++                    headers=_api_headers(),
++                    timeout=600,
++                )
++            if response.status_code != 200:
++                detail = ""
++                try:
++                    detail = str(response.json().get("detail") or "")
++                except Exception:
++                    pass
++                return (
++                    f"❌ Live API test failed (HTTP {response.status_code})."
++                    + (f"\n<code>{escape(detail[:160])}</code>" if detail else "")
++                )
++            payload = response.json()
++        except Exception as exc:
++            return f"❌ Live API test failed: <code>{escape(str(exc)[:180])}</code>"
++
++        rows = payload.get("sites") or []
++        if not rows:
++            return "⚠️ Live test returned no sites."
++
++        def state(row):
++            test = row.get("search_test") or {}
++            result = str(test.get("search") or "ERROR").upper()
++            if result == "OK":
++                return "ok"
++            if result == "TIMEOUT":
++                return "timeout"
++            return "failed"
++
++        grouped = {"ok": [], "timeout": [], "failed": []}
++        for row in rows:
++            grouped[state(row)].append(row)
++        reachable = sum(
++            bool(row.get("plain", {}).get("reachable")) for row in rows
++        )
++        audits = [
++            row.get("search_test", {}).get("link_audit") or {}
++            for row in rows
++        ]
++        links_checked = sum(int(item.get("checked") or 0) for item in audits)
++        links_valid = sum(int(item.get("valid") or 0) for item in audits)
++        links_invalid = sum(int(item.get("invalid") or 0) for item in audits)
++        links_unknown = sum(int(item.get("unknown") or 0) for item in audits)
++        magnets_valid = sum(int(item.get("magnet_syntax_valid") or 0) for item in audits)
++        hashes_valid = sum(int(item.get("infohash_syntax_valid") or 0) for item in audits)
++        validity_counts = Counter(
++            str(item.get("validity") or "not_checked") for item in audits
++        )
++        sites_with_results = sum(
++            int((row.get("search_test") or {}).get("results", 0) > 0)
++            for row in rows
++        )
++        probed_sites = sum(int(item.get("checked", 0) > 0) for item in audits)
++        link_issues = []
++        for row in rows:
++            audit = row.get("search_test", {}).get("link_audit") or {}
++            if str(audit.get("validity") or "") in ("partial", "fail"):
++                link_issues.append((row, audit))
++        elapsed = _format_seconds(int(time.monotonic() - started))
++        lines = [
++            "<b>🔴 API Live Status</b>",
++            f"<b>Search OK:</b> ✅ {len(grouped['ok'])}/{len(rows)}",
++            f"<b>Results:</b> ✅ {sites_with_results}/{len(rows)}",
++            f"<b>Base Reachable:</b> {reachable}/{len(rows)}",
++            f"<b>Sites Probed:</b> ✅ {probed_sites}/{len(rows)}",
++            f"<b>Links Probed:</b> {links_checked}",
++            f"<b>Links Valid:</b> ✅ {links_valid} | ⚠️ {links_unknown} | ❌ {links_invalid}",
++            "<b>Audit:</b> "
++            f"✅ {validity_counts['pass']} | ⚠️ {validity_counts['partial']} | "
++            f"❌ {validity_counts['fail']} | ❓ {validity_counts['inconclusive']}",
++            f"<b>Magnet/Hash Syntax:</b> 🧲 {magnets_valid} | #️⃣ {hashes_valid}",
++            f"<b>Duration:</b> {elapsed}",
++        ]
++        if link_issues:
++            lines.append("\n<b>🔗 Link Issues</b>")
++            for row, audit in link_issues[:10]:
++                lines.append(
++                    f"• <code>{escape(str(row.get('site') or 'unknown'))}</code> — "
++                    f"✅ {audit.get('valid', 0)}/{audit.get('checked', 0)}, "
++                    f"❌ {audit.get('invalid', 0)}, ❓ {audit.get('unknown', 0)}"
++                )
++            remaining = len(link_issues) - 10
++            if remaining > 0:
++                lines.append(f"• +{remaining} more")
++
++        if grouped["timeout"]:
++            names = ", ".join(
++                escape(str(row.get("site") or "unknown"))
++                for row in grouped["timeout"][:14]
++            )
++            extra = (
++                f" +{len(grouped['timeout']) - 14}"
++                if len(grouped["timeout"]) > 14 else ""
++            )
++            lines.extend(["", "<b>⏳ Timeouts</b>", f"<code>{names}{extra}</code>"])
++
++        if grouped["failed"]:
++            lines.append("\n<b>❌ Failed</b>")
++            for row in grouped["failed"][:12]:
++                test = row.get("search_test") or {}
++                reason = str(test.get("error") or test.get("search") or "Unknown")
++                lines.append(
++                    f"• <code>{escape(str(row.get('site') or 'unknown'))}</code> — "
++                    f"<i>{escape(reason[:90])}</i>"
++                )
++            remaining = len(grouped["failed"]) - 12
++            if remaining > 0:
++                lines.append(f"• +{remaining} more")
++
++        if len(grouped["ok"]) == len(rows) and not link_issues:
++            if payload.get("coverage_complete"):
++                lines.append("\n✅ Full coverage passed: real result + verified download path for every site.")
++            else:
++                lines.append("\n✅ All enabled sites passed live search + link audit.")
++        elif len(grouped["ok"]) == len(rows):
++            lines.append("\n✅ Search passed for all sites; review link issues above.")
++        return "\n".join(lines)
++
++    sites = list(SITE_STATUS.values())
++    if not sites:
++        return "⚠️ Site status is unavailable right now."
++
++    manual = [item for item in sites if item.get("manual_blocked")]
++    cooling = [
++        item for item in sites
++        if not item.get("manual_blocked")
++        and (item.get("blocked") or int(item.get("cooldown_remaining") or 0) > 0)
++    ]
++    recent_fails = [
++        item for item in sites
++        if not item.get("manual_blocked")
++        and item not in cooling
++        and int(item.get("fail_count") or 0) > 0
++    ]
++    healthy_count = len(sites) - len(manual) - len(cooling) - len(recent_fails)
++    lines = [
++        "<b>🩺 API Site Status</b>",
++        f"<b>Healthy:</b> ✅ {healthy_count}/{len(sites)}",
++    ]
++
++    if cooling:
++        lines.append("\n<b>⏳ Cooling Down</b>")
++        for item in cooling[:10]:
++            remaining = _format_seconds(item.get("cooldown_remaining"))
++            fails = int(item.get("fail_count") or 0)
++            error = str(item.get("last_error") or "").strip()
++            row = (
++                f"• <code>{escape(str(item.get('site') or 'unknown'))}</code> — "
++                f"{remaining}, fails: {fails}"
++            )
++            if error:
++                row += f"\n  <i>{escape(error[:90])}</i>"
++            lines.append(row)
++        if len(cooling) > 10:
++            lines.append(f"• +{len(cooling) - 10} more")
++
++    if recent_fails:
++        lines.append("\n<b>⚠️ Recent Failures</b>")
++        for item in recent_fails[:8]:
++            error = str(item.get("last_error") or "").strip()
++            row = (
++                f"• <code>{escape(str(item.get('site') or 'unknown'))}</code> — "
++                f"fails: {int(item.get('fail_count') or 0)}"
++            )
++            if error:
++                row += f"\n  <i>{escape(error[:90])}</i>"
++            lines.append(row)
++        if len(recent_fails) > 8:
++            lines.append(f"• +{len(recent_fails) - 8} more")
++
++    if manual:
++        names = ", ".join(
++            escape(str(item.get("site") or "unknown")) for item in manual[:12]
++        )
++        extra = f" +{len(manual) - 12}" if len(manual) > 12 else ""
++        lines.append(f"\n<b>⛔ Disabled:</b> <code>{names}{extra}</code>")
++
++    if not cooling and not recent_fails and not manual:
++        lines.append("\n✅ All sites are healthy.")
++    return "\n".join(lines)
++
++
+ def _site_display_name(site):
+     if site in GROUP_NAMES:
+         return GROUP_NAMES[site]
+@@ -164,28 +464,45 @@ def _site_display_name(site):
+     return name
+ 
+ 
+-def _group_sites_param(group):
+-    """Comma-separated enabled site ids for a group button, or "" for All."""
+-    if group == "all" or not SITES:
++def _group_sites_param(group, full_all=False):
++    """Enabled site IDs for a group.
++
++    The All button searches general sites only. ``full_all=True`` (from -a)
++    adds Courses and Books groups; dedicated-button sites remain excluded.
++    """
++    if not SITES:
+         return ""
++    if group == "all":
++        excluded = ALL_SITES_EXCLUDE
++        if not full_all:
++            excluded = excluded | COURSE_SITES | BOOK_GROUP_SITES
++        return ",".join(
++            s for s in SITES if s != "all" and s not in excluded
++        )
+     members = GROUP_SITES.get(group)
+     if not members:
+         return ""
+     return ",".join(s for s in SITES if s in members and s != "all")
+ 
+ 
+-# Site button ordering: page 1 = all + important general + course sites,
+-# page 2 = anime/movie/book sites. Any site not listed here stays on page 1.
++# Site button ordering: page 1 = All + general/course/book sites,
++# page 2 = every dedicated/special individual button.
+ PAGE2_SITES = {
++    "audiobookbay",
++    "downloadly",
++    "bt4g",
+     "nyaasi",
+     "yts",
+ }
+ 
+-# Sites excluded from -a (all-sites) search: audiobookbay has its own
+-# dedicated button, so it shouldn't flood every "search all" result.
++# Dedicated/special sites never flood grouped searches. They remain available
++# through their own individual Page-2 buttons only.
+ ALL_SITES_EXCLUDE = {
+     "audiobookbay",
+     "downloadly",
++    "bt4g",
++    "nyaasi",
++    "yts",
+ }
+ 
+ 
+@@ -204,10 +521,18 @@ def _site_sort_key(item):
+     return (page, rank, name.lower())
+ 
+ 
++def _search_user_id(message):
++    """Get the requester whether called from a command or callback message."""
++    origin = getattr(message, "reply_to_message", None)
++    user = getattr(origin, "from_user", None) or getattr(message, "from_user", None)
++    return getattr(user, "id", 0)
++
++
+ async def search(
+     key, site, message, method, category="all", quality="", language="", format_="",
+     size="all",
+ ):
++    user_id = _search_user_id(message)
+     opts = {}
+     if method.startswith("api"):
+         opts = _search_opts(message)
+@@ -217,13 +542,12 @@ async def search(
+             LOGGER.info(f"API Searching: {key} from {site} (limit={limit}){extra}")
+             if site in GROUP_NAMES or "," in site:
+                 api = f"{Config.SEARCH_API_LINK}/api/v1/all/search?query={quote(key)}&limit={limit}"
+-                group_sites = _group_sites_param(site)
++                group_sites = _group_sites_param(
++                    site, bool(opts.get("all_sites"))
++                )
+                 if not group_sites and "," in site:
+                     group_sites = site
+-                if not group_sites and opts.get("all_sites") and SITES:
+-                    group_sites = ",".join(
+-                        s for s in SITES if s != "all" and s not in ALL_SITES_EXCLUDE
+-                    )
++                requested_group_sites = group_sites
+                 hide = opts.get("hide_sites")
+                 if hide:
+                     hidden = {
+@@ -231,16 +555,22 @@ async def search(
+                         for s in str(hide).split(",")
+                         if s.strip()
+                     }
+-                    if not group_sites and SITES:
+-                        # All-button / default combo: honour -hs by searching
+-                        # every enabled site except the hidden ones.
+-                        group_sites = ",".join(s for s in SITES if s != "all")
++                    if not requested_group_sites:
++                        requested_group_sites = _group_sites_param(
++                            "all", bool(opts.get("all_sites"))
++                        )
+                     group_sites = ",".join(
+                         s
+-                        for s in group_sites.split(",")
++                        for s in requested_group_sites.split(",")
+                         if s.strip().lower() not in hidden
+                     )
+-                if group_sites:
++                    if not group_sites:
++                        await edit_message(
++                            message,
++                            "Saari sites hide ho gayi hain — <code>-hs</code> list check karo.",
++                        )
++                        return
++                elif requested_group_sites:
+                     api += f"&sites={quote(group_sites)}"
+                 elif hide:
+                     await edit_message(
+@@ -282,19 +612,22 @@ async def search(
+                     api += f"&sites={quote(group_sites)}"
+             else:
+                 api = f"{Config.SEARCH_API_LINK}/api/v1/recent?site={site}&limit={limit}"
+-        api += _api_extra_params(opts, method, is_all=bool(opts.get("all_sites") and method == "apisearch"))
++        api += _api_extra_params(
++            opts, method,
++            is_all=(method == "apisearch" and (site == "all" or bool(opts.get("all_sites")))),
++        )
+         try:
+             page_spec = str(opts.get("page") or "").strip()
+             queries = [q.strip() for q in str(key).split(",") if q.strip()][:3]
+             multi_query = method == "apisearch" and len(queries) > 1
+             if opts.get("timeout"):
+                 req_timeout = int(opts["timeout"]) + 60
+-            elif method == "apisearch" and opts.get("all_sites"):
+-                req_timeout = 900
++            elif method == "apisearch" and (site == "all" or opts.get("all_sites")):
++                req_timeout = 960
+             else:
+-                req_timeout = 60
++                req_timeout = 180
+             if page_spec and page_spec not in ("1",) and (page_spec == "0" or "-" in page_spec):
+-                req_timeout = max(req_timeout, 300)
++                req_timeout = max(req_timeout, 360)
+             async with AsyncSession(timeout=req_timeout) as client:
+                 if method == "apisearch" and ((page_spec and page_spec != "1") or multi_query):
+                     # -p spec (N | 0 | A-B) is passed to the API, which
+@@ -335,6 +668,10 @@ async def search(
+                         search_results = dict(search_results)
+                         search_results["data"] = _dedup_rows(search_results.get("data") or [])
+                         search_results["total"] = len(search_results["data"])
++            if not isinstance(search_results, dict):
++                raise RuntimeError("Invalid response from search API")
++            search_results.setdefault("data", [])
++            search_results.setdefault("total", len(search_results["data"]))
+             if isinstance(search_results, dict):
+                 api_error = search_results.get("error") or search_results.get("detail")
+                 if api_error:
+@@ -351,12 +688,20 @@ async def search(
+                         await edit_message(
+                             message,
+                             f"{escape(str(api_error))}\nTorrent Site:- <i>{_site_display_name(site)}</i>",
++                            _failure_buttons(
++                                user_id, key, site, method, category, quality,
++                                language, format_, size,
++                            ),
+                         )
+                     return
+             if search_results["total"] == 0:
+                 await edit_message(
+                     message,
+                     f"No result found for <i>{key or 'results'}</i>\nTorrent Site:- <i>{_site_display_name(site)}</i>",
++                    _failure_buttons(
++                        user_id, key, site, method, category, quality,
++                        language, format_, size,
++                    ),
+                 )
+                 return
+             relaxed_filters = search_results.get("relaxed_filters")
+@@ -367,6 +712,10 @@ async def search(
+                 await edit_message(
+                     message,
+                     f"No result found for <i>{key or 'results'}</i> with the applied filters\nTorrent Site:- <i>{_site_display_name(site)}</i>",
++                    _failure_buttons(
++                        user_id, key, site, method, category, quality,
++                        language, format_, size,
++                    ),
+                 )
+                 return
+             msg = f"<b>Found {min(len(search_results), TELEGRAPH_LIMIT)}</b>"
+@@ -381,7 +730,14 @@ async def search(
+             if relaxed_filters:
+                 msg += " <i>(filters relaxed)</i>"
+         except Exception as e:
+-            await edit_message(message, str(e))
++            await edit_message(
++                message,
++                str(e),
++                _failure_buttons(
++                    user_id, key, site, method, category, quality,
++                    language, format_, size,
++                ) if method.startswith("api") else None,
++            )
+             return
+     else:
+         LOGGER.info(f"PLUGINS Searching: {key} from {site}")
+@@ -492,7 +859,7 @@ async def get_result(search_results, key, message, method):
+         if method.startswith("api"):
+             try:
+                 if result.get("name"):
+-                    msg += f"<code><a href='{result.get('url') or '#'}'>{escape(result['name'])}</a></code><br>"
++                    msg += f"<code><a href='{_safe_html_attr(result.get('url'))}'>{escape(result['name'])}</a></code><br>"
+                 if "torrents" in result.keys():
+                     for subres in result["torrents"]:
+                         msg += f"<b>Quality: </b>{subres['quality']} | <b>Type: </b>{subres['type']} | "
+@@ -548,12 +915,44 @@ async def get_result(search_results, key, message, method):
+                             msg += f"• {escape(str(f))[:90]}<br>"
+                         if len(files) > 3:
+                             msg += f"<i>+{len(files) - 3} more</i><br>"
++                    api_parts = result.get("parts")
++                    if isinstance(api_parts, list):
++                        part_links = []
++                        part_urls = set()
++                        for part_no, part in enumerate(
++                            (item for item in api_parts if isinstance(item, dict)), 1
++                        ):
++                            part_url = part.get("url") or part.get("download")
++                            if not part_url:
++                                continue
++                            part_name = (
++                                part.get("label")
++                                or part.get("name")
++                                or part.get("title")
++                                or f"Download Part {part_no}"
++                            )
++                            part_dl = _dl_link(
++                                part_url,
++                                part_name,
++                                part.get("extension") or "",
++                                part.get("short") or "",
++                            )
++                            part_urls.add(str(part_url).strip())
++                            part_links.append(
++                                "<a href='{}'>{}</a> | <a href='{}'>Share</a>".format(
++                                    part_dl,
++                                    escape(str(part_name)),
++                                    _share_link(part_dl),
++                                )
++                            )
++                        if part_links:
++                            msg += "<b>Download Links:</b><br>" + "<br>".join(part_links) + "<br>"
+                     _links = []
+                     if result.get("torrent"):
+                         _dl = _dl_link(result["torrent"], result.get("name") or "", result.get("extension") or "", result.get("short") or "")
+                         _links.append("<a href='{}'>Direct Link</a>".format(_dl))
+                         _links.append("<a href='{}'>Share</a>".format(_share_link(_dl)))
+-                    if result.get("download"):
++                    if result.get("download") and str(result["download"]).strip() not in part_urls:
+                         _alt = _dl_link(result["download"], result.get("name") or "", result.get("extension") or "", result.get("download_short") or "")
+                         _links.append("<a href='{}'>Alt Link</a>".format(_alt))
+                         _links.append("<a href='{}'>Share</a>".format(_share_link(_alt)))
+@@ -568,7 +967,11 @@ async def get_result(search_results, key, message, method):
+                         msg += "<br><br>"
+                     else:
+                         msg += "<br>"
+-            except Exception:
++            except Exception as e:
++                LOGGER.warning(
++                    "Result render skipped index=%d site=%s error=%s",
++                    index, result.get("site"), e
++                )
+                 continue
+         else:
+             msg += f"<a href='{result.descrLink}'>{escape(result.fileName)}</a><br>"
+@@ -642,12 +1045,35 @@ def _rentry_blocks(search_results, key, method):
+         for t in ("site", "category", "quality", "language", "format", "date", "uploader"):
+             if result.get(t):
+                 tags.append(str(result[t]))
+-        line = f"{index}. **[{name}]({url})**"
++        line = f"{index}. **[{name}]({_safe_markdown_url(url)})**"
+         if parts:
+             line += " — " + " — ".join(parts)
+         if tags:
+             line += " — " + " • ".join(tags)
++        api_parts = [
++            part for part in (result.get("parts") or [])
++            if isinstance(part, dict) and (part.get("url") or part.get("download"))
++        ]
+         links = []
++        part_urls = set()
++        for part_no, part in enumerate(api_parts, 1):
++            part_url = part.get("url") or part.get("download")
++            part_name = (
++                part.get("label")
++                or part.get("name")
++                or part.get("title")
++                or f"Download Part {part_no}"
++            )
++            safe_part_name = re.sub(r"([\[\]()*_`])", r"\\\1", str(part_name))
++            dl = _dl_link(
++                part_url,
++                part_name,
++                part.get("extension") or "",
++                part.get("short") or "",
++            )
++            links.append(f"[📥 {safe_part_name}]({dl})")
++            links.append(f"[📤 Share]({_share_link(dl)})")
++            part_urls.add(str(part_url).strip())
+         if result.get("torrent"):
+             dl = _dl_link(
+                 result["torrent"],
+@@ -657,7 +1083,7 @@ def _rentry_blocks(search_results, key, method):
+             )
+             links.append(f"[📥 Direct Link]({dl})")
+             links.append(f"[📤 Share]({_share_link(dl)})")
+-        if result.get("download"):
++        if result.get("download") and str(result["download"]).strip() not in part_urls:
+             alt = _dl_link(
+                 result["download"],
+                 result.get("name") or "",
+@@ -737,6 +1163,7 @@ FILTER_SIZES = ["all", "small", "medium", "large"]
+ # In-memory filter state (user_id -> dict) so the second filter page can use
+ # short callbacks (Telegram callback_data is limited to 64 bytes).
+ FILTER_STATE = {}
++SEARCH_FAILURES = {}
+ 
+ # Per-command search options set with /search -l <N> -s <S> -p <spec> -f
+ # (keyed by (user_id, msg_id) because callbacks only carry the original
+@@ -780,6 +1207,8 @@ _FLAG_ONLY = {
+     "-nv": "no_video",
+     "-ov": "only_video",
+     "--help": "help",
++    "--status": "status",
++    "--live": "live",
+ }
+ 
+ _PRESETS = {
+@@ -841,6 +1270,11 @@ def _parse_search_cmd(text):
+             opts[_WORD_FLAGS[parts[i - 1]]] = part
+             i -= 2
+             continue
++        if part == "-au":
++            # Bare -au means: use the main search key as the author query.
++            opts["author"] = True
++            i -= 1
++            continue
+         if part in _FLAG_ONLY:
+             opts[_FLAG_ONLY[part]] = True
+             i -= 1
+@@ -890,6 +1324,9 @@ def _parse_search_cmd(text):
+ 
+     key = _restore(key)
+     opts = {k: _restore(v) for k, v in opts.items()}
++    if opts.get("author") is True:
++        opts["author_only"] = True
++        opts["author"] = key
+     return key, opts
+ 
+ 
+@@ -951,6 +1388,14 @@ def _api_extra_params(opts, method, is_all=False):
+             # (40s) skip slow sites - wait up to 10 min so every site
+             # returns results. -to always wins when set explicitly.
+             params.append("timeout=600")
++        elif opts.get("page") in ("0",) or (
++            isinstance(opts.get("page"), str) and "-" in str(opts.get("page", ""))
++        ):
++            params.append("timeout=300")
++        else:
++            # Single-page searches: raise from 40s to 120s so slow sites
++            # with FlareSolverr fallbacks still return full results.
++            params.append("timeout=120")
+         fmt = opts.get("format")
+         if fmt and "," not in str(fmt):
+             params.append(f"format={quote(fmt)}")
+@@ -960,6 +1405,9 @@ def _api_extra_params(opts, method, is_all=False):
+             params.append("fresh=1")
+         if opts.get("dedup"):
+             params.append("dedup=1")
++        author = opts.get("author")
++        if author:
++            params.append(f"author={quote(author)}")
+         include = opts.get("include")
+         if include and "," not in str(include):
+             params.append(f"include={quote(include)}")
+@@ -1122,17 +1570,33 @@ def _format_matches(item, fmt):
+ 
+ 
+ def _author_matches(item, author):
+-    """Match a book result by author (authors field + author + name fallback)."""
+-    a = str(author or "").lower().replace("_", " ").strip()
+-    if not a:
++    """Match a complete author name, not merely any overlapping first name."""
++    words = [
++        w.lower()
++        for w in re.findall(r"\w+", str(author or "").replace("_", " "))
++        if len(w) > 1
++    ]
++    if not words:
+         return True
+-    text = " ".join(
+-        str(x) for x in (item.get("authors") or [])
+-    )
+-    if item.get("author"):
+-        text += " " + str(item["author"])
+-    text += " " + str(item.get("name") or "")
+-    return a in text.lower().replace("_", " ")
++    authors = item.get("authors")
++    if not isinstance(authors, list):
++        authors = [authors] if authors else []
++    def normalized(value):
++        return re.sub(r"[^\w]+", " ", str(value or "").lower()).strip()
++
++    author_text = normalized(" ".join([
++        *(str(author) for author in authors),
++        str(item.get("author") or ""),
++    ]))
++    context_text = normalized(" ".join([
++        str(item.get("name") or ""),
++        str(item.get("info") or ""),
++        str(item.get("publisher") or ""),
++    ]))
++    if len(words) == 1:
++        return words[0] in author_text or words[0] in context_text
++    phrases = (" ".join(words), " ".join(reversed(words)))
++    return any(phrase in author_text for phrase in phrases) or phrases[0] in context_text
+ 
+ 
+ ADULT_KEYWORDS = (
+@@ -1266,9 +1730,8 @@ def _apply_client_filters(results, opts, query=""):
+             out = [r for r in out if any(_format_matches(r, f) for f in formats)]
+     author = opts.get("author")
+     if author:
+-        words = _words(author, underscore=True)
+-        if words:
+-            out = [r for r in out if any(_author_matches(r, w) for w in words)]
++        phrases = _words(author, underscore=True)
++        out = [r for r in out if any(all(_author_matches(r, w) for w in phrase.split()) for phrase in phrases)]
+     language = opts.get("language")
+     if language and "," in str(language):
+         langs = _words(language)
+@@ -1282,7 +1745,10 @@ def _apply_client_filters(results, opts, query=""):
+     bounds = _year_bounds(opts.get("year"))
+     if bounds:
+         lo, hi = bounds
+-        out = [r for r in out if lo <= (_result_year(r) or -1) <= hi]
++        out = [
++            r for r in out
++            if _result_year(r) is None or lo <= _result_year(r) <= hi
++        ]
+     season = opts.get("season")
+     episode = opts.get("episode")
+     if season is not None or episode is not None:
+@@ -1344,10 +1810,10 @@ SEARCH_HELP_TEXT = (
+     "• <code>-nv</code> → video results hatao (1080p/mkv/webrip) - courses ke liye useful\n"
+     "• <code>-ov</code> → SIRF video results (movies/webseries/TV): 480p/720p/1080p/4K/mkv/WEB-DL/S01E02 sab - anime/cartoon nahi - <code>-nv</code> ka ulta\n"
+     "• <code>-g &lt;site&gt;</code> → direct search, buttons skip\n"
+-    "&nbsp;&nbsp;&nbsp;&nbsp;Groups: <code>all</code> (17 sites), <code>books</code>, <code>courses</code>\n"
++    "&nbsp;&nbsp;&nbsp;&nbsp;Groups: <code>all</code> (general sites), <code>books</code>, <code>courses</code>\n"
+     "&nbsp;&nbsp;&nbsp;&nbsp;Multiple: <code>1337x,tgx,yts</code>\n"
+     "&nbsp;&nbsp;&nbsp;&nbsp;Hide sites: <code>-hs 1337x,tgx</code> (ulta <code>-g</code>)\n"
+-    "• <code>-a</code> → SAB sites ek sath (31: general + books + courses)\n"
++    "• <code>-a</code> → general + courses + books ek sath\n"
+     "• <code>-q &lt;quality&gt;</code> → <code>480</code>, <code>720</code>, <code>1080</code>, <code>4k</code>\n"
+     "&nbsp;&nbsp;&nbsp;&nbsp;Multi: <code>-q 1080p,4k</code>\n"
+     "• <code>-lng &lt;lang&gt;</code> → <code>hindi</code>, <code>english</code>, <code>tamil</code>, <code>telugu</code>, <code>dual</code>\n"
+@@ -1357,7 +1823,7 @@ SEARCH_HELP_TEXT = (
+     "• <code>-mx &lt;size&gt;</code> → max size cap: <code>2GB</code>\n"
+     "• <code>-w &lt;format&gt;</code> → file type: <code>mkv</code>, <code>mp4</code>, <code>pdf</code>\n"
+     "&nbsp;&nbsp;&nbsp;&nbsp;Multi: <code>-w pdf,epub,mobi</code>\n"
+-    "• <code>-au &lt;author&gt;</code> → author filter (books): <code>-au james</code>, multi-word: <code>-au james_clear</code>\n"
++    "• <code>-au</code> → main key ko author-only search karo: <code>/s james clear -l 0 -p 0 -au</code>\n"
+     "• <code>-ex</code> → exact title match (books): <code>-ex</code>\n"
+     "• <code>-S &lt;sort&gt;</code> → <code>seeders</code>, <code>size</code>, <code>date</code>\n"
+     "&nbsp;&nbsp;&nbsp;&nbsp;<code>quality</code> bhi: <code>-S quality</code>\n"
+@@ -1366,7 +1832,9 @@ SEARCH_HELP_TEXT = (
+     "• <code>-se &lt;n&gt;</code> → season filter: <code>-se 5</code> (S05)\n"
+     "• <code>-ep &lt;n&gt;</code> → episode filter: <code>-ep 3</code> (S01E03 ke sath best)\n"
+     "• <code>-auto</code> → best (top seeders) result DIRECT leech\n"
+-    "&nbsp;&nbsp;&nbsp;&nbsp;Leech args passthrough: <code>-sp 2GB -n Name -d</code>\n\n"
++    "&nbsp;&nbsp;&nbsp;&nbsp;Leech args passthrough: <code>-sp 2GB -n Name -d</code>\n"
++    "• <code>--status</code> → fast API site health report\n"
++    "• <code>--live</code> → real search test for all enabled sites\n\n"
+     "Presets (Hindi movies):\n"
+     "• <code>-hd</code> → hindi + 1080p | <code>-4k</code> → 4K\n"
+     "• <code>-480</code>/<code>-720</code>/<code>-1080</code> → resolution\n"
+@@ -1673,6 +2141,33 @@ async def torrent_search(_, message):
+     if opts.get("help"):
+         await send_message(message, SEARCH_HELP_TEXT)
+         return
++    if opts.get("status"):
++        await send_message(message, await _api_site_status_text())
++        return
++    if opts.get("live"):
++        progress = await send_message(
++            message,
++            "<i>🔴 Live testing all enabled API sites... 1–4 minutes tak lag sakta hai.</i>",
++        )
++
++        async def _live_with_progress():
++            task = asyncio.create_task(_api_site_status_text(live=True))
++            started = time.monotonic()
++            while not task.done():
++                await asyncio.sleep(20)
++                if task.done():
++                    break
++                elapsed = int(time.monotonic() - started)
++                await edit_message(
++                    progress,
++                    "<i>🔴 Live testing all enabled API sites...\n"
++                    f"⏳ Elapsed: <code>{elapsed}s</code> | Sites: search + real link probe</i>",
++                )
++            return await task
++
++        report = await _live_with_progress()
++        await edit_message(progress, report)
++        return
+     if opts.get("restart_api"):
+         confirm_buttons = ButtonMaker()
+         confirm_buttons.data_button(
+@@ -1698,12 +2193,13 @@ async def torrent_search(_, message):
+         )
+         return
+     if opts:
+-        SEARCH_OPTS[(user_id, message.id)] = opts
+-        SEARCH_OPTS[user_id] = opts
+-        SEARCH_OPTS[message.id] = opts
++        _remember_state(SEARCH_OPTS, (user_id, message.id), opts)
++        _remember_state(SEARCH_OPTS, message.id, opts)
+     else:
+-        SEARCH_OPTS.pop(user_id, None)
+-        SEARCH_OPTS.pop(message.id, None)
++        _drop_state(SEARCH_OPTS, (user_id, message.id))
++        _drop_state(SEARCH_OPTS, message.id)
++    _remember_state(SEARCH_ORIGINS, (user_id, message.id), key or None)
++    _remember_state(SEARCH_ORIGINS, message.id, key or None)
+     direct_site = opts.get("site")
+     if direct_site and not key:
+         await send_message(
+@@ -1714,8 +2210,8 @@ async def torrent_search(_, message):
+         )
+         return
+     if direct_site:
+-        if SITES is None and Config.SEARCH_API_LINK:
+-            api_ready = await _refresh_sites()
++        if Config.SEARCH_API_LINK:
++            await _refresh_sites()
+         if SITES is None:
+             await send_message(
+                 message, "Search API is unavailable right now. Try again in a bit."
+@@ -1740,8 +2236,8 @@ async def torrent_search(_, message):
+             # The direct-search message's reply_to_message is not reliable
+             # (Pyrogram may drop it), so also key the options by this
+             # message id - _search_opts falls back to src.id.
+-            SEARCH_OPTS[searching.id] = opts
+-            SEARCH_OPTS[user_id] = opts
++            _remember_state(SEARCH_OPTS, searching.id, opts)
++            _remember_state(SEARCH_ORIGINS, searching.id, key)
+             await search(key, direct_site, searching, "apisearch")
+         return
+     # Bare "/search" (or "/search -l 5" with no key) keeps the old
+@@ -1826,12 +2322,25 @@ async def _need_state(message, user_id, site=None):
+ async def torrent_search_update(_, query):
+     user_id = query.from_user.id
+     message = query.message
+-    key, _ = _parse_search_cmd(message.reply_to_message.text)
+-    key = key or None
+     data = query.data.split()
+-    if user_id != int(data[1]):
++    if len(data) < 3:
++        await query.answer("Invalid action.", show_alert=True)
++        return
++    try:
++        owner_id = int(data[1])
++    except (IndexError, ValueError):
++        await query.answer("Invalid action.", show_alert=True)
++        return
++    if user_id != owner_id:
+         await query.answer("Not Yours!", show_alert=True)
+-    elif data[2] == "apipage":
++        return
++    origin_text = getattr(message.reply_to_message, "text", None) or ""
++    key, _ = _parse_search_cmd(origin_text)
++    key = key or _recover_origin_key(message, user_id) or None
++    if len(data) < 4 and data[2] not in ("fretry", "fsites", "cancel", "restartapi", "restartapi_go", "restartapi_no"):
++        await query.answer("This search menu is stale.", show_alert=True)
++        return
++    if data[2] == "apipage":
+         await query.answer()
+         page = int(data[3]) if len(data) > 3 and data[3].isdigit() else 1
+         method = data[4] if len(data) > 4 else "apisearch"
+@@ -1849,7 +2358,7 @@ async def torrent_search_update(_, query):
+         await query.answer()
+         site = data[3] if len(data) > 3 else "all"
+         category = data[4] if len(data) > 4 else "all"
+-        FILTER_STATE.pop(user_id, None)
++        _drop_state(FILTER_STATE, user_id)
+         button = filter_buttons(user_id, site, category, "all", "all", "all")
+         await edit_message(
+             message,
+@@ -1865,14 +2374,14 @@ async def torrent_search_update(_, query):
+         await query.answer()
+         site, category, quality, language, format_ = _parse_filters(data)
+         prev = FILTER_STATE.get(user_id) or {}
+-        FILTER_STATE[user_id] = {
++        _remember_state(FILTER_STATE, user_id, {
+             "site": site,
+             "category": category,
+             "quality": quality,
+             "language": language,
+             "format": format_,
+             "size": prev.get("size", "all"),
+-        }
++        })
+         button = filter_size_buttons(user_id, FILTER_STATE[user_id]["size"])
+         await edit_message(
+             message,
+@@ -1952,14 +2461,14 @@ async def torrent_search_update(_, query):
+         group = data[3] if len(data) > 3 else "all"
+         method = data[4] if len(data) > 4 else "apisearch"
+         if method == "apisearch":
+-            FILTER_STATE[user_id] = {
++            _remember_state(FILTER_STATE, user_id, {
+                 "site": group,
+                 "category": "all",
+                 "quality": "all",
+                 "language": "all",
+                 "format": "all",
+                 "size": "all",
+-            }
++            })
+             button = filter_group_buttons(user_id, group, "all", "all", "all")
+             await edit_message(
+                 message,
+@@ -2053,7 +2562,7 @@ async def torrent_search_update(_, query):
+             buttons=confirm_buttons.build_menu(2),
+         )
+     elif data[2] == "restartapi_go":
+-        await query.answer("Restarting API...", show_alert=True)
++        await query.answer("Restarting API...")
+         try:
+             import asyncio as _aio
+             from niquests import AsyncSession
+@@ -2068,19 +2577,26 @@ async def torrent_search_update(_, query):
+                 commit = body.get("message", "").replace("Updated to ", "").split(".")[0]
+                 await edit_message(
+                     message,
+-                    "<i>🔄 Restarting API...\nTesting all sites, please wait...</i>",
++                    "<i>🔄 Restarting API...\nWaiting until it is ready...</i>",
+                 )
+-                await _aio.sleep(15)
+-                health = await client.get(
+-                    f"{Config.SEARCH_API_LINK.rstrip('/')}/health", timeout=10
+-                )
+-                hdata = health.json() if health.status_code == 200 else {}
+-                version = hdata.get("version", "unknown")
++                version = "unknown"
++                for _ in range(90):
++                    await _aio.sleep(2)
++                    try:
++                        health = await client.get(
++                            f"{Config.SEARCH_API_LINK.rstrip('/')}/health", timeout=5
++                        )
++                        if health.status_code == 200:
++                            hdata = health.json()
++                            version = hdata.get("version", "unknown")
++                            break
++                    except Exception:
++                        continue
+                 test = await client.get(
+                     f"{Config.SEARCH_API_LINK.rstrip('/')}/api/v1/test/all",
+                     params={"skip_search": 1},
+                     headers=headers,
+-                    timeout=60,
++                    timeout=120,
+                 )
+                 tdata = test.json() if test.status_code == 200 else {}
+                 results = tdata.get("sites", [])
+@@ -2109,6 +2625,22 @@ async def torrent_search_update(_, query):
+     elif data[2] == "restartapi_no":
+         await query.answer("Cancelled!")
+         await delete_message(message)
++    elif data[2] == "fretry":
++        ctx = SEARCH_FAILURES.get(user_id)
++        if not ctx:
++            await query.answer("Search context expired.", show_alert=True)
++            return
++        await query.answer("Retrying...")
++        await edit_message(message, _searching_msg(ctx["key"], ctx["site"]))
++        await search(
++            ctx["key"], ctx["site"], message, ctx["method"], ctx["category"],
++            ctx["quality"], ctx["language"], ctx["format"], ctx["size"],
++        )
++    elif data[2] == "fsites":
++        await query.answer()
++        method = data[3] if len(data) > 3 else "apisearch"
++        button = await api_buttons(user_id, method)
++        await edit_message(message, "Choose another site:", button)
+     elif data[2] != "cancel":
+         await query.answer()
+         site = data[2]
+@@ -2144,8 +2676,8 @@ async def torrent_search_update(_, query):
+                 f"<b>Searching for <i>{key}</i>\nTorrent Site:- <i>{site.capitalize()}</i></b>",
+             )
+             await search(key, site, message, method)
+-
+     else:
+         await query.answer()
+-        FILTER_STATE.pop(user_id, None)
++        _drop_state(FILTER_STATE, user_id)
++        _drop_state(SEARCH_FAILURES, user_id)
+         await edit_message(message, "Search has been canceled!")
