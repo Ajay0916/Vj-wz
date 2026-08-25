@@ -609,4 +609,5 @@ DISABLE_COMMANDS = {
     "DISABLE_API": ["Search"],
     "DISABLE_STREAM": ["Stream"],
     "DISABLE_MIRROR": ["Mirror"],
+    "DISABLE_LEECH": ["Leech", "QbLeech", "YtdlLeech"],
 }
