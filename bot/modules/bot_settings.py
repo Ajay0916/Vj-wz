@@ -503,6 +503,7 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
                     "PIXELDRAIN_KEY", "BUZZHEAVIER_API",
                     "DEVUPLOADS_KEY", "DEVUPLOADS_FOLDER",
                     "VIKINGFILE_HASH", "VIKINGFILE_FOLDER",
+                    "ALLDEBRID_API_KEY",
                 ]
             )
         if Config.DISABLE_GOOGLE:
