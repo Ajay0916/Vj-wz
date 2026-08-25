@@ -145,6 +145,8 @@ class Config:
     SEARCH_PLUGINS = []
     SEARCH_RESULT_HOST = ""
     API_PIN = ""
+    STATUS_THEME = "vj"
+    WZML_PROGRESS_STYLE = 1
     SET_COMMANDS = True
     STATUS_LIMIT = 10
     STATUS_UPDATE_INTERVAL = 15
