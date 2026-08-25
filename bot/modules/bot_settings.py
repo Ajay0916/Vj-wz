@@ -806,6 +806,8 @@ async def toggle_onoff_var(_, query, pre_message, key, value):
     Config.set(key, bool_value)
     await database.update_config({key: bool_value})
     await _handle_service_toggle(key, bool_value)
+    from ..core.handlers import refresh_bot_commands
+    await refresh_bot_commands()
     await update_buttons(pre_message, "setonoff")
 
 
@@ -1381,6 +1383,8 @@ async def edit_bot_settings(client, query):
         value = data[3]
         Config.set(key, value)
         await database.update_config({key: value})
+        from ..core.handlers import refresh_bot_commands
+        await refresh_bot_commands()
         await update_buttons(message, key, "editvar", False)
     elif data[1] == "toggleonoff":
         await query.answer()
