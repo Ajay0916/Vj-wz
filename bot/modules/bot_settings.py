@@ -1273,10 +1273,10 @@ async def edit_bot_settings(client, query):
             show_alert=True,
         )
         await sync_jdownloader()
-    elif data[1] in ["var", "aria", "qbit", "nzb", "nzbserver", "setonoff"] or data[
+    elif data[1] in ["var", "aria", "qbit", "nzb", "nzbserver", "setonoff", "setonoff2"] or data[
         1
     ].startswith("nzbser"):
-        if data[1] in ("nzbserver", "setonoff"):
+        if data[1] in ("nzbserver", "setonoff", "setonoff2"):
             globals()["start"] = 0
         await query.answer()
         await update_buttons(message, data[1])
