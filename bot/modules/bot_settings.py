@@ -465,7 +465,10 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
             )
         msg = f"⌬ <b><u>Config Variables</u></b> | <b><u>Page: {int(start / 10) + 1}</b></u>"
     elif key == "setonoff":
-        for k in ONOFF_VARS + NEW_ONOFF_VARS:
+        all_toggles = ONOFF_VARS + NEW_ONOFF_VARS
+        page = int(start / 10) if start else 0
+        page_toggles = all_toggles[page * 10:(page + 1) * 10]
+        for k in page_toggles:
             val = Config.get(k)
             label = k.removeprefix("DISABLE_")
             if not val:
@@ -476,7 +479,12 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
         buttons.data_button(
             "Close", "botset close", position="footer", style=ButtonStyle.DANGER
         )
-        msg = "⌬ <b><u>Module Settings</u></b>"
+        total_pages = (len(all_toggles) + 9) // 10
+        if total_pages > 1:
+            for p in range(total_pages):
+                label = f"Page {p + 1}" + (" ✓" if p == page else "")
+                buttons.data_button(label, f"botset start setonoff {p * 10}", position="footer")
+        msg = f"⌬ <b><u>Module Settings</u></b> | <b><u>Page: {page + 1}/{total_pages}</u></b>"
     elif key == "private":
         if edit_mode:
             buttons.data_button("Stop Invoke File", "botset private stop", "header")
@@ -1192,7 +1200,7 @@ async def edit_bot_settings(client, query):
     elif data[1] in ["var", "aria", "qbit", "nzb", "nzbserver", "setonoff"] or data[
         1
     ].startswith("nzbser"):
-        if data[1] == "nzbserver":
+        if data[1] in ("nzbserver", "setonoff"):
             globals()["start"] = 0
         await query.answer()
         await update_buttons(message, data[1])
