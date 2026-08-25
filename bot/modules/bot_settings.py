@@ -493,7 +493,7 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
         if Config.DISABLE_API:
             hidden_vars.update(["STREAMWISH_API", "PROTECTED_API", "DEBRID_LINK_API", "INSTADL_API", "FILELION_API"])
         if Config.DISABLE_HELPER:
-            hidden_vars.update(["HELPER_TOKENS", "HELPER_STRINGS", "HELPER_BOT_PROXIES", "HELPER_USER_PROXIES", "CPU_LIMIT", "THROTTLE_SERVICES"])
+            hidden_vars.update(["HELPER_TOKENS", "HELPER_STRINGS", "HELPER_BOT_PROXIES", "HELPER_USER_PROXIES"])
         if Config.DISABLE_HYPER:
             hidden_vars.update(["USE_HYPER", "HYPER_CHUNK", "HYPER_PIPELINE", "HYPER_THREADS", "HYPER_LIMIT"])
         if Config.DISABLE_UPHOSTER:
