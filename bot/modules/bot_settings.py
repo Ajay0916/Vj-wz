@@ -428,9 +428,17 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
         if Config.DISABLE_THEMES:
             hidden_vars.update(["STATUS_THEME", "WZML_PROGRESS_STYLE"])
         if Config.DISABLE_SEARCH:
-            hidden_vars.update(["SEARCH_API_LINK", "SEARCH_LIMIT", "SEARCH_PLUGINS"])
-        if Config.DISABLE_API:
-            hidden_vars.update(["API_PIN", "SEARCH_RESULT_HOST"])
+            hidden_vars.update(
+                [
+                    "API_PIN",
+                    "AUTHOR_NAME",
+                    "AUTHOR_URL",
+                    "SEARCH_API_LINK",
+                    "SEARCH_LIMIT",
+                    "SEARCH_PLUGINS",
+                    "SEARCH_RESULT_HOST",
+                ]
+            )
         if Config.DISABLE_JD:
             hidden_vars.update(["JD_EMAIL", "JD_PASS", "JD_LIMIT"])
         if Config.DISABLE_NZB:
@@ -438,7 +446,12 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
         if Config.DISABLE_MEGA:
             hidden_vars.update(["MEGA_EMAIL", "MEGA_LIMIT", "MEGA_PASSWORD"])
         if Config.DISABLE_YTDLP:
-            hidden_vars.update(["YT_CATEGORY_ID", "YT_DESP", "YT_DLP_OPTIONS", "YT_PRIVACY_STATUS", "YT_TAGS", "YTDLP_LIMIT", "PLAYLIST_LIMIT"])
+            hidden_vars.update(
+                [
+                    "YT_CATEGORY_ID", "YT_DESP", "YT_DLP_OPTIONS",
+                    "YT_PRIVACY_STATUS", "YT_TAGS", "YTDLP_LIMIT", "PLAYLIST_LIMIT",
+                ]
+            )
         if Config.DISABLE_TORRENTS:
             hidden_vars.update(["TORRENT_LIMIT", "TORRENT_TIMEOUT"])
         if Config.DISABLE_FF_MODE:
@@ -446,27 +459,67 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
         if Config.DISABLE_QUEUE:
             hidden_vars.update(["QUEUE_ALL", "QUEUE_DOWNLOAD", "QUEUE_UPLOAD"])
         if Config.DISABLE_LIMITS:
-            hidden_vars.update(["BOT_MAX_TASKS", "DIRECT_LIMIT", "TORRENT_LIMIT", "CLONE_LIMIT", "LEECH_LIMIT", "GD_DL_LIMIT", "STORAGE_LIMIT", "MEGA_LIMIT", "LEECH_SPLIT_SIZE", "RC_DL_LIMIT"])
+            hidden_vars.update(
+                [
+                    "BOT_MAX_TASKS", "QUEUE_ALL", "QUEUE_DOWNLOAD", "QUEUE_UPLOAD",
+                    "DIRECT_LIMIT", "TORRENT_LIMIT", "CLONE_LIMIT", "LEECH_LIMIT",
+                    "GD_DL_LIMIT", "STORAGE_LIMIT", "MEGA_LIMIT", "LEECH_SPLIT_SIZE",
+                    "RC_DL_LIMIT", "TORRENT_TIMEOUT",
+                ]
+            )
         if Config.DISABLE_RCLONE:
-            hidden_vars.update(["RCLONE_PATH", "RCLONE_FLAGS", "RCLONE_SERVE_URL", "RCLONE_SERVE_USER", "RCLONE_SERVE_PASS", "RCLONE_SERVE_PORT", "RC_DL_LIMIT"])
-        if Config.DISABLE_HELPER:
-            hidden_vars.update(["HELPER_TOKENS", "HELPER_STRINGS", "HELPER_BOT_PROXIES", "HELPER_USER_PROXIES"])
-        if Config.DISABLE_HYPER:
-            hidden_vars.update(["HYPER_CHUNK", "HYPER_PIPELINE", "HYPER_THREADS", "USE_HYPER"])
+            hidden_vars.update(
+                [
+                    "RCLONE_PATH", "RCLONE_FLAGS",
+                    "RCLONE_SERVE_URL", "RCLONE_SERVE_USER",
+                    "RCLONE_SERVE_PASS", "RCLONE_SERVE_PORT",
+                    "RC_DL_LIMIT",
+                ]
+            )
+        if Config.DISABLE_LEECH:
+            hidden_vars.update(
+                [
+                    "AS_DOCUMENT", "EQUAL_SPLITS",
+                    "LEECH_CAPTION", "LEECH_DUMP_CHAT", "LINKS_LOG_ID",
+                    "LEECH_FONT", "LEECH_LIMIT", "LEECH_PREFIX",
+                    "LEECH_SPLIT_SIZE", "LEECH_SUFFIX",
+                    "MEDIA_GROUP", "MEDIA_STORE", "EXCLUDED_EXTENSIONS",
+                ]
+            )
         if Config.DISABLE_STREAM:
             hidden_vars.update(["STREAM_TOKENS", "STREAM_PIPELINE", "STREAM_CHUNK", "STREAM_PER_CLIENT", "STREAM_GATE"])
         if Config.DISABLE_IMAGES:
-            hidden_vars.update(["IMAGES", "IMG_SEARCH", "IMG_PAGE", "IMG_SOURCES"])
+            hidden_vars.update(["IMG_SEARCH", "IMG_PAGE", "IMG_SOURCES", "USE_IMAGES", "IMAGES"])
+        if Config.DISABLE_API:
+            hidden_vars.update(["STREAMWISH_API", "PROTECTED_API", "DEBRID_LINK_API", "INSTADL_API", "FILELION_API"])
+        if Config.DISABLE_HELPER:
+            hidden_vars.update(["HELPER_TOKENS", "HELPER_STRINGS", "HELPER_BOT_PROXIES", "HELPER_USER_PROXIES"])
+        if Config.DISABLE_HYPER:
+            hidden_vars.update(["USE_HYPER", "HYPER_CHUNK", "HYPER_PIPELINE", "HYPER_THREADS", "HYPER_LIMIT"])
+        if Config.DISABLE_UPHOSTER:
+            hidden_vars.update(
+                [
+                    "GOFILE_API", "GOFILE_FOLDER_ID", "GOFILE_AUTO_CREATE_FOLDER",
+                    "PIXELDRAIN_KEY", "BUZZHEAVIER_API",
+                    "DEVUPLOADS_KEY", "DEVUPLOADS_FOLDER",
+                    "VIKINGFILE_HASH", "VIKINGFILE_FOLDER",
+                ]
+            )
         if Config.DISABLE_GOOGLE:
-            hidden_vars.update(["GDRIVE_ID", "INDEX_URL"])
+            hidden_vars.update(
+                ["GDRIVE_ID", "GD_DESP", "GD_DL_LIMIT", "INDEX_URL",
+                 "USE_SERVICE_ACCOUNTS", "DRIVE_CATEGORY_MODE", "DRIVE_CATEGORY_SA",
+                 "IS_TEAM_DRIVE", "SHOW_CLOUD_LINK", "STOP_DUPLICATE"]
+            )
         if Config.DISABLE_CLONE:
             hidden_vars.update(["GDRIVE_ID", "INDEX_URL"])
         if Config.DISABLE_IMDB:
             hidden_vars.update(["IMDB_TEMPLATE"])
+        if Config.DISABLE_LIST:
+            hidden_vars.update(["INDEX_URL"])
         if Config.DISABLE_SESSION:
             hidden_vars.update(["USER_SESSION_STRING"])
-        if Config.DISABLE_LEECH:
-            hidden_vars.update(["LEECH_CAPTION", "LEECH_DUMP_CHAT", "LEECH_FONT", "LEECH_PREFIX", "LEECH_SPLIT_SIZE", "LEECH_SUFFIX"])
+
         conf_dict = {
             k: v for k, v in Config.get_all().items() if not k.startswith("DISABLE_") and k not in hidden_vars
         }
