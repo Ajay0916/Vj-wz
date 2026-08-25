@@ -466,6 +466,7 @@ DISABLE_COMMANDS = {
     "DISABLE_MEDIAINFO": {"MediaInfo"},
     "DISABLE_SESSION": {"RestartSessions", "GenPyroSess"},
     "DISABLE_GOOGLE": {"Clone", "GDClean", "Count"},
+    "DISABLE_STREAM": {"Stream"},
 }
 
 
