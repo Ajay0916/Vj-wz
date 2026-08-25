@@ -604,7 +604,7 @@ DISABLE_COMMANDS = {
     "DISABLE_LIST": ["List"],
     "DISABLE_CLONE": ["Clone"],
     "DISABLE_MEDIAINFO": ["MediaInfo"],
-    "DISABLE_SESSION": ["GenPyroSess"],
+    "DISABLE_SESSION": ["GenPyroSess", "RestartSessions"],
     "DISABLE_GOOGLE": ["GDClean"],
     "DISABLE_API": ["Search"],
     "DISABLE_STREAM": ["Stream"],
