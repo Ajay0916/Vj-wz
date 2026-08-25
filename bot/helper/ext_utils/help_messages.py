@@ -416,6 +416,7 @@ def get_bot_commands():
         "MediaInfo": "[reply/link] Get MediaInfo of the Target Media",
         "Select": "[gid/reply] Select files for NZB, Aria2, Qbit Tasks",
         "Ping": "Ping Bot to test Response Speed",
+        "Stream": "Stream media in Telegram inline player",
         "Status": "[id/me] Tasks Status of Bot",
         "Stats": "Bot, OS, Repo & System full Statistics",
         "Rss": "User RSS Management Settings",
@@ -427,7 +428,6 @@ def get_bot_commands():
         "Restart": "[SUDO] Reboot bot",
         "RestartSessions": "[SUDO] Reboot User Sessions",
         "GenPyroSess": "[SUDO] Generate Pyrogram String Session",
-        "Stream": "Stream media in Telegram inline player",
     }
 
     commands = static_commands.copy()
