@@ -611,4 +611,6 @@ DISABLE_COMMANDS = {
     "DISABLE_QUEUE": ["Queue"],
     "DISABLE_RCLONE": ["Rclone"],
     "DISABLE_API": ["Search"],
+    "DISABLE_STREAM": ["Stream"],
+    "DISABLE_MIRROR": ["Mirror", "MirrorLeech"],
 }
