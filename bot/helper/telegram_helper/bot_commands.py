@@ -33,6 +33,7 @@ class BotCommands:
         "Restart": ["restart", "r", "restartall"],
         "RestartSessions": ["restartses", "rses"],
         "Broadcast": ["broadcast", "bc"],
+        "Stream": ["stream", "sl"],
         "Stats": ["stats"],
         "Help": ["help", "h"],
         "Log": "log",
