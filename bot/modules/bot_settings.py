@@ -96,6 +96,7 @@ BOOL_VARS = [
     "DISABLE_RSS",
     "DISABLE_SEARCH",
     "DISABLE_SEED",
+    "DISABLE_STREAM",
     "DISABLE_TORRENTS",
     "DISABLE_YTDLP",
     "DISABLE_MEGA",
@@ -105,7 +106,6 @@ BOOL_VARS = [
     "IS_TEAM_DRIVE",
     "MEDIA_GROUP",
     "MEDIA_STORE",
-                    "EXCLUDED_EXTENSIONS",
     "SET_COMMANDS",
     "SHOW_CLOUD_LINK",
     "STOP_DUPLICATE",
@@ -113,7 +113,6 @@ BOOL_VARS = [
     "USE_SERVICE_ACCOUNTS",
     "WEB_PINCODE",
 ]
-
 # Config vars with preset choice buttons (rendered directly like BOOL_VARS).
 CHOICE_VARS = {
     "SEARCH_RESULT_HOST": [("Telegraph", "telegraph"), ("Rentry", "rentry")],
@@ -121,13 +120,39 @@ CHOICE_VARS = {
     "WZML_PROGRESS_STYLE": [("1 ■ Default", 1), ("2 ● Dots", 2), ("3 ⬤ Circles", 3), ("4 ∿ Waves", 4), ("5 ★ Stars", 5), ("6 ♥ Hearts", 6), ("7 ░ Shade", 7), ("8 ♪ Music", 8), ("9 ✿ Flowers", 9), ("10 ⠿ Braille", 10)],
 }
 
+NEW_ONOFF_VARS = [
+    "DISABLE_IMAGES",
+    "DISABLE_UPHOSTER",
+    "DISABLE_PLUGINS",
+    "DISABLE_SHELL",
+    "DISABLE_IMDB",
+    "DISABLE_MEDIAINFO",
+    "DISABLE_LIMITS",
+    "DISABLE_QUEUE",
+    "DISABLE_RCLONE",
+    "DISABLE_GOOGLE",
+    "DISABLE_API",
+    "DISABLE_SESSION",
+    "DISABLE_HELPER",
+    "DISABLE_HYPER",
+    "DISABLE_THEMES",
+    "DISABLE_STREAM",
+]
+
+
 DEFAULT_DESP = {
-    "DISABLE_THEMES": "Disable theme system entirely. Default: False.",
     "AS_DOCUMENT": "Send files as document instead of media. Default: False.",
+    "DISABLE_THEMES": "Disable theme system entirely. Default: False.",
+    "STATUS_THEME": "Status message theme: VJ (Flat) or WZML (Tree). Default: VJ.",
+    "WZML_PROGRESS_STYLE": "Progress bar style (1-10). Works for both VJ and WZML themes. Default: 1.",
+    "API_PIN": "API PIN for search API auth (X-API-Pin header). Empty = no auth.",
+    "SEARCH_RESULT_HOST": "Search results publish destination: telegraph | rentry.",
+
     "AUTHORIZED_CHATS": "User/Chat IDs authorized to use the bot. Space-separated. Supports thread IDs with | separator.",
     "BASE_URL": "Public URL for torrent web file selection. Format: http://ip or http://ip:port.",
     "BOT_TOKEN": "Telegram Bot Token from @BotFather.",
     "HELPER_TOKENS": "Additional bot tokens for parallel task handling.",
+    "STREAM_TOKENS": "Bot tokens dedicated to /stream and /dl. If set, streaming uses these and is isolated from mirror/leech load. Falls back to HELPER_TOKENS.",
     "BOT_MAX_TASKS": "Max tasks (including queued) the bot runs in parallel. 0 = unlimited.",
     "BOT_PM": "Send files/links to bot owner PM. Default: False.",
     "CMD_SUFFIX": "Text appended to all bot commands. Useful for running multiple bot instances.",
@@ -135,8 +160,6 @@ DEFAULT_DESP = {
     "DEFAULT_LANG": "Default bot language code. Default: en.",
     "DATABASE_URL": "MongoDB connection string for persistent storage.",
     "DEFAULT_UPLOAD": "Default upload destination: gd (Google Drive) or rc (rclone). Default: rc.",
-    "STATUS_THEME": "Status message theme: VJ (Flat) or WZML (Tree). Default: VJ.",
-    "WZML_PROGRESS_STYLE": "Progress bar style (1-10). Works for both VJ and WZML themes. Default: 1.",
     "DELETE_LINKS": "Auto-delete source links/messages on task start. Default: False.",
     "DEBRID_LINK_API": "Debrid-link.com API key for premium hoster support.",
     "ALLDEBRID_API_KEY": "AllDebrid API key, used by the -ad flag to unlock links/magnets.",
@@ -152,9 +175,8 @@ DEFAULT_DESP = {
     "DISABLE_NZB": "Disable SABnzbd/Usenet downloads. Saves ~100-200MB RAM. Default: False.",
     "DISABLE_RSS": "Disable RSS feed monitoring. Saves CPU cycles. Default: False.",
     "DISABLE_SEARCH": "Disable torrent search plugins. Saves network I/O. Default: False.",
+    "DISABLE_STREAM": "Disable streaming. Stops /stream and the stream server. Default: False.",
     "DISABLE_YTDLP": "Disable YouTube/YT-DLP downloads. Default: False.",
-    "DISABLE_THEMES": "Disable theme system. VJ + default style locked. Default: False.",
-    "DISABLE_STREAM": "Disable streaming feature. Default: False."
     "EQUAL_SPLITS": "Split files into equal parts of LEECH_SPLIT_SIZE. Default: False.",
     "EXCLUDED_EXTENSIONS": "File extensions to exclude from upload/clone. Space-separated.",
     "FFMPEG_CMDS": "Custom FFmpeg command presets. Dict format.",
@@ -216,6 +238,10 @@ DEFAULT_DESP = {
     "HYPER_THREADS": "Number of parallel download parts (clients). 0 = auto.",
     "HYPER_PIPELINE": "Concurrent GetFile requests per HyperDL part. Default: 4.",
     "HYPER_CHUNK": "HyperDL working chunk size in bytes. Default: 512 * 1024 (512KB).",
+    "STREAM_PIPELINE": "Concurrent GetFile requests for /dl downloads. Default: 8.",
+    "STREAM_CHUNK": "Streaming chunk size in bytes, capped at 1 MiB. Default: 1048576.",
+    "STREAM_PER_CLIENT": "Concurrent playback streams allowed per bot. Raise for more simultaneous viewers, lower if Telegram floods. Default: 6.",
+    "STREAM_GATE": "Process-wide ceiling on concurrent GetFile calls. Default: 96.",
     "CPU_LIMIT": "CPU limit percentage for background services (SABnzbd, JDownloader). Default: 20.",
     "THROTTLE_SERVICES": "Pause services during heavy ops (FFmpeg). auto=low-end only, always, never.",
     "HYDRA_IP": "Hydra API IP address for search.",
@@ -236,10 +262,8 @@ DEFAULT_DESP = {
     "RSS_DELAY": "RSS feed check interval in seconds. Default: 600.",
     "RSS_SIZE_LIMIT": "RSS download size limit in GB. 0 = unlimited.",
     "SEARCH_API_LINK": "Search API app URL for multi-search.",
-    "API_PIN": "API PIN for search API auth (X-API-Pin header). Empty = no auth.",
     "SEARCH_LIMIT": "Max search results per site. 0 = default API limit.",
     "SEARCH_PLUGINS": "qBittorrent search plugin URLs. List format.",
-    "SEARCH_RESULT_HOST": "Search results kahan publish honge: telegraph | rentry (Module Settings → API Result bhi).",
     "SET_COMMANDS": "Auto-set bot commands on start. Default: True.",
     "STATUS_LIMIT": "Number of status messages to show. Default: 10.",
     "STATUS_UPDATE_INTERVAL": "Status message refresh interval in seconds. Default: 15.",
@@ -280,6 +304,7 @@ PROTECTED_VARS = {
     "DATABASE_URL",
 }
 RESTART_VARS = {
+    "STREAM_TOKENS",
     "CMD_SUFFIX",
     "OWNER_ID",
     "USER_SESSION_STRING",
@@ -304,29 +329,9 @@ ONOFF_VARS = [
     "DISABLE_NZB",
     "DISABLE_RSS",
     "DISABLE_SEARCH",
+    "DISABLE_STREAM",
     "DISABLE_YTDLP",
 ]
-
-NEW_ONOFF_VARS = [
-    "DISABLE_IMAGES",
-    "DISABLE_UPHOSTER",
-    "DISABLE_PLUGINS",
-    "DISABLE_SHELL",
-    "DISABLE_IMDB",
-    "DISABLE_MEDIAINFO",
-    "DISABLE_LIMITS",
-    "DISABLE_QUEUE",
-    "DISABLE_RCLONE",
-    "DISABLE_GOOGLE",
-    "DISABLE_API",
-    "DISABLE_SESSION",
-    "DISABLE_HELPER",
-    "DISABLE_HYPER",
-    "DISABLE_THEMES",
-    "DISABLE_STREAM",
-]
-
-
 
 
 async def get_buttons(key=None, edit_type=None, edit_mode=False):
@@ -406,11 +411,7 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
                 msg += "<i>Choose a valid value for the above Var</i>\n\n"
                 buttons.data_button("True", f"botset boolvar {key} on")
                 buttons.data_button("False", f"botset boolvar {key} off")
-            if (
-                key not in BOOL_VARS
-                and key not in CHOICE_VARS
-                and key not in PROTECTED_VARS
-            ):
+            if key not in BOOL_VARS and key not in CHOICE_VARS and key not in PROTECTED_VARS:
                 buttons.data_button("Reset", f"botset resetvar {key}")
             buttons.data_button(
                 "Close", "botset close", position="footer", style=ButtonStyle.DANGER
@@ -419,7 +420,7 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
                 msg += (
                     "\n<b>Note:</b> Restart required for this edit to take effect!\n\n"
                 )
-            if edit_mode and key not in BOOL_VARS:
+            if edit_mode and key not in BOOL_VARS and key not in CHOICE_VARS:
                 msg += "<i>Send a valid value for the above Var.</i>\n┖ <b>Time Left :</b> <code>60 sec</code>"
     elif key == "var":
         hidden_vars = set()
@@ -428,17 +429,7 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
         if Config.DISABLE_THEMES:
             hidden_vars.update(["STATUS_THEME", "WZML_PROGRESS_STYLE"])
         if Config.DISABLE_SEARCH:
-            hidden_vars.update(
-                [
-                    "API_PIN",
-                    "AUTHOR_NAME",
-                    "AUTHOR_URL",
-                    "SEARCH_API_LINK",
-                    "SEARCH_LIMIT",
-                    "SEARCH_PLUGINS",
-                    "SEARCH_RESULT_HOST",
-                ]
-            )
+            hidden_vars.update(["API_PIN", "SEARCH_API_LINK", "SEARCH_LIMIT", "SEARCH_PLUGINS", "SEARCH_RESULT_HOST"])
         if Config.DISABLE_JD:
             hidden_vars.update(["JD_EMAIL", "JD_PASS", "JD_LIMIT"])
         if Config.DISABLE_NZB:
@@ -446,103 +437,25 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
         if Config.DISABLE_MEGA:
             hidden_vars.update(["MEGA_EMAIL", "MEGA_LIMIT", "MEGA_PASSWORD"])
         if Config.DISABLE_YTDLP:
-            hidden_vars.update(
-                [
-                    "YT_CATEGORY_ID",
-                    "YT_DESP",
-                    "YT_DLP_OPTIONS",
-                    "YT_PRIVACY_STATUS",
-                    "YT_TAGS",
-                    "YTDLP_LIMIT",
-                    "PLAYLIST_LIMIT",
-                ]
-            )
+            hidden_vars.update(["YT_CATEGORY_ID", "YT_DESP", "YT_DLP_OPTIONS", "YT_PRIVACY_STATUS", "YT_TAGS", "YTDLP_LIMIT", "PLAYLIST_LIMIT"])
         if Config.DISABLE_TORRENTS:
             hidden_vars.update(["TORRENT_LIMIT", "TORRENT_TIMEOUT"])
         if Config.DISABLE_FF_MODE:
-            hidden_vars.update(
-                ["ARCHIVE_LIMIT", "EXTRACT_LIMIT", "FFMPEG_CMDS"]
-            )
+            hidden_vars.update(["ARCHIVE_LIMIT", "EXTRACT_LIMIT", "FFMPEG_CMDS"])
         if Config.DISABLE_QUEUE:
             hidden_vars.update(["QUEUE_ALL", "QUEUE_DOWNLOAD", "QUEUE_UPLOAD"])
         if Config.DISABLE_LIMITS:
-            hidden_vars.update(
-                [
-                    "BOT_MAX_TASKS", "QUEUE_ALL", "QUEUE_DOWNLOAD", "QUEUE_UPLOAD",
-                    "DIRECT_LIMIT", "TORRENT_LIMIT", "CLONE_LIMIT", "LEECH_LIMIT",
-                    "GD_DL_LIMIT", "STORAGE_LIMIT", "MEGA_LIMIT", "LEECH_SPLIT_SIZE",
-                    "RC_DL_LIMIT", "TORRENT_TIMEOUT",
-                ]
-            )
+            hidden_vars.update(["BOT_MAX_TASKS", "QUEUE_ALL", "QUEUE_DOWNLOAD", "QUEUE_UPLOAD", "DIRECT_LIMIT", "TORRENT_LIMIT", "CLONE_LIMIT", "LEECH_LIMIT", "GD_DL_LIMIT", "STORAGE_LIMIT", "MEGA_LIMIT", "LEECH_SPLIT_SIZE", "RC_DL_LIMIT", "TORRENT_TIMEOUT"])
         if Config.DISABLE_RCLONE:
-            hidden_vars.update(
-                [
-                    "RCLONE_PATH", "RCLONE_FLAGS",
-                    "RCLONE_SERVE_URL", "RCLONE_SERVE_USER",
-                    "RCLONE_SERVE_PASS", "RCLONE_SERVE_PORT",
-                    "RC_DL_LIMIT",
-                ]
-            )
-        if Config.DISABLE_LEECH:
-            hidden_vars.update(
-                [
-                    "AS_DOCUMENT",
-                    "EQUAL_SPLITS",
-
-                    "LEECH_CAPTION",
-                    "LEECH_DUMP_CHAT",
-                    "LINKS_LOG_ID",
-                    "LEECH_FONT",
-                    "LEECH_LIMIT",
-                    "LEECH_PREFIX",
-                    "LEECH_SPLIT_SIZE",
-                    "LEECH_SUFFIX",
-                    "MEDIA_GROUP",
-                    "MEDIA_STORE",
-                    "EXCLUDED_EXTENSIONS",
-                ]
-            )
-        if Config.DISABLE_IMAGES:
-            hidden_vars.update(
-                ["IMG_SEARCH", "IMG_PAGE", "IMG_SOURCES", "USE_IMAGES", "IMAGES"]
-            )
-        if Config.DISABLE_API:
-            hidden_vars.update(
-                ["STREAMWISH_API", "PROTECTED_API", "DEBRID_LINK_API", "INSTADL_API", "FILELION_API"]
-            )
+            hidden_vars.update(["RCLONE_PATH", "RCLONE_FLAGS", "RCLONE_SERVE_URL", "RCLONE_SERVE_USER", "RCLONE_SERVE_PASS", "RCLONE_SERVE_PORT", "RC_DL_LIMIT"])
         if Config.DISABLE_HELPER:
-            hidden_vars.update(
-                ["HELPER_TOKENS", "HELPER_STRINGS", "HELPER_BOT_PROXIES", "HELPER_USER_PROXIES"]
-            )
+            hidden_vars.update(["HELPER_TOKENS", "HELPER_STRINGS", "HELPER_BOT_PROXIES", "HELPER_USER_PROXIES"])
         if Config.DISABLE_HYPER:
-            hidden_vars.update(
-                ["USE_HYPER", "HYPER_CHUNK", "HYPER_PIPELINE", "HYPER_THREADS", "HYPER_LIMIT"]
-            )
-        if Config.DISABLE_UPHOSTER:
-            hidden_vars.update(
-                [
-                    "GOFILE_API", "GOFILE_FOLDER_ID", "GOFILE_AUTO_CREATE_FOLDER",
-                    "PIXELDRAIN_KEY", "BUZZHEAVIER_API",
-                    "DEVUPLOADS_KEY", "DEVUPLOADS_FOLDER",
-                    "VIKINGFILE_HASH", "VIKINGFILE_FOLDER",
-                ]
-            )
-        if Config.DISABLE_GOOGLE:
-            hidden_vars.update(
-                ["GDRIVE_ID", "GD_DESP", "GD_DL_LIMIT", "INDEX_URL", "USE_SERVICE_ACCOUNTS", "DRIVE_CATEGORY_MODE", "DRIVE_CATEGORY_SA", "IS_TEAM_DRIVE", "SHOW_CLOUD_LINK", "STOP_DUPLICATE"]
-            )
-        if Config.DISABLE_IMDB:
-            hidden_vars.update(["IMDB_TEMPLATE"])
-        if Config.DISABLE_LIST:
-            hidden_vars.update(["INDEX_URL"])
+            hidden_vars.update(["HYPER_CHUNK", "HYPER_PIPELINE", "HYPER_THREADS", "USE_HYPER"])
         conf_dict = {
-            k: v
-            for k, v in Config.get_all().items()
-            if not k.startswith("DISABLE_") and k not in hidden_vars
+            k: v for k, v in Config.get_all().items() if not k.startswith("DISABLE_") and k not in hidden_vars
         }
         all_keys = list(conf_dict.keys())
-        if start >= len(all_keys) and all_keys:
-            globals()["start"] = 0
         for k in all_keys[start : 10 + start]:
             buttons.data_button(k, f"botset editvar {k}")
         buttons.data_button("Back", "botset back")
@@ -560,41 +473,11 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
                 buttons.data_button(f"✓ {label}", f"botset toggleonoff {k} on")
             else:
                 buttons.data_button(label, f"botset toggleonoff {k} off")
-        buttons.data_button("Page 2 ⏭", "botset setonoff2")
         buttons.data_button("Back", "botset back", position="footer")
         buttons.data_button(
             "Close", "botset close", position="footer", style=ButtonStyle.DANGER
         )
-        msg = "⌬ <b><u>Module Settings</u></b> | Page 1"
-    elif key == "setonoff2":
-        for k in NEW_ONOFF_VARS:
-            val = Config.get(k)
-            label = k.removeprefix("DISABLE_")
-            if not val:
-                buttons.data_button(f"✓ {label}", f"botset toggleonoff {k} on")
-            else:
-                buttons.data_button(label, f"botset toggleonoff {k} off")
-        buttons.data_button("Page 1 ⏮", "botset setonoff")
-        buttons.data_button("Back", "botset back", position="footer")
-        buttons.data_button(
-            "Close", "botset close", position="footer", style=ButtonStyle.DANGER
-        )
-        msg = "⌬ <b><u>Module Settings</u></b> | Page 2"
-    elif key == "api_result":
-        host = str(Config.get("SEARCH_RESULT_HOST") or "telegraph")
-        buttons.data_button(
-            f"{'✓ ' if host == 'telegraph' else ''}Telegraph",
-            "botset resulthost telegraph",
-        )
-        buttons.data_button(
-            f"{'✓ ' if host == 'rentry' else ''}Rentry",
-            "botset resulthost rentry",
-        )
-        buttons.data_button("Back", "botset back setonoff", position="footer")
-        buttons.data_button(
-            "Close", "botset close", position="footer", style=ButtonStyle.DANGER
-        )
-        msg = "⌬ <b><u>API Result Settings</u></b>\n\n<b>Search Results Host:</b> results kahan publish honge (Telegraph / Rentry)"
+        msg = "⌬ <b><u>Module Settings</u></b>"
     elif key == "private":
         if edit_mode:
             buttons.data_button("Stop Invoke File", "botset private stop", "header")
@@ -856,7 +739,7 @@ async def edit_variable(_, message, pre_message, key):
     await update_buttons(pre_message, key, "editvar", False)
     await delete_message(message)
     await database.update_config({key: value})
-    if key in ["SEARCH_PLUGINS", "SEARCH_API_LINK", "API_PIN"]:
+    if key in ["SEARCH_PLUGINS", "SEARCH_API_LINK"]:
         await initiate_search_tools()
     elif key in ["QUEUE_ALL", "QUEUE_DOWNLOAD", "QUEUE_UPLOAD"]:
         await start_from_queued()
@@ -900,19 +783,7 @@ async def toggle_onoff_var(_, query, pre_message, key, value):
     Config.set(key, bool_value)
     await database.update_config({key: bool_value})
     await _handle_service_toggle(key, bool_value)
-    page = "setonoff" if key in ONOFF_VARS else "setonoff2"
-    await update_buttons(pre_message, page)
-    if database.db is None:
-        await query.answer(
-            "DATABASE_URL not set - toggle will NOT survive restart! Set it in config.py.",
-            show_alert=True,
-        )
-    try:
-        from ..core.handlers import refresh_bot_commands
-
-        await refresh_bot_commands()
-    except Exception as e:
-        LOGGER.error(f"refresh_bot_commands failed: {e}")
+    await update_buttons(pre_message, "setonoff")
 
 
 async def _handle_service_toggle(key, disabled):
@@ -955,6 +826,15 @@ async def _handle_service_toggle(key, disabled):
                 LOGGER.info("SABnzbd stopped via Module Settings")
         else:
             LOGGER.info("SABnzbd requires restart to re-enable")
+    elif key == "DISABLE_STREAM":
+        from ..core.stream_server import spawn_stream_server, stop_stream_server
+
+        if disabled:
+            await stop_stream_server()
+            LOGGER.info("Stream server stopped via Module Settings")
+        else:
+            spawn_stream_server()
+            LOGGER.info("Stream server started via Module Settings")
     elif key == "DISABLE_RSS":
         if disabled:
             if scheduler.running:
@@ -1299,11 +1179,6 @@ async def edit_bot_settings(client, query):
             globals()["start"] = 0
         await update_buttons(message, key)
     elif data[1] == "syncjd":
-        if Config.DISABLE_JD:
-            await query.answer(
-                "JDownloader is disabled by the Bot Owner.", show_alert=True
-            )
-            return
         if not Config.JD_EMAIL or not Config.JD_PASS:
             await query.answer(
                 "No Email or Password provided!",
@@ -1315,33 +1190,9 @@ async def edit_bot_settings(client, query):
             show_alert=True,
         )
         await sync_jdownloader()
-    elif data[1] == "resulthost":
-        await query.answer()
-        Config.set("SEARCH_RESULT_HOST", data[2])
-        await database.update_config({"SEARCH_RESULT_HOST": data[2]})
-        await update_buttons(message, "api_result")
-    elif data[1] in [
-        "var",
-        "aria",
-        "qbit",
-        "nzb",
-        "nzbserver",
-        "setonoff",
-        "setonoff2",
-        "api_result",
-    ] or data[1].startswith("nzbser"):
-        if data[1] == "qbit" and Config.DISABLE_TORRENTS:
-            await query.answer(
-                "qBittorrent is disabled by the Bot Owner.", show_alert=True
-            )
-            return
-        if (
-            data[1] in ("nzb", "nzbserver") or data[1].startswith("nzbser")
-        ) and Config.DISABLE_NZB:
-            await query.answer(
-                "SABnzbd is disabled by the Bot Owner.", show_alert=True
-            )
-            return
+    elif data[1] in ["var", "aria", "qbit", "nzb", "nzbserver", "setonoff"] or data[
+        1
+    ].startswith("nzbser"):
         if data[1] == "nzbserver":
             globals()["start"] = 0
         await query.answer()
