@@ -511,8 +511,6 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
                  "USE_SERVICE_ACCOUNTS", "DRIVE_CATEGORY_MODE", "DRIVE_CATEGORY_SA",
                  "IS_TEAM_DRIVE", "SHOW_CLOUD_LINK", "STOP_DUPLICATE"]
             )
-        if Config.DISABLE_CLONE:
-            hidden_vars.update(["GDRIVE_ID", "INDEX_URL"])
         if Config.DISABLE_IMDB:
             hidden_vars.update(["IMDB_TEMPLATE"])
         if Config.DISABLE_LIST:
