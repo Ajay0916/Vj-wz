@@ -427,6 +427,7 @@ def get_bot_commands():
         "Restart": "[SUDO] Reboot bot",
         "RestartSessions": "[SUDO] Reboot User Sessions",
         "GenPyroSess": "[SUDO] Generate Pyrogram String Session",
+        "Stream": "Stream media in Telegram inline player",
     }
 
     commands = static_commands.copy()
