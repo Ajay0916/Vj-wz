@@ -4,12 +4,106 @@ from pyrogram.filters import command, regex
 from pyrogram.handlers import CallbackQueryHandler, EditedMessageHandler, MessageHandler
 from pyrogram.types import BotCommand
 
+from .. import LOGGER
 from ..core.config_manager import Config
 from ..helper.ext_utils.help_messages import BOT_COMMANDS
 from ..helper.telegram_helper.bot_commands import BotCommands
 from ..helper.telegram_helper.filters import CustomFilters
 from ..modules import *
 from .tg_client import TgClient
+
+
+async def refresh_bot_commands():
+    if not Config.SET_COMMANDS:
+        return
+    global BOT_COMMANDS
+    from ..helper.ext_utils import help_messages
+
+    BOT_COMMANDS = help_messages.get_bot_commands()
+
+    def insert_at(d, k, v, i):
+        return dict(list(d.items())[:i] + [(k, v)] + list(d.items())[i:])
+
+    if Config.JD_EMAIL and Config.JD_PASS:
+        BOT_COMMANDS = insert_at(
+            BOT_COMMANDS,
+            "JdMirror",
+            "[link/file] Mirror to Upload Destination using JDownloader",
+            2,
+        )
+        BOT_COMMANDS = insert_at(
+            BOT_COMMANDS,
+            "JdLeech",
+            "[link/file] Leech files to Upload to Telegram using JDownloader",
+            6,
+        )
+
+    if len(Config.USENET_SERVERS) != 0:
+        BOT_COMMANDS = insert_at(
+            BOT_COMMANDS,
+            "NzbMirror",
+            "[nzb] Mirror to Upload Destination using Sabnzbd",
+            2,
+        )
+        BOT_COMMANDS = insert_at(
+            BOT_COMMANDS,
+            "NzbLeech",
+            "[nzb] Leech files to Upload to Telegram using Sabnzbd",
+            6,
+        )
+
+    if Config.LOGIN_PASS:
+        BOT_COMMANDS = insert_at(
+            BOT_COMMANDS, "Login", "[password] Login to Bot", 14
+        )
+
+    removed = []
+    for _var, _cmds in help_messages.DISABLE_COMMANDS.items():
+        if getattr(Config, _var, False):
+            for _c in _cmds:
+                if BOT_COMMANDS.pop(_c, None) is not None:
+                    removed.append(_c)
+    LOGGER.info(
+        "set_commands refresh: flags RSS=%s YTDLP=%s LEECH=%s SEARCH=%s TORRENTS=%s JD=%s NZB=%s IMAGES=%s UPHOSTER=%s PLUGINS=%s SHELL=%s IMDB=%s LIST=%s CLONE=%s MEDIAINFO=%s SESSION=%s GOOGLE=%s LIMITS=%s QUEUE=%s RCLONE=%s API=%s | removed=%s | total=%d",
+        Config.DISABLE_RSS,
+        Config.DISABLE_YTDLP,
+        Config.DISABLE_LEECH,
+        Config.DISABLE_SEARCH,
+        Config.DISABLE_TORRENTS,
+        Config.DISABLE_JD,
+        Config.DISABLE_NZB,
+        Config.DISABLE_IMAGES,
+        Config.DISABLE_UPHOSTER,
+        Config.DISABLE_PLUGINS,
+        Config.DISABLE_SHELL,
+        Config.DISABLE_IMDB,
+        Config.DISABLE_LIST,
+        Config.DISABLE_CLONE,
+        Config.DISABLE_MEDIAINFO,
+        Config.DISABLE_SESSION,
+        Config.DISABLE_GOOGLE,
+        Config.DISABLE_LIMITS,
+        Config.DISABLE_QUEUE,
+        Config.DISABLE_RCLONE,
+        Config.DISABLE_API,
+        ",".join(removed) or "-",
+        len(BOT_COMMANDS),
+    )
+
+    try:
+        await TgClient.bot.set_bot_commands(
+            [
+                BotCommand(
+                    cmds[0] if isinstance(cmds, list) else cmds,
+                    description,
+                )
+                for cmd, description in BOT_COMMANDS.items()
+                for cmds in [getattr(BotCommands, f"{cmd}Command", None)]
+                if cmds is not None
+            ]
+        )
+    except Exception as e:
+        LOGGER.error(f"set_bot_commands failed: {e}")
 
 
 async def add_handlers():
@@ -100,34 +194,38 @@ async def add_handlers():
     TgClient.bot.add_handler(
         CallbackQueryHandler(cancel_multi, filters=regex("^stopm"))
     )
-    TgClient.bot.add_handler(
-        MessageHandler(
-            clone_node,
-            filters=command(BotCommands.CloneCommand, case_sensitive=True)
-            & CustomFilters.authorized,
+    if not Config.DISABLE_CLONE and not Config.DISABLE_GOOGLE:
+        TgClient.bot.add_handler(
+            MessageHandler(
+                clone_node,
+                filters=command(BotCommands.CloneCommand, case_sensitive=True)
+                & CustomFilters.authorized,
+            )
         )
-    )
-    TgClient.bot.add_handler(
-        MessageHandler(
-            aioexecute,
-            filters=command(BotCommands.AExecCommand, case_sensitive=True)
-            & CustomFilters.sudo,
+    if not Config.DISABLE_SHELL:
+        TgClient.bot.add_handler(
+            MessageHandler(
+                aioexecute,
+                filters=command(BotCommands.AExecCommand, case_sensitive=True)
+                & CustomFilters.sudo,
+            )
         )
-    )
-    TgClient.bot.add_handler(
-        MessageHandler(
-            execute,
-            filters=command(BotCommands.ExecCommand, case_sensitive=True)
-            & CustomFilters.sudo,
+    if not Config.DISABLE_SHELL:
+        TgClient.bot.add_handler(
+            MessageHandler(
+                execute,
+                filters=command(BotCommands.ExecCommand, case_sensitive=True)
+                & CustomFilters.sudo,
+            )
         )
-    )
-    TgClient.bot.add_handler(
-        MessageHandler(
-            clear,
-            filters=command(BotCommands.ClearLocalsCommand, case_sensitive=True)
-            & CustomFilters.sudo,
+    if not Config.DISABLE_SHELL:
+        TgClient.bot.add_handler(
+            MessageHandler(
+                clear,
+                filters=command(BotCommands.ClearLocalsCommand, case_sensitive=True)
+                & CustomFilters.sudo,
+            )
         )
-    )
     TgClient.bot.add_handler(
         MessageHandler(
             select,
@@ -145,13 +243,14 @@ async def add_handlers():
             & CustomFilters.authorized,
         )
     )
-    TgClient.bot.add_handler(
-        MessageHandler(
-            count_node,
-            filters=command(BotCommands.CountCommand, case_sensitive=True)
-            & CustomFilters.authorized,
+    if not Config.DISABLE_GOOGLE:
+        TgClient.bot.add_handler(
+            MessageHandler(
+                count_node,
+                filters=command(BotCommands.CountCommand, case_sensitive=True)
+                & CustomFilters.authorized,
+            )
         )
-    )
     TgClient.bot.add_handler(
         MessageHandler(
             delete_file,
@@ -159,16 +258,18 @@ async def add_handlers():
             & CustomFilters.authorized,
         )
     )
-    TgClient.bot.add_handler(
-        MessageHandler(
-            gdrive_search,
-            filters=command(BotCommands.ListCommand, case_sensitive=True)
-            & CustomFilters.authorized,
+    if not Config.DISABLE_LIST:
+        TgClient.bot.add_handler(
+            MessageHandler(
+                gdrive_search,
+                filters=command(BotCommands.ListCommand, case_sensitive=True)
+                & CustomFilters.authorized,
+            )
         )
-    )
-    TgClient.bot.add_handler(
-        CallbackQueryHandler(select_type, filters=regex("^list_types"))
-    )
+    if not Config.DISABLE_LIST:
+        TgClient.bot.add_handler(
+            CallbackQueryHandler(select_type, filters=regex("^list_types"))
+        )
     TgClient.bot.add_handler(CallbackQueryHandler(arg_usage, filters=regex("^help")))
     TgClient.bot.add_handler(
         MessageHandler(
@@ -226,13 +327,14 @@ async def add_handlers():
             & CustomFilters.authorized,
         )
     )
-    TgClient.bot.add_handler(
-        MessageHandler(
-            uphoster,
-            filters=command(BotCommands.UpHosterCommand, case_sensitive=True)
-            & CustomFilters.authorized,
+    if not Config.DISABLE_UPHOSTER:
+        TgClient.bot.add_handler(
+            MessageHandler(
+                uphoster,
+                filters=command(BotCommands.UpHosterCommand, case_sensitive=True)
+                & CustomFilters.authorized,
+            )
         )
-    )
     TgClient.bot.add_handler(
         MessageHandler(
             get_rss_menu,
@@ -241,20 +343,22 @@ async def add_handlers():
         )
     )
     TgClient.bot.add_handler(CallbackQueryHandler(rss_listener, filters=regex("^rss")))
-    TgClient.bot.add_handler(
-        MessageHandler(
-            run_shell,
-            filters=command(BotCommands.ShellCommand, case_sensitive=True)
-            & CustomFilters.sudo,
+    if not Config.DISABLE_SHELL:
+        TgClient.bot.add_handler(
+            MessageHandler(
+                run_shell,
+                filters=command(BotCommands.ShellCommand, case_sensitive=True)
+                & CustomFilters.sudo,
+            )
         )
-    )
-    TgClient.bot.add_handler(
-        EditedMessageHandler(
-            run_shell,
-            filters=command(BotCommands.ShellCommand, case_sensitive=True)
-            & CustomFilters.owner,
+    if not Config.DISABLE_SHELL:
+        TgClient.bot.add_handler(
+            EditedMessageHandler(
+                run_shell,
+                filters=command(BotCommands.ShellCommand, case_sensitive=True)
+                & CustomFilters.owner,
+            )
         )
-    )
     TgClient.bot.add_handler(
         MessageHandler(
             start, filters=command(BotCommands.StartCommand, case_sensitive=True)
@@ -284,23 +388,26 @@ async def add_handlers():
             confirm_restart, filters=regex("^botrestart") & CustomFilters.sudo
         )
     )
-    TgClient.bot.add_handler(
-        MessageHandler(
-            restart_sessions,
-            filters=command(BotCommands.RestartSessionsCommand, case_sensitive=True)
-            & CustomFilters.sudo,
+    if not Config.DISABLE_SESSION:
+        TgClient.bot.add_handler(
+            MessageHandler(
+                restart_sessions,
+                filters=command(BotCommands.RestartSessionsCommand, case_sensitive=True)
+                & CustomFilters.sudo,
+            )
         )
-    )
-    TgClient.bot.add_handler(
-        MessageHandler(
-            imdb_search,
-            filters=command(BotCommands.IMDBCommand, case_sensitive=True)
-            & CustomFilters.authorized,
+    if not Config.DISABLE_IMDB:
+        TgClient.bot.add_handler(
+            MessageHandler(
+                imdb_search,
+                filters=command(BotCommands.IMDBCommand, case_sensitive=True)
+                & CustomFilters.authorized,
+            )
         )
-    )
-    TgClient.bot.add_handler(
-        CallbackQueryHandler(imdb_callback, filters=regex("^imdb"))
-    )
+    if not Config.DISABLE_IMDB:
+        TgClient.bot.add_handler(
+            CallbackQueryHandler(imdb_callback, filters=regex("^imdb"))
+        )
     TgClient.bot.add_handler(
         MessageHandler(
             ping,
@@ -315,37 +422,34 @@ async def add_handlers():
             & CustomFilters.authorized,
         )
     )
-    TgClient.bot.add_handler(
-        MessageHandler(
-            mediainfo,
-            filters=command(BotCommands.MediaInfoCommand, case_sensitive=True)
-            & CustomFilters.authorized,
+    if not Config.DISABLE_MEDIAINFO:
+        TgClient.bot.add_handler(
+            MessageHandler(
+                mediainfo,
+                filters=command(BotCommands.MediaInfoCommand, case_sensitive=True)
+                & CustomFilters.authorized,
+            )
         )
-    )
-    TgClient.bot.add_handler(
-        MessageHandler(
-            stream_links,
-            filters=command(BotCommands.StreamCommand, case_sensitive=True)
-            & CustomFilters.authorized,
+    if not Config.DISABLE_IMAGES:
+        TgClient.bot.add_handler(
+            MessageHandler(
+                picture_add,
+                filters=command(BotCommands.AddImageCommand, case_sensitive=True)
+                & CustomFilters.authorized,
+            )
         )
-    )
-    TgClient.bot.add_handler(
-        MessageHandler(
-            picture_add,
-            filters=command(BotCommands.AddImageCommand, case_sensitive=True)
-            & CustomFilters.authorized,
+    if not Config.DISABLE_IMAGES:
+        TgClient.bot.add_handler(
+            MessageHandler(
+                pictures,
+                filters=command(BotCommands.ImagesCommand, case_sensitive=True)
+                & CustomFilters.authorized,
+            )
         )
-    )
-    TgClient.bot.add_handler(
-        MessageHandler(
-            pictures,
-            filters=command(BotCommands.ImagesCommand, case_sensitive=True)
-            & CustomFilters.authorized,
+    if not Config.DISABLE_IMAGES:
+        TgClient.bot.add_handler(
+            CallbackQueryHandler(pics_callback, filters=regex("^images"))
         )
-    )
-    TgClient.bot.add_handler(
-        CallbackQueryHandler(pics_callback, filters=regex("^images"))
-    )
 
     TgClient.bot.add_handler(
         MessageHandler(
@@ -415,13 +519,14 @@ async def add_handlers():
             & CustomFilters.authorized,
         )
     )
-    TgClient.bot.add_handler(
-        MessageHandler(
-            gen_pyro_string,
-            filters=command(BotCommands.GenPyroSessCommand, case_sensitive=True)
-            & CustomFilters.sudo,
+    if not Config.DISABLE_SESSION:
+        TgClient.bot.add_handler(
+            MessageHandler(
+                gen_pyro_string,
+                filters=command(BotCommands.GenPyroSessCommand, case_sensitive=True)
+                & CustomFilters.sudo,
+            )
         )
-    )
     TgClient.bot.add_handler(
         MessageHandler(
             change_category,
@@ -432,63 +537,15 @@ async def add_handlers():
     TgClient.bot.add_handler(
         CallbackQueryHandler(confirm_category, filters=regex("^scat"))
     )
-    TgClient.bot.add_handler(
-        MessageHandler(
-            drive_clean,
-            filters=command(BotCommands.GDCleanCommand, case_sensitive=True)
-            & CustomFilters.authorized,
+    if not Config.DISABLE_GOOGLE:
+        TgClient.bot.add_handler(
+            MessageHandler(
+                drive_clean,
+                filters=command(BotCommands.GDCleanCommand, case_sensitive=True)
+                & CustomFilters.authorized,
+            )
         )
-    )
-    TgClient.bot.add_handler(
-        CallbackQueryHandler(confirm_drive_clean_cb, filters=regex("^gdccat"))
-    )
-    if Config.SET_COMMANDS:
-        global BOT_COMMANDS
-
-        def insert_at(d, k, v, i):
-            return dict(list(d.items())[:i] + [(k, v)] + list(d.items())[i:])
-
-        if Config.JD_EMAIL and Config.JD_PASS:
-            BOT_COMMANDS = insert_at(
-                BOT_COMMANDS,
-                "JdMirror",
-                "[link/file] Mirror to Upload Destination using JDownloader",
-                2,
-            )
-            BOT_COMMANDS = insert_at(
-                BOT_COMMANDS,
-                "JdLeech",
-                "[link/file] Leech files to Upload to Telegram using JDownloader",
-                6,
-            )
-
-        if len(Config.USENET_SERVERS) != 0:
-            BOT_COMMANDS = insert_at(
-                BOT_COMMANDS,
-                "NzbMirror",
-                "[nzb] Mirror to Upload Destination using Sabnzbd",
-                2,
-            )
-            BOT_COMMANDS = insert_at(
-                BOT_COMMANDS,
-                "NzbLeech",
-                "[nzb] Leech files to Upload to Telegram using Sabnzbd",
-                6,
-            )
-
-        if Config.LOGIN_PASS:
-            BOT_COMMANDS = insert_at(
-                BOT_COMMANDS, "Login", "[password] Login to Bot", 14
-            )
-
-        await TgClient.bot.set_bot_commands(
-            [
-                BotCommand(
-                    cmds[0] if isinstance(cmds, list) else cmds,
-                    description,
-                )
-                for cmd, description in BOT_COMMANDS.items()
-                for cmds in [getattr(BotCommands, f"{cmd}Command", None)]
-                if cmds is not None
-            ]
+        TgClient.bot.add_handler(
+            CallbackQueryHandler(confirm_drive_clean_cb, filters=regex("^gdccat"))
         )
+    await refresh_bot_commands()

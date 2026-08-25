@@ -22,19 +22,18 @@ class BotCommands:
         "Count": "count",
         "Delete": "del",
         "List": "list",
-        "Search": "search",
+        "Search": ["search", "s"],
         "Users": "users",
         "CancelTask": ["cancel", "c"],
         "CancelAll": ["cancelall", "call"],
         "ForceStart": ["forcestart", "fs"],
-        "Status": ["status", "s", "statusall"],
+        "Status": ["status", "st", "statusall"],
         "MediaInfo": ["mediainfo", "mi"],
-        "Stream": ["stream", "sl"],
         "Ping": "ping",
         "Restart": ["restart", "r", "restartall"],
         "RestartSessions": ["restartses", "rses"],
         "Broadcast": ["broadcast", "bc"],
-        "Stats": ["stats", "st"],
+        "Stats": ["stats"],
         "Help": ["help", "h"],
         "Log": "log",
         "Shell": "shell",
@@ -66,7 +65,7 @@ class BotCommands:
         commands = cls._static_commands.copy()
 
         plugin_manager = get_plugin_manager()
-        if plugin_manager:
+        if plugin_manager and not Config.DISABLE_PLUGINS:
             for plugin_info in plugin_manager.list_plugins():
                 if plugin_info.enabled and plugin_info.commands:
                     for cmd in plugin_info.commands:

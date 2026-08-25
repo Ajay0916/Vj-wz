@@ -219,6 +219,37 @@ async def status_pages(_, query):
         button.data_button("Back", f"status {data[1]} ref")
         await edit_message(message, msg, button.build_menu())
 
+    elif data[2] == "close":
+        async with task_dict_lock:
+            if key in status_dict:
+                try:
+                    await delete_message(status_dict[key]["message"])
+                except Exception:
+                    pass
+                del status_dict[key]
+                if obj := intervals["status"].get(key):
+                    obj.cancel()
+                    del intervals["status"][key]
+
+    elif data[2] == "stats":
+        from psutil import net_io_counters as _net
+        net = _net()
+        disk = disk_usage(DOWNLOAD_DIR)
+        popup = (
+            f"📊 𝗕𝗼𝘁 𝗦𝘁𝗮𝘁𝗶𝗰𝘀\n\n"
+            f"⚙️ 𝗖𝗣𝗨: {cpu_percent()}%\n"
+            f"🧠 𝗥𝗔𝗠: {virtual_memory().percent}%\n"
+            f"🗄 𝗗𝗶𝘀𝗸: {get_readable_file_size(disk.free)} free [{round(100 - disk.percent, 1)}%]\n"
+            f"📤 𝗦𝗲𝗻𝘁: {get_readable_file_size(net.bytes_sent)}\n"
+            f"📥 𝗥𝗲𝗰𝗲𝗶𝘃𝗲𝗱: {get_readable_file_size(net.bytes_recv)}\n\n"
+            f"𝗠𝗮𝗱𝗲 𝘄𝗶𝘁𝗵 ❤️ 𝗯𝘆 𝗔𝗷𝗮𝘆"
+        )
+        try:
+            await query.answer(popup, show_alert=True)
+        except QueryIdInvalid:
+            pass
+        return
+
     try:
         await query.answer()
     except QueryIdInvalid:
