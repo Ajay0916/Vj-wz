@@ -114,6 +114,15 @@ BOOL_VARS = [
     "WEB_PINCODE",
 ]
 
+
+# Config vars with preset choice buttons (rendered directly like BOOL_VARS).
+CHOICE_VARS = {
+    "SEARCH_RESULT_HOST": [("Telegraph", "telegraph"), ("Rentry", "rentry")],
+    "STATUS_THEME": [("VJ (Flat)", "vj"), ("WZML (Tree)", "wzml")],
+    "WZML_PROGRESS_STYLE": [("1 ■ Default", 1), ("2 ● Dots", 2), ("3 ⬤ Circles", 3), ("4 ∿ Waves", 4), ("5 ★ Stars", 5), ("6 ♥ Hearts", 6), ("7 ░ Shade", 7), ("8 ♪ Music", 8), ("9 ✿ Flowers", 9), ("10 ⠿ Braille", 10)],
+}
+
+
 DEFAULT_DESP = {
     "AS_DOCUMENT": "Send files as document instead of media. Default: False.",
     "AUTHORIZED_CHATS": "User/Chat IDs authorized to use the bot. Space-separated. Supports thread IDs with | separator.",
@@ -262,6 +271,10 @@ DEFAULT_DESP = {
     "YT_TAGS": "Tags for YouTube uploads. List format.",
     "YT_CATEGORY_ID": "YouTube video category ID. Default: 22 (People & Blogs).",
     "YT_PRIVACY_STATUS": "YouTube upload privacy: public, unlisted, or private.",
+    "API_PIN": "API PIN for search API auth (X-API-Pin header). Empty = no auth.",
+    "SEARCH_RESULT_HOST": "Search results kahan publish honge: telegraph | rentry.",
+    "STATUS_THEME": "Status message theme: VJ (Flat) or WZML (Tree). Default: VJ.",
+    "WZML_PROGRESS_STYLE": "Progress bar style (1-10). Works for both VJ and WZML themes. Default: 1.",
 }
 
 PROTECTED_VARS = {
@@ -299,6 +312,25 @@ ONOFF_VARS = [
     "DISABLE_SEARCH",
     "DISABLE_STREAM",
     "DISABLE_YTDLP",
+]
+
+
+NEW_ONOFF_VARS = [
+    "DISABLE_IMAGES",
+    "DISABLE_UPHOSTER",
+    "DISABLE_PLUGINS",
+    "DISABLE_SHELL",
+    "DISABLE_IMDB",
+    "DISABLE_MEDIAINFO",
+    "DISABLE_LIMITS",
+    "DISABLE_QUEUE",
+    "DISABLE_RCLONE",
+    "DISABLE_GOOGLE",
+    "DISABLE_API",
+    "DISABLE_SESSION",
+    "DISABLE_HELPER",
+    "DISABLE_HYPER",
+    "DISABLE_THEMES",
 ]
 
 
