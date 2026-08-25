@@ -466,7 +466,7 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
             )
         msg = f"⌬ <b><u>Config Variables</u></b> | <b><u>Page: {int(start / 10) + 1}</b></u>"
     elif key == "setonoff":
-        for k in ONOFF_VARS:
+        for k in ONOFF_VARS + NEW_ONOFF_VARS:
             val = Config.get(k)
             label = k.removeprefix("DISABLE_")
             if not val:
