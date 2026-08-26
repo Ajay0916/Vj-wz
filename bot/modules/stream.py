@@ -179,7 +179,7 @@ def _short(name, limit=_LABEL):
 
 
 async def _register(message, poster=None, exp=None, pl=None, pi=0):
-    chat_id, msg_id = await _dump_copy(message)
+    chat_id, msg_id = message.chat.id, message.id
     return await _mint_token(chat_id, msg_id, poster, exp, pl, pi)
 
 
