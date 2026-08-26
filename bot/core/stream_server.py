@@ -157,11 +157,15 @@ def stream_port():
 
 async def _resolve(request):
     token = request.match_info.get("token", "")
+    LOGGER.info(f"[STREAM] _resolve token={token} path={request.path}")
     if not _TOKEN_RE.match(token):
+        LOGGER.warning(f"[STREAM] bad token format: {token}")
         raise web.HTTPNotFound(text="unknown link")
     found = await database.get_stream(token)
     if not found:
+        LOGGER.warning(f"[STREAM] token not in DB: {token}")
         raise web.HTTPNotFound(text="unknown link")
+    LOGGER.info(f"[STREAM] resolved cid={found[0]} mid={found[1]}")
     return token, found[0], found[1]
 
 
@@ -231,6 +235,7 @@ async def _meta(request):
 
 
 async def _serve(request, kind):
+    LOGGER.info(f"[STREAM] _serve kind={kind} method={request.method} path={request.path}")
     _, cid, mid = await _resolve(request)
     inline = kind == "playback"
 
@@ -258,10 +263,12 @@ async def _serve(request, kind):
 
     try:
         st = await open_stream(cid, mid, kind, viewer=viewer)
-    except StreamGone:
+    except StreamGone as e:
+        LOGGER.error(f"[STREAM] StreamGone cid={cid} mid={mid}: {e}")
         purge_fid(cid, mid)
         raise web.HTTPNotFound(text="file is gone") from None
     except NoClientAvailable as e:
+        LOGGER.error(f"[STREAM] NoClientAvailable cid={cid} mid={mid}: {e}")
         raise web.HTTPServiceUnavailable(text=str(e), headers={"Retry-After": "10"})
     except StreamAbort as e:
         raise web.HTTPBadGateway(text=str(e)) from None

@@ -187,18 +187,23 @@ _fid_locks = {}
 
 async def get_fid(ci, client, chat_id, msg_id, force=False):
     key = (ci, chat_id, msg_id)
+    LOGGER.info(f"[STREAM] get_fid ci={ci} chat={chat_id} msg={msg_id} force={force}")
     if not force:
         hit = _fid_cache.get(key)
         if hit and monotonic() - hit[1] < _FID_TTL:
             _fid_cache.move_to_end(key)
+            LOGGER.info(f"[STREAM] get_fid cache hit ci={ci} chat={chat_id} msg={msg_id}")
             return hit[0]
     lk = _fid_locks.setdefault(key, Lock())
     async with lk:
         hit = _fid_cache.get(key)
         if hit and not force and monotonic() - hit[1] < _FID_TTL:
             return hit[0]
+        LOGGER.info(f"[STREAM] get_fid calling get_messages ci={ci} chat={chat_id} msg={msg_id}")
         msg = await client.get_messages(chat_id, msg_id)
+        LOGGER.info(f"[STREAM] get_fid msg={msg} empty={getattr(msg, 'empty', 'N/A') if msg else 'None'}")
         if msg is None or getattr(msg, "empty", False):
+            LOGGER.warning(f"[STREAM] get_fid StreamGone: msg {msg_id} missing from {chat_id} (ci={ci})")
             _fid_cache.pop(key, None)
             raise StreamGone(f"msg {msg_id} missing from {chat_id}")
         media = media_of(msg)
@@ -554,6 +559,7 @@ class HypertgStream:
 
 
 async def open_stream(chat_id, msg_id, kind, viewer=None):
+    LOGGER.info(f"[STREAM] open_stream chat={chat_id} msg={msg_id} kind={kind} viewer={viewer}")
     return await HypertgStream(chat_id, msg_id, profile(kind), viewer=viewer).open()
 
 
