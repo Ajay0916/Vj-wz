@@ -187,47 +187,20 @@ _fid_locks = {}
 
 async def get_fid(ci, client, chat_id, msg_id, force=False):
     key = (ci, chat_id, msg_id)
-    LOGGER.info(f"[STREAM] get_fid ci={ci} chat={chat_id} msg={msg_id} force={force}")
     if not force:
         hit = _fid_cache.get(key)
         if hit and monotonic() - hit[1] < _FID_TTL:
             _fid_cache.move_to_end(key)
-            LOGGER.info(f"[STREAM] get_fid cache hit ci={ci} chat={chat_id} msg={msg_id}")
             return hit[0]
     lk = _fid_locks.setdefault(key, Lock())
     async with lk:
         hit = _fid_cache.get(key)
         if hit and not force and monotonic() - hit[1] < _FID_TTL:
             return hit[0]
-        LOGGER.info(f"[STREAM] get_fid calling get_messages ci={ci} chat={chat_id} msg={msg_id}")
         msg = await client.get_messages(chat_id, msg_id)
-        LOGGER.info(f"[STREAM] get_fid msg empty={getattr(msg, 'empty', 'N/A') if msg else 'None'}")
         if msg is None or getattr(msg, "empty", False):
-            from ...core.tg_client import TgClient
-            main_bot = TgClient.bot
-            if main_bot and main_bot is not client:
-                LOGGER.warning(f"[STREAM] stream bot failed, trying main bot for {chat_id}/{msg_id}")
-                try:
-                    msg = await main_bot.get_messages(chat_id, msg_id)
-                    LOGGER.info(f"[STREAM] main_bot msg empty={getattr(msg, 'empty', 'N/A') if msg else 'None'}")
-                except Exception as e:
-                    LOGGER.error(f"[STREAM] main_bot also failed: {e}")
-                    msg = None
-            if msg is None or getattr(msg, "empty", False):
-                user_client = getattr(TgClient, "user", None)
-                LOGGER.warning(f"[STREAM] DEBUG user_client={type(user_client).__name__ if user_client else 'None'} TgClient.user={type(getattr(TgClient, 'user', None)).__name__ if getattr(TgClient, 'user', None) else 'None'}")
-                if user_client:
-                    LOGGER.warning(f"[STREAM] bot failed, trying user session for {chat_id}/{msg_id}")
-                    try:
-                        msg = await user_client.get_messages(chat_id, msg_id)
-                        LOGGER.info(f"[STREAM] user msg empty={getattr(msg, 'empty', 'N/A') if msg else 'None'}")
-                    except Exception as e:
-                        LOGGER.error(f"[STREAM] user also failed: {e}")
-                        msg = None
-            if msg is None or getattr(msg, "empty", False):
-                LOGGER.warning(f"[STREAM] get_fid StreamGone: msg {msg_id} missing from {chat_id}")
-                _fid_cache.pop(key, None)
-                raise StreamGone(f"msg {msg_id} missing from {chat_id}")
+            _fid_cache.pop(key, None)
+            raise StreamGone(f"msg {msg_id} missing from {chat_id}")
         media = media_of(msg)
         fid = FileId.decode(media.file_id)
         fid.file_size = getattr(media, "file_size", 0)
@@ -581,7 +554,6 @@ class HypertgStream:
 
 
 async def open_stream(chat_id, msg_id, kind, viewer=None):
-    LOGGER.info(f"[STREAM] open_stream chat={chat_id} msg={msg_id} kind={kind} viewer={viewer}")
     return await HypertgStream(chat_id, msg_id, profile(kind), viewer=viewer).open()
 
 
