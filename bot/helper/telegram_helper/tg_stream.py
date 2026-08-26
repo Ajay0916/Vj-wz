@@ -215,6 +215,7 @@ async def get_fid(ci, client, chat_id, msg_id, force=False):
                     msg = None
             if msg is None or getattr(msg, "empty", False):
                 user_client = getattr(TgClient, "user", None)
+                LOGGER.warning(f"[STREAM] DEBUG user_client={type(user_client).__name__ if user_client else 'None'} TgClient.user={type(getattr(TgClient, 'user', None)).__name__ if getattr(TgClient, 'user', None) else 'None'}")
                 if user_client:
                     LOGGER.warning(f"[STREAM] bot failed, trying user session for {chat_id}/{msg_id}")
                     try:
