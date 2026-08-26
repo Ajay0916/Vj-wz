@@ -201,11 +201,22 @@ async def get_fid(ci, client, chat_id, msg_id, force=False):
             return hit[0]
         LOGGER.info(f"[STREAM] get_fid calling get_messages ci={ci} chat={chat_id} msg={msg_id}")
         msg = await client.get_messages(chat_id, msg_id)
-        LOGGER.info(f"[STREAM] get_fid msg={msg} empty={getattr(msg, 'empty', 'N/A') if msg else 'None'}")
+        LOGGER.info(f"[STREAM] get_fid msg empty={getattr(msg, 'empty', 'N/A') if msg else 'None'}")
         if msg is None or getattr(msg, "empty", False):
-            LOGGER.warning(f"[STREAM] get_fid StreamGone: msg {msg_id} missing from {chat_id} (ci={ci})")
-            _fid_cache.pop(key, None)
-            raise StreamGone(f"msg {msg_id} missing from {chat_id}")
+            from ...core.tg_client import TgClient
+            main_bot = TgClient.bot
+            if main_bot and main_bot is not client:
+                LOGGER.warning(f"[STREAM] stream bot failed, trying main bot for {chat_id}/{msg_id}")
+                try:
+                    msg = await main_bot.get_messages(chat_id, msg_id)
+                    LOGGER.info(f"[STREAM] main_bot msg empty={getattr(msg, 'empty', 'N/A') if msg else 'None'}")
+                except Exception as e:
+                    LOGGER.error(f"[STREAM] main_bot also failed: {e}")
+                    msg = None
+            if msg is None or getattr(msg, "empty", False):
+                LOGGER.warning(f"[STREAM] get_fid StreamGone: msg {msg_id} missing from {chat_id}")
+                _fid_cache.pop(key, None)
+                raise StreamGone(f"msg {msg_id} missing from {chat_id}")
         media = media_of(msg)
         fid = FileId.decode(media.file_id)
         fid.file_size = getattr(media, "file_size", 0)
