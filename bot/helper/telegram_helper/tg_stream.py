@@ -214,6 +214,16 @@ async def get_fid(ci, client, chat_id, msg_id, force=False):
                     LOGGER.error(f"[STREAM] main_bot also failed: {e}")
                     msg = None
             if msg is None or getattr(msg, "empty", False):
+                user_client = getattr(TgClient, "user", None)
+                if user_client:
+                    LOGGER.warning(f"[STREAM] bot failed, trying user session for {chat_id}/{msg_id}")
+                    try:
+                        msg = await user_client.get_messages(chat_id, msg_id)
+                        LOGGER.info(f"[STREAM] user msg empty={getattr(msg, 'empty', 'N/A') if msg else 'None'}")
+                    except Exception as e:
+                        LOGGER.error(f"[STREAM] user also failed: {e}")
+                        msg = None
+            if msg is None or getattr(msg, "empty", False):
                 LOGGER.warning(f"[STREAM] get_fid StreamGone: msg {msg_id} missing from {chat_id}")
                 _fid_cache.pop(key, None)
                 raise StreamGone(f"msg {msg_id} missing from {chat_id}")
