@@ -43,8 +43,6 @@ getLogger("aiohttp").setLevel(WARNING)
 getLogger("uvicorn").setLevel(WARNING)
 getLogger("uvicorn.access").setLevel(WARNING)
 
-logger = getLogger("wserver")
-
 basicConfig(
     format="[%(asctime)s] [%(levelname)s] - %(message)s",
     datefmt="%d-%b-%y %I:%M:%S %p",
@@ -562,7 +560,6 @@ def _stream_offline():
 async def stream_proxy(
     token: str, request: Request, upstream_path: str, params: dict = None
 ):
-    logger.info(f"[WSERVER] stream_proxy token={token} path={request.url.path} method={request.method}")
     if not _SAFE_TOKEN.match(token or ""):
         raise HTTPException(status_code=404, detail="Unknown link")
     headers = {}
@@ -699,7 +696,6 @@ async def poster_route(token: str, request: Request):
 
 @app.get("/xstrm/{token}", response_class=HTMLResponse)
 async def xstrm_page(token: str, request: Request):
-    logger.info(f"[WSERVER] xstrm_page token={token}")
     if not _SAFE_TOKEN.match(token or ""):
         raise HTTPException(status_code=404, detail="Unknown link")
     response = templates.TemplateResponse(request, "stream.html")
@@ -778,7 +774,6 @@ async def tracks_route(token: str, request: Request):
 
 @app.get("/api/stream/{token}")
 async def stream_meta(token: str, request: Request):
-    logger.info(f"[WSERVER] stream_meta token={token}")
     if not _SAFE_TOKEN.match(token or ""):
         raise HTTPException(status_code=404, detail="Unknown link")
     try:
