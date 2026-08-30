@@ -6,6 +6,7 @@ from wz_bin import bin_name
 
 class Config:
     ALLDEBRID_API_KEY = ""
+    ALLDEBRID_NO_SEED_TIMEOUT = 180
     AS_DOCUMENT = False
     AUTHORIZED_CHATS = ""
     BASE_URL = ""
@@ -18,7 +19,6 @@ class Config:
     BOT_MAX_TASKS = 0
     BOT_PM = False
     CMD_SUFFIX = ""
-    COLORED_BTNS = True
     DEFAULT_LANG = "en"
     DATABASE_URL = ""
     DEFAULT_UPLOAD = "rc"
@@ -33,8 +33,10 @@ class Config:
     DISABLE_SEED = False
     DISABLE_FF_MODE = False
     DISABLE_MEGA = False
+    DISABLE_PLUGINS = False
     DISABLE_JD = True
     DISABLE_NZB = True
+    DISABLE_SEEDR = True
     DISABLE_RSS = False
     DISABLE_SEARCH = False
     DISABLE_STREAM = False
@@ -55,6 +57,7 @@ class Config:
     DISABLE_LIMITS = False
     DISABLE_QUEUE = False
     DISABLE_RCLONE = False
+    PLUGIN_INDEXES = []
     EQUAL_SPLITS = False
     EXCLUDED_EXTENSIONS = ""
     FFMPEG_CMDS = {}
@@ -90,6 +93,9 @@ class Config:
     JD_PASS = ""
     MEGA_EMAIL = ""
     MEGA_PASSWORD = ""
+    SEEDR_EMAIL = ""
+    SEEDR_PASSWORD = ""
+    SEEDR_DELETE_FOLDER = False
     DIRECT_LIMIT = 0
     MEGA_LIMIT = 0
     TORRENT_LIMIT = 0
@@ -98,13 +104,15 @@ class Config:
     CLONE_LIMIT = 0
     JD_LIMIT = 0
     NZB_LIMIT = 0
+    SEEDR_LIMIT = 0
     YTDLP_LIMIT = 0
     PLAYLIST_LIMIT = 0
     LEECH_LIMIT = 0
     EXTRACT_LIMIT = 0
     ARCHIVE_LIMIT = 0
     STORAGE_LIMIT = 0
-    LEECH_DUMP_CHAT = ""
+    LEECH_LOG_CHAT = ""
+    LEECH_DUMP_CHATS = {}
     LINKS_LOG_ID = ""
     MIRROR_LOG_ID = ""
     LEECH_PREFIX = ""
@@ -117,11 +125,14 @@ class Config:
     HYPER_THREADS = 0
     HYPER_PIPELINE = 4
     HYPER_CHUNK = 512 * 1024
+    MEM_BUDGET = 0
+    MEM_DEEP_STATS = False
     STREAM_PIPELINE = 8
     STREAM_CHUNK = 1048576
     STREAM_PER_CLIENT = 6
     STREAM_GATE = 96
     CPU_LIMIT = 20
+    FFMPEG_CORES = "auto"
     THROTTLE_SERVICES = "auto"
     HYDRA_IP = ""
     HYDRA_API_KEY = ""
@@ -157,6 +168,8 @@ class Config:
     TELEGRAM_HASH = ""
     TG_PROXY = None
     THUMBNAIL_LAYOUT = ""
+    TMDB_ACCESS_TOKEN = ""
+    AUTO_THUMBNAIL = False
     VERIFY_TIMEOUT = 0
     LOGIN_PASS = ""
     TORRENT_TIMEOUT = 0
@@ -167,7 +180,7 @@ class Config:
     DRIVE_CATEGORY_MODE = False
     DRIVE_CATEGORY_SA = ""
     UPSTREAM_REPO = ""
-    UPSTREAM_BRANCH = "master"
+    UPSTREAM_BRANCH = "wzv3"
     USENET_SERVERS = []
     USER_SESSION_STRING = ""
     TRANSMISSION_MODE = "both"
@@ -236,6 +249,12 @@ class Config:
                     except Exception:
                         continue
                 setattr(cls, attr, value)
+        if hasattr(settings, "LEECH_DUMP_CHAT"):
+            legacy_value = getattr(settings, "LEECH_DUMP_CHAT")
+            if legacy_value and not cls.LEECH_LOG_CHAT:
+                if isinstance(legacy_value, str):
+                    legacy_value = legacy_value.strip()
+                cls.LEECH_LOG_CHAT = legacy_value
         for key in ["BOT_TOKEN", "OWNER_ID", "TELEGRAM_API", "TELEGRAM_HASH"]:
             value = getattr(cls, key)
             if isinstance(value, str):
@@ -245,6 +264,11 @@ class Config:
 
     @classmethod
     def load_env(cls):
+        legacy_dump_chat = getenv("LEECH_DUMP_CHAT")
+        if legacy_dump_chat is not None and getenv("LEECH_LOG_CHAT") is None:
+            cls.LEECH_LOG_CHAT = cls._convert_env_type(
+                "LEECH_LOG_CHAT", legacy_dump_chat
+            )
         config_vars = cls.get_all()
         for key in config_vars:
             env_value = getenv(key)
@@ -324,12 +348,19 @@ class Config:
                         value = []
                 value = cls._convert_env_type(key, value)
                 setattr(cls, key, value)
+        if config_dict.get("LEECH_DUMP_CHAT") and not cls.LEECH_LOG_CHAT:
+            cls.LEECH_LOG_CHAT = cls._convert_env_type(
+                "LEECH_LOG_CHAT", config_dict["LEECH_DUMP_CHAT"]
+            )
         for key in ["BOT_TOKEN", "OWNER_ID", "TELEGRAM_API", "TELEGRAM_HASH"]:
             value = getattr(cls, key)
             if isinstance(value, str):
                 value = value.strip()
             if not value:
                 raise ValueError(f"{key} variable is missing!")
+
+
+DEFAULT_CONFIG = Config.get_all()
 
 
 class BinConfig:
