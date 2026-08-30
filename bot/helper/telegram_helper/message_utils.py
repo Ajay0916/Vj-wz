@@ -45,16 +45,16 @@ def _edit_signature(text, buttons):
 
 
 def _is_edit_spam(chat_id, msg_id, text, buttons):
-    """Return True if this edit should be skipped (duplicate or too fast)."""
+    """Skip ONLY exact duplicates. Navigation/content changes always pass —
+    a time-gap here would swallow legit button clicks (user double-clicking)."""
     global _FLOOD_UNTIL
     now = time()
-    if _FLOOD_UNTIL > now:
+    if _FLOOD_UNTIL > now and _EDIT_LAST.get((chat_id, msg_id)):
+        # if we're in a flood cooldown AND it's the same content, drop it
         return True
     key = (chat_id, msg_id)
     sig = _edit_signature(text, buttons)
     prev = _EDIT_LAST.get(key)
-    if prev and prev[0] > now - _EDIT_MIN_GAP:
-        return True
     if prev and prev[1] == sig:
         return True
     _EDIT_LAST[key] = (now, sig)
