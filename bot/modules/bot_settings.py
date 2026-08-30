@@ -432,6 +432,7 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
     if key is None:
         buttons.data_button("Config Variables", "botset var")
         buttons.data_button("Module Settings", "botset setonoff")
+        buttons.data_button("Limit Settings", "botset setlimit")
         buttons.data_button("Private Files", "botset private open")
         if not Config.DISABLE_TORRENTS:
             buttons.data_button("Qbit Settings", "botset qbit")
