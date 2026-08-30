@@ -609,6 +609,34 @@ class VPSGuard:
 
     # ---------------- scanning ----------------
     def refresh(self):
+        state = {
+            "used": available_bytes(),
+            "total": limit_bytes(),
+            "servers": {},
+            "services": {},
+        }
+        self.services = {}
+        self.servers = {}
+        self.top = []
+        try:
+            self._refresh_inner(state)
+        except Exception as err:
+            LOGGER.error(f"VPS refresh: {err}")
+        self.last_scan = time()
+        self.services = state["services"]
+        self.servers = state["servers"]
+        self.top = sorted(
+            [
+                {"pid": p.get("pid"), "rss": p.get("rss"), "cmd": p.get("cmd"), "name": k}
+                for k, s in list(state["services"].items()) + list(state["servers"].items())
+                for p in (s.get("top") or [])
+            ],
+            key=lambda x: x.get("rss") or 0,
+            reverse=True,
+        )[:6]
+        return state
+
+    def _refresh_inner(self, state):
         try:
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as _probe:
                 _probe.settimeout(2.0)
@@ -617,12 +645,6 @@ class VPSGuard:
         except Exception:
             _dock = False
         scan = _scan_tree(skip_docker=_dock)
-        state = {
-            "used": available_bytes(),
-            "total": limit_bytes(),
-            "servers": {},
-            "services": {},
-        }
         for key, procs in scan.items():
             if not procs:
                 continue
@@ -672,14 +694,6 @@ class VPSGuard:
                 }
         except Exception:
             pass
-        self.last_scan = time()
-        self.services = state["services"]
-        self.servers = state["servers"]
-        self.top = []
-        for k, s in list(state["services"].items()) + list(state["servers"].items()):
-            for p in s.get("top") or []:
-                self.top.append({"pid": p.get("pid"), "rss": p.get("rss"), "cmd": p.get("cmd"), "name": k})
-        self.top = sorted(self.top, key=lambda x: x.get("rss") or 0, reverse=True)[:6]
         return state
 
     # ---------------- criticality & alerts ----------------

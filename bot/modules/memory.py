@@ -533,8 +533,13 @@ async def memory_callback(_, query):
         view = "vset"
     elif action == "vsetdo":
         view = "vsettings"
-    text, markup = _menu(user_id, view, data)
-    await edit_message(query.message, text, markup)
+    try:
+        text, markup = _menu(user_id, view, data)
+        await edit_message(query.message, text, markup)
+    except Exception as err:
+        await query.answer(f"Error: {err}", show_alert=True)
+        from ..helper.ext_utils.mem_guard import LOGGER as mg_logger
+        mg_logger.error(f"memory menu {view}: {err}")
 
 
 def memory_report():
