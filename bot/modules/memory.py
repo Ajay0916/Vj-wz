@@ -6,17 +6,18 @@ _LAST_ANSWER_TS = 0.0
 
 
 async def _safe_answer(query, text=None, show_alert=False):
-    """Answer a callback query, throttled to avoid Telegram FloodWait on rapid
-    button presses. Duplicate/too-fast presses get a no-op (no visible alert)."""
+    """Answer a callback query. Always ack instantly (clears Telegram loading
+    spinner so taps feel immediate); only the visible alert text is throttled
+    to avoid FloodWait on rapid presses. Non-alert acks carry no text."""
     global _LAST_ANSWER_TS
     now = time()
-    if show_alert:
-        _LAST_ANSWER_TS = now
-        return await _safe_answer(query, text, show_alert=True)
+    await query.answer()
+    if not show_alert:
+        return
     if now - _LAST_ANSWER_TS >= 0.4:
         _LAST_ANSWER_TS = now
-        await _safe_answer(query, text)
-    # else: silent no-op to avoid flood
+        await query.answer(text, show_alert=True)
+    # else: silent (spinner already cleared, no alert popup)
 
 from pyrogram.enums import ButtonStyle
 
