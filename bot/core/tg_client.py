@@ -135,7 +135,7 @@ class TgClient:
 
     @classmethod
     async def _retry_hclient(cls, no, b_token, delay, proxy=None):
-        await sleep(delay)
+        await sleep(min(delay, 15))
         try:
             sessions = _load_sessions("helper_sessions")
             kw = cls._session_kwargs(sessions.get(str(no)))
@@ -204,7 +204,7 @@ class TgClient:
 
     @classmethod
     async def _retry_sclient(cls, no, b_token, delay, proxy=None):
-        await sleep(delay)
+        await sleep(min(delay, 15))
         try:
             sessions = _load_sessions("stream_sessions")
             kw = cls._session_kwargs(sessions.get(str(no)))
@@ -268,7 +268,7 @@ class TgClient:
 
     @classmethod
     async def _retry_huser(cls, no, session_string, delay, proxy=None):
-        await sleep(delay)
+        await sleep(min(delay, 15))
         try:
             huser = cls.wztgClient(
                 f"WZ-HUser{no}",
@@ -372,7 +372,7 @@ class TgClient:
 
     @classmethod
     async def _retry_user(cls, delay):
-        await sleep(delay)
+        await sleep(min(delay, 15))
         try:
             cls.user = cls.wztgClient(
                 "WZ-User",
