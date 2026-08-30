@@ -485,16 +485,17 @@ def _scan_tree(skip_docker=True):
     return seen
 
 
-def _docker_stats_socket():
-    out = {}
+def _docker_http(method, path, timeout=6.0):
+    """Raw Docker API request over unix socket. Returns parsed HTTP
+    (status line, headers dict, de-chunked body bytes). Handles
+    Transfer-Encoding: chunked responses."""
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-            s.settimeout(3.0)
+            s.settimeout(timeout)
             s.connect("/var/run/docker.sock")
             req = (
-                "GET /v1.44/containers/json?all=0 HTTP/1.1\r\n"
-                "Host: docker\r\n"
-                "Connection: close\r\n\r\n"
+                f"{method} {path} HTTP/1.1\r\n"
+                "Host: docker\r\nConnection: close\r\n\r\n"
             ).encode()
             s.sendall(req)
             data = b""
@@ -504,11 +505,47 @@ def _docker_stats_socket():
                     break
                 data += chunk
     except Exception:
-        return out
-    body = data.split(b"\r\n\r\n", 1)[-1]
+        return None, None
+    head, sep, body = data.partition(b"\r\n\r\n")
+    if not sep:
+        return None, None
+    status = head.split(b" ", 1)[0] if head else b""
+    headers = {}
+    for line in head.split(b"\r\n")[1:]:
+        k, _, v = line.partition(b":")
+        headers[k.strip().lower()] = v.strip()
+    # de-chunk
+    if headers.get(b"transfer-encoding") == b"chunked" or body.startswith((b"0\r\n",)):
+        try:
+            out = b""
+            rest = body
+            while True:
+                line, _, rest = rest.partition(b"\r\n")
+                size = int(line.split(b";")[0], 16)
+                if size == 0:
+                    break
+                out += rest[:size]
+                rest = rest[size + 2 :]
+            body = out
+        except Exception:
+            return None, None
+    return status, body
+
+
+def _docker_json(method, path, timeout=6.0):
+    status, body = _docker_http(method, path, timeout)
+    if status is None:
+        return None
     try:
-        items = json.loads(body.decode("utf-8", "replace"))
+        return json.loads(body.decode("utf-8", "replace"))
     except Exception:
+        return None
+
+
+def _docker_stats_socket():
+    out = {}
+    items = _docker_json("GET", "/v1.44/containers/json?all=0")
+    if not isinstance(items, list):
         return out
     for item in items:
         try:
@@ -525,22 +562,9 @@ def _docker_stats_socket():
 
 def _container_mem(id_):
     try:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-            s.settimeout(4.0)
-            s.connect("/var/run/docker.sock")
-            req = (
-                f"GET /v1.44/containers/{id_}/stats?stream=0 HTTP/1.1\r\n"
-                "Host: docker\r\nConnection: close\r\n\r\n"
-            ).encode()
-            s.sendall(req)
-            data = b""
-            while True:
-                chunk = s.recv(65536)
-                if not chunk:
-                    break
-                data += chunk
-        body = data.split(b"\r\n\r\n", 1)[-1]
-        stats = json.loads(body.decode("utf-8", "replace"))
+        stats = _docker_json("GET", f"/v1.44/containers/{id_}/stats?stream=0")
+        if stats is None:
+            raise ValueError("no stats")
         ms = stats.get("memory_stats") or {}
         out = {
             "cur": int(ms.get("usage") or 0),
@@ -564,20 +588,10 @@ def _container_mem(id_):
 
 def _trim_container(name, aggressive=False):
     try:
-        import signal
-
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-            s.settimeout(2.0)
-            s.connect("/var/run/docker.sock")
-            req = (
-                f"POST /v1.44/containers/{name}/kill?signal=SIGHUP HTTP/1.1\r\n"
-                "Host: docker\r\nConnection: close\r\n\r\n"
-            ).encode()
-            s.sendall(req)
-            while True:
-                if not s.recv(65536):
-                    break
-        return True
+        status, _ = _docker_http(
+            "POST", f"/v1.44/containers/{name}/kill?signal=SIGHUP", timeout=4.0
+        )
+        return status == b"HTTP/1.1" or (status is not None and b"200" in status or b"204" in status)
     except Exception:
         return False
 
@@ -1020,26 +1034,13 @@ class CpuGuard:
 
     def _container_cpu(self, name):
         try:
-            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-                s.settimeout(4.0)
-                s.connect("/var/run/docker.sock")
-                req = (
-                    f"GET /v1.44/containers/name/{name}/stats?stream=true&one-shot=false&since=0 HTTP/1.1\r\n"
-                    "Host: docker\r\nConnection: close\r\n\r\n"
-                ).encode()
-                s.sendall(req)
-                data = b""
-                while True:
-                    chunk = s.recv(65536)
-                    if not chunk:
-                        break
-                    if b"\r\n\r\n" in data and b"\r\n\r\n" not in data + chunk:
-                        data += chunk
-                        break
-                    data += chunk
-            body = data.split(b"\r\n\r\n", 1)[-1]
-            first_line = body.split(b"\r\n", 1)[0]
-            stats = json.loads(first_line.decode("utf-8", "replace"))
+            stats = _docker_json(
+                "GET",
+                f"/v1.44/containers/name/{name}/stats?stream=true&one-shot=false&since=0",
+                timeout=4.0,
+            )
+            if stats is None:
+                return 0.0
             pre_stats = stats.get("precpu_stats") or {}
             cur_stats = stats.get("cpu_stats") or {}
             pre = pre_stats.get("cpu_usage") or {}
@@ -1224,22 +1225,9 @@ def _disk_usage(path="/"):
 def _docker_df():
     out = {"images": 0, "containers": 0, "volumes": 0, "build": 0}
     try:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-            s.settimeout(5.0)
-            s.connect("/var/run/docker.sock")
-            req = (
-                "GET /v1.44/system/df HTTP/1.1\r\n"
-                "Host: docker\r\nConnection: close\r\n\r\n"
-            ).encode()
-            s.sendall(req)
-            data = b""
-            while True:
-                chunk = s.recv(65536)
-                if not chunk:
-                    break
-                data += chunk
-        body = data.split(b"\r\n\r\n", 1)[-1]
-        resp = json.loads(body.decode("utf-8", "replace"))
+        resp = _docker_json("GET", "/v1.44/system/df", timeout=8.0)
+        if not isinstance(resp, dict):
+            return out
         for kind in ("images", "containers", "volumes", "build"):
             for e in resp.get(kind) or []:
                 if kind == "images":
@@ -1555,22 +1543,9 @@ def docker_disk_breakdown():
     """Per-container disk usage (read-only)."""
     out = []
     try:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-            s.settimeout(4.0)
-            s.connect("/var/run/docker.sock")
-            req = (
-                "GET /v1.44/containers/json?all=1 HTTP/1.1\r\n"
-                "Host: docker\r\nConnection: close\r\n\r\n"
-            ).encode()
-            s.sendall(req)
-            data = b""
-            while True:
-                chunk = s.recv(65536)
-                if not chunk:
-                    break
-                data += chunk
-        body = data.split(b"\r\n\r\n", 1)[-1]
-        items = json.loads(body)
+        items = _docker_json("GET", "/v1.44/containers/json?all=1", timeout=6.0)
+        if not isinstance(items, list):
+            return out
         for item in items:
             name = (item.get("Names") or [""])[0].lstrip("/")
             cid = (item.get("Id") or "")[:12]
