@@ -633,7 +633,6 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
         msg = f"⌬ <b><u>Config Variables</u></b> | <b><u>Page: {int(start / 10) + 1}</b></u>"
     elif key == "setonoff":
         buttons.data_button("On/Off Settings", "botset settoggle")
-        buttons.data_button("Limit Settings", "botset setlimit")
         buttons.data_button("Back", "botset back", position="footer")
         buttons.data_button(
             "Close", "botset close", position="footer", style=ButtonStyle.DANGER
