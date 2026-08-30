@@ -905,10 +905,31 @@ class VPSGuard:
 vps_guard = VPSGuard()
 
 
+_threading_lock = None
+
+
+def _bg_refresh(owner, refresh_fn, ttl):
+    """Non-blocking refresh: if stale, spawn daemon thread to refresh.
+    Returns immediately — UI never waits on scans."""
+    global _threading_lock
+    import threading
+
+    if _threading_lock is None:
+        _threading_lock = threading.Lock()
+    now = time()
+    if now - getattr(owner, "last_scan", 0) <= ttl:
+        return
+    with _threading_lock:
+        if now - getattr(owner, "last_scan", 0) <= ttl:
+            return
+        threading.Thread(
+            target=refresh_fn, args=(owner,), daemon=True, name="mem_guard_refresh"
+        ).start()
+
+
 def vps_snapshot():
     guard = vps_guard
-    if time() - guard.last_scan > 12:
-        guard.refresh()
+    _bg_refresh(guard, lambda g: g.refresh(), 12)
     st = guard.state()
     services = []
     for name, s in st["services"].items():
@@ -1173,8 +1194,7 @@ cpu_guard = CpuGuard()
 
 def cpu_snapshot():
     guard = cpu_guard
-    if time() - guard.last_scan > 10:
-        guard.refresh()
+    _bg_refresh(guard, lambda g: g.refresh(), 12)
     st = guard.state()
     services = []
     for name, s in st["services"].items():
@@ -1343,8 +1363,7 @@ disk_guard = DiskGuard()
 
 def disk_snapshot():
     guard = disk_guard
-    if time() - guard.last_scan > 120:
-        guard.refresh()
+    _bg_refresh(guard, lambda g: g.refresh(), 60)
     st = guard.state()
     return {
         "disk": st["disk"],
@@ -1473,11 +1492,18 @@ _disk_breakdown_cache = {}
 _DISK_BREAKDOWN_TTL = 300  # seconds
 
 def disk_breakdown(force=False):
-    """Top-level dir sizes via du (safe, cached 5min). du on a big VPS is slow —
-    cache it so button presses don't re-scan. For /memory "Disk Details"."""
+    """Top-level dir sizes via du (safe, cached 5min). Returns cached instantly;
+    if stale, kicks a background thread and returns what we have (or {} first time)."""
     now = time()
-    if not force and _disk_breakdown_cache and now - _disk_breakdown_cache["ts"] < _DISK_BREAKDOWN_TTL:
+    if _disk_breakdown_cache and now - _disk_breakdown_cache["ts"] < _DISK_BREAKDOWN_TTL:
         return _disk_breakdown_cache["data"]
+    # stale → background refresh, don't block UI
+    def _fill():
+        _disk_breakdown(force=True)
+    _bg_refresh(_disk_breakdown, lambda cache: _fill(), _DISK_BREAKDOWN_TTL)
+    return _disk_breakdown_cache.get("data") or {}
+
+def _disk_breakdown(force=False):
     dirs = {}
     for path in ("/var", "/home", "/root", "/tmp", "/opt", "/snap"):
         try:
