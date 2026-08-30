@@ -193,7 +193,6 @@ def _menu(user_id, view="main"):
             note = "High usage — consider pruning"
         buttons.data_button("Refresh", f"mem {user_id} disk")
         buttons.data_button("Prune Docker", f"mem {user_id} dprune")
-        buttons.data_button("Prune All", f"mem {user_id} dpruneall")
         buttons.data_button("Back", f"mem {user_id} main", position="footer")
         buttons.data_button(
             "Close", f"mem {user_id} close", position="footer", style=ButtonStyle.DANGER
@@ -288,29 +287,24 @@ async def memory_callback(_, query):
             f"VPS trim done. Sent SIGHUP to: {', '.join(flags) or 'no services'}",
             show_alert=True,
         )
-    elif action in ("dprune", "dpruneall"):
-        aggressive = action == "dpruneall"
-        label = "All (images+volumes)" if aggressive else "Safe (unused only)"
+    elif action == "dprune":
         btns = ButtonMaker()
-        btns.data_button(
-            "Confirm Prune", f"mem {user_id} dprunedo {'a' if aggressive else 's'}"
-        )
+        btns.data_button("Confirm Prune", f"mem {user_id} dprunedo")
         btns.data_button("Cancel", f"mem {user_id} disk")
         await query.answer()
         await edit_message(
             query.message,
-            f"⚠️ <b>Confirm Docker prune?</b>\n\n"
-            f"Mode: <code>{label}</code>\n"
-            f"Safe = unused images + build cache.\n"
-            f"All = also dangling volumes + all unused images.",
+            "⚠️ <b>Confirm Docker prune?</b>\n\n"
+            "Mode: <code>Safe</code>\n"
+            "Sirf unused (dangling) images + build cache + stopped containers.\n"
+            "Running containers, volumes aur used images safe rehte hain.",
             btns.build_menu(2),
         )
         return
     elif action == "dprunedo":
-        aggressive = len(data) > 3 and data[3] == "a"
         await query.answer("Pruning...")
         from ..helper.ext_utils.mem_guard import _docker_prune
-        ok, freed = await asyncio.to_thread(_docker_prune, aggressive)
+        ok, freed = await asyncio.to_thread(_docker_prune, False)
         btns = ButtonMaker()
         btns.data_button("Back", f"mem {user_id} disk")
         await edit_message(
