@@ -808,6 +808,22 @@ class VPSGuard:
             self._task = None
 
     # ---------------- actions & state ----------------
+    def restart(self, name, force=True):
+        """Manual restart (user-initiated from /memory). Ignores cooldown only
+        when triggered manually via force=True from the Telegram button."""
+        s = self.services.get(name)
+        if s is None:
+            # not currently in a scan snapshot; rebuild so we have an entry
+            self.refresh()
+            s = self.services.get(name)
+        if s is None:
+            return False, "service not found"
+        if force:
+            # temporarily clear cooldown for this manual call
+            self.restarts.pop(name, None)
+        ok = self._restart_service(name, s, s.get("ratio") or 0.0, force=force)
+        return ok, "ok"
+
     def trim(self):
         flags = []
         for name, s in self.services.items():

@@ -1,3 +1,4 @@
+import asyncio
 from asyncio import all_tasks
 from time import time
 
@@ -154,11 +155,20 @@ def _menu(user_id, view="main"):
     if view == "vps_svc":
         rows = _vps_services_rows()
         buttons.data_button("Refresh", f"mem {user_id} vps_svc")
+        vsnap = vps_snapshot()
+        for s in vsnap["services"]:
+            if s["cont"]:
+                buttons.data_button(
+                    f"restart {s['name']}",
+                    f"mem {user_id} rst {s['name']}",
+                    style=ButtonStyle.DANGER,
+                )
         buttons.data_button("Back", f"mem {user_id} vps", position="footer")
         buttons.data_button(
             "Close", f"mem {user_id} close", position="footer", style=ButtonStyle.DANGER
         )
-        return _wz("VPS Services", rows, ""), buttons.build_menu(2)
+        note = "Restart buttons: docker containers only (FlareSolverr/tunnels/...)."
+        return _wz("VPS Services", rows, note), buttons.build_menu(2)
 
     if view == "detail":
         snap = snapshot()
@@ -248,6 +258,16 @@ async def memory_callback(_, query):
             f"VPS trim done. Sent SIGHUP to: {', '.join(flags) or 'no services'}",
             show_alert=True,
         )
+    elif action == "rst":
+        if len(data) < 4 or not data[3].isalnum():
+            await query.answer("Bad service name", show_alert=True)
+        else:
+            name = data[3]
+            ok, msg = await asyncio.to_thread(vps_guard.restart, name)
+            await query.answer(
+                f"{'Restarted' if ok else 'Restart failed'}: {name} ({msg})",
+                show_alert=not ok,
+            )
     else:
         await query.answer()
 
