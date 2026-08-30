@@ -383,7 +383,7 @@ async def memory_callback(_, query):
         return
     elif action == "vpstrimdo":
         await query.answer("Trimming...")
-        flags = vps_guard.trim()
+        flags = await asyncio.to_thread(vps_guard.trim)
         btns = ButtonMaker()
         btns.data_button("Back", f"mem {user_id} vps")
         await edit_message(
