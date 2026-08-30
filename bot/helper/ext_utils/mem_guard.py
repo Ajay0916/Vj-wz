@@ -879,3 +879,448 @@ def vps_snapshot():
         "services": services,
         "top": st["top"],
     }
+
+
+# ============================================================
+# CPU Guard — mirror of VPS Guard for CPU load monitoring
+# ============================================================
+
+def _cpu_count():
+    try:
+        from os import sched_getaffinity
+        return len(sched_getaffinity(0))
+    except Exception:
+        try:
+            from os import cpu_count
+            return cpu_count() or 1
+        except Exception:
+            return 1
+
+def _system_cpu():
+    try:
+        import psutil
+        return psutil.cpu_percent(interval=0.05) / 100.0
+    except Exception:
+        return 0.0
+
+def _proc_cpu(pid):
+    try:
+        import psutil
+        if not psutil.pid_exists(pid):
+            return None
+        p = psutil.Process(pid)
+        pct = p.cpu_percent(interval=0.05)
+        return pct
+    except Exception:
+        return None
+
+
+class CpuGuard:
+    def __init__(self):
+        self._task = None
+        self.cpus = _cpu_count()
+        self.services = {}
+        self.top = []
+        self.last_scan = 0
+        self.restarts = {}
+
+    def _safe_limit(self, name):
+        total = self.cpus
+        limit = getattr(Config, "VPS_CPU_LIMIT", 0) or 0
+        if limit > 0:
+            return min(limit, total)
+        if name == "flaresolverr":
+            return max(1.0, total * 0.6)
+        if name == "t-api":
+            return max(1.0, total * 0.5)
+        return max(1.0, total * 0.5)
+
+    def refresh(self):
+        scan = _scan_tree(skip_docker=True)
+        state = {
+            "services": {},
+        }
+        for key, procs in scan.items():
+            if not procs:
+                continue
+            rows = sorted(procs, key=lambda p: p["rss"], reverse=True)
+            name = str(key)
+            if name.startswith("host ") or name.startswith("proc "):
+                name = name[5:]
+                state["services"][name] = {
+                    "pids": len(rows),
+                    "cont": False,
+                    "pid": rows[0]["pid"],
+                    "cmd": rows[0]["cmd"],
+                }
+            else:
+                state["services"][name] = {
+                    "pids": len(rows),
+                    "cont": True,
+                    "pid": rows[0]["pid"],
+                    "cmd": rows[0]["cmd"],
+                }
+        try:
+            for cname, cdata in _docker_stats_socket().items():
+                m = _container_mem(cdata["id"])
+                state["services"][cname] = {
+                    "pids": 1,
+                    "cont": True,
+                    "pid": None,
+                    "cmd": cdata["image"],
+                }
+        except Exception:
+            pass
+        for name, s in state["services"].items():
+            try:
+                if s.get("cont"):
+                    s["cpu_pct"] = self._container_cpu(name)
+                elif s.get("pid"):
+                    pct = _proc_cpu(s["pid"])
+                    s["cpu_pct"] = pct if pct is not None else 0.0
+                else:
+                    s["cpu_pct"] = 0.0
+            except Exception:
+                s["cpu_pct"] = 0.0
+        self.last_scan = time()
+        self.services = state["services"]
+        self.top = sorted(
+            [
+                {"pid": s.get("pid"), "cpu": s.get("cpu_pct", 0), "name": k}
+                for k, s in self.services.items()
+                if s.get("pid")
+            ],
+            key=lambda x: x["cpu"],
+            reverse=True,
+        )[:6]
+        return state
+
+    def _container_cpu(self, name):
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+                s.settimeout(4.0)
+                s.connect("/var/run/docker.sock")
+                req = (
+                    f"GET /v1.41/containers/name/{name}/stats?stream=true&one-shot=false&since=0 HTTP/1.1\r\n"
+                    "Host: docker\r\nConnection: close\r\n\r\n"
+                ).encode()
+                s.sendall(req)
+                data = b""
+                while True:
+                    chunk = s.recv(65536)
+                    if not chunk:
+                        break
+                    if b"\r\n\r\n" in data and b"\r\n\r\n" not in data + chunk:
+                        data += chunk
+                        break
+                    data += chunk
+            body = data.split(b"\r\n\r\n", 1)[-1]
+            first_line = body.split(b"\r\n", 1)[0]
+            stats = json.loads(first_line.decode("utf-8", "replace"))
+            pre_stats = stats.get("precpu_stats") or {}
+            cur_stats = stats.get("cpu_stats") or {}
+            pre = pre_stats.get("cpu_usage") or {}
+            cur = cur_stats.get("cpu_usage") or {}
+            sys = cur_stats.get("system_cpu_usage") or 0
+            pre_sys = pre_stats.get("system_cpu_usage") or 0
+            delta_cpu = (cur.get("total_usage") or 0) - (pre.get("total_usage") or 0)
+            delta_sys = max(1, sys - pre_sys)
+            num_cpus = cur_stats.get("online_cpus") or 1
+            cpu_percent = (delta_cpu / delta_sys) * num_cpus * 100
+            return round(cpu_percent, 1)
+        except Exception:
+            return 0.0
+
+    def _check(self):
+        for name, s in list(self.services.items()):
+            try:
+                cpu_pct = s.get("cpu_pct") or 0
+                limit = self._safe_limit(name) * 100  # as percent
+                ratio = cpu_pct / limit if limit > 0 else 0
+                s["cpu_ratio"] = ratio
+                s["cpu_limit"] = limit
+                if ratio >= 1.5:
+                    self._restart_service(name, s)
+                elif ratio >= 1.0:
+                    LOGGER.warning(f"CPU Guard: {name} at {cpu_pct:.1f}% (limit {limit:.0f}%)")
+            except Exception as err:
+                LOGGER.error(f"CPU Guard {name}: {err}")
+
+    def _restart_service(self, name, s):
+        conf = _vps_conf
+        if not conf["restart"]:
+            return False
+        now = time()
+        if now - (self.restarts.get(name) or 0) < (conf["restart_cooldown"] or 600):
+            return False
+        command = None
+        if s.get("cont"):
+            command = f"docker restart {name}"
+        elif name == "t-api":
+            command = "systemctl restart t-api"
+        if not command:
+            return False
+        LOGGER.warning(f"CPU Guard: restarting {name} (CPU {s.get('cpu_pct', 0):.1f}%)")
+        try:
+            subprocess.run(command, shell=True, timeout=60, capture_output=True)
+            self.restarts[name] = now
+            return True
+        except Exception:
+            return False
+
+    async def _loop(self):
+        while True:
+            try:
+                self.refresh()
+                self._check()
+            except Exception as err:
+                LOGGER.error(f"CPU Guard loop: {err}")
+            await sleep(max(20, _vps_conf.get("interval", 30) or 30))
+
+    def start(self):
+        if self._task is not None:
+            return
+        if not _vps_conf.get("guard"):
+            return
+        try:
+            from ... import bot_loop
+            self.refresh()
+            self._task = bot_loop.create_task(self._loop())
+            LOGGER.info(f"CPU Guard on: {self.cpus} CPUs, {len(self.services)} services")
+        except Exception as err:
+            LOGGER.error(f"CPU Guard start: {err}")
+
+    def stop(self):
+        if self._task is not None:
+            self._task.cancel()
+            self._task = None
+
+    def state(self):
+        return {
+            "cpus": self.cpus,
+            "last_scan": self.last_scan,
+            "services": self.services,
+            "top": self.top,
+        }
+
+    def restart(self, name, force=True):
+        s = self.services.get(name)
+        if s is None:
+            self.refresh()
+            s = self.services.get(name)
+        if s is None:
+            return False, "service not found"
+        if force:
+            self.restarts.pop(name, None)
+        command = None
+        if s.get("cont"):
+            command = f"docker restart {name}"
+        elif name == "t-api":
+            command = "systemctl restart t-api"
+        if not command:
+            return False, "no command"
+        LOGGER.warning(f"CPU Guard: manual restart {name}")
+        try:
+            subprocess.run(command, shell=True, timeout=60, capture_output=True)
+            self.restarts[name] = time()
+            return True, "ok"
+        except Exception as err:
+            return False, str(err)
+
+
+cpu_guard = CpuGuard()
+
+
+def cpu_snapshot():
+    guard = cpu_guard
+    if time() - guard.last_scan > 10:
+        guard.refresh()
+    st = guard.state()
+    services = []
+    for name, s in st["services"].items():
+        services.append(
+            {
+                "name": name,
+                "cpu_pct": s.get("cpu_pct") or 0,
+                "cont": bool(s.get("cont")),
+                "limit": s.get("cpu_limit") or 0,
+                "ratio": s.get("cpu_ratio") or 0.0,
+            }
+        )
+    services = sorted(services, key=lambda x: x["cpu_pct"], reverse=True)[:10]
+    return {
+        "cpus": st["cpus"],
+        "last_scan": st["last_scan"],
+        "services": services,
+        "top": st["top"],
+    }
+
+
+# ============================================================
+# Disk Guard — disk / Docker-storage watchdog
+# ============================================================
+
+def _disk_usage(path="/"):
+    try:
+        import psutil
+        u = psutil.disk_usage(path)
+        return {"total": u.total, "used": u.used, "free": u.free, "pct": u.percent}
+    except Exception:
+        import shutil
+        u = shutil.disk_usage(path)
+        return {
+            "total": u.total,
+            "used": u.used,
+            "free": u.free,
+            "pct": round(u.used / u.total * 100, 1),
+        }
+
+
+
+
+# ============================================================
+# Disk Guard — disk / Docker-storage watchdog
+# ============================================================
+
+def _disk_usage(path="/"):
+    try:
+        import psutil
+        u = psutil.disk_usage(path)
+        return {"total": u.total, "used": u.used, "free": u.free, "pct": u.percent}
+    except Exception:
+        import shutil
+        u = shutil.disk_usage(path)
+        return {
+            "total": u.total,
+            "used": u.used,
+            "free": u.free,
+            "pct": round(u.used / u.total * 100, 1),
+        }
+
+
+def _docker_df():
+    out = {"images": 0, "containers": 0, "volumes": 0, "build": 0}
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(5.0)
+            s.connect("/var/run/docker.sock")
+            req = (
+                "GET /v1.41/system/df HTTP/1.1\r\n"
+                "Host: docker\r\nConnection: close\r\n\r\n"
+            ).encode()
+            s.sendall(req)
+            data = b""
+            while True:
+                chunk = s.recv(65536)
+                if not chunk:
+                    break
+                data += chunk
+        body = data.split(b"\r\n\r\n", 1)[-1]
+        resp = json.loads(body.decode("utf-8", "replace"))
+        for kind in ("images", "containers", "volumes", "build"):
+            for e in resp.get(kind) or []:
+                if kind == "images":
+                    out["images"] += e.get("Size") or 0
+                elif kind == "containers":
+                    out["containers"] += e.get("SizeRw") or 0
+                elif kind == "volumes":
+                    out["volumes"] += e.get("Size") or 0
+                elif kind == "build":
+                    out["build"] += e.get("Size") or 0
+    except Exception:
+        pass
+    return out
+
+
+def _docker_prune(aggressive=False):
+    cmd = "docker system prune -f" + (" -a --volumes" if aggressive else "")
+    try:
+        result = subprocess.run(cmd, shell=True, timeout=120, capture_output=True, text=True)
+        output = (result.stdout or "") + (result.stderr or "")
+        freed = "unknown"
+        for line in output.split("\n"):
+            if "freed" in line.lower():
+                freed = line.strip()
+                break
+        return True, freed
+    except Exception as err:
+        return False, str(err)
+
+
+class DiskGuard:
+    def __init__(self):
+        self._task = None
+        self.disk = {"total": 0, "used": 0, "free": 0, "pct": 0}
+        self.docker_df = {}
+        self.last_scan = 0
+
+    def refresh(self):
+        self.disk = _disk_usage("/")
+        self.docker_df = _docker_df()
+        self.last_scan = time()
+        return self.disk
+
+    def pressure(self):
+        return (self.disk.get("pct") or 0) / 100.0
+
+    def _loop(self):
+        while True:
+            try:
+                self.refresh()
+                ratio = self.pressure()
+                if ratio >= 0.90:
+                    LOGGER.warning(
+                        f"Disk Guard: {readable(self.disk['used'])} / "
+                        f"{readable(self.disk['total'])} ({self.disk['pct']:.1f}%) "
+                        f"— consider pruning Docker images"
+                    )
+            except Exception as err:
+                LOGGER.error(f"Disk Guard scan: {err}")
+            time.sleep(max(60, (_vps_conf.get("interval") or 30) * 2))
+
+    async def _aloop(self):
+        import asyncio
+        await asyncio.to_thread(self._loop)
+
+    def start(self):
+        if self._task is not None:
+            return
+        if not _vps_conf.get("guard"):
+            return
+        try:
+            from ... import bot_loop
+            self.refresh()
+            self._task = bot_loop.create_task(self._aloop())
+            LOGGER.info(
+                f"Disk Guard on: {readable(self.disk['used'])} / "
+                f"{readable(self.disk['total'])} ({self.disk['pct']:.1f}%)"
+            )
+        except Exception as err:
+            LOGGER.error(f"Disk Guard start: {err}")
+
+    def stop(self):
+        if self._task is not None:
+            self._task.cancel()
+            self._task = None
+
+    def state(self):
+        return {
+            "disk": self.disk,
+            "docker": self.docker_df,
+            "last_scan": self.last_scan,
+        }
+
+
+disk_guard = DiskGuard()
+
+
+def disk_snapshot():
+    guard = disk_guard
+    if time() - guard.last_scan > 120:
+        guard.refresh()
+    st = guard.state()
+    return {
+        "disk": st["disk"],
+        "docker": st["docker"],
+        "last_scan": st["last_scan"],
+    }

@@ -174,10 +174,12 @@ if not Config.DISABLE_PLUGINS:
     register_plugin_commands()
 bot_loop.run_until_complete(plugin_manager.boot())
 
-from .helper.ext_utils.mem_guard import monitor as memory_monitor, vps_guard
+from .helper.ext_utils.mem_guard import monitor as memory_monitor, vps_guard, cpu_guard, disk_guard
 
 memory_monitor.start()
 vps_guard.start()
+cpu_guard.start()
+disk_guard.start()
 
 from pyrogram.filters import regex
 from pyrogram.handlers import CallbackQueryHandler

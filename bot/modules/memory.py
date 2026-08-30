@@ -8,6 +8,7 @@ from ..core.config_manager import Config
 from ..helper.ext_utils.bot_utils import new_task
 from ..helper.ext_utils.mem_guard import (
     budget,
+    disk_snapshot,
     limit_bytes,
     monitor,
     profiler,
@@ -119,6 +120,7 @@ def _menu(user_id, view="main"):
     if view == "main":
         snap, rows = _overview()
         buttons.data_button("VPS Guard", f"mem {user_id} vps", position="header")
+        buttons.data_button("Disk Guard", f"mem {user_id} disk")
         buttons.data_button("Refresh", f"mem {user_id} main", position="header")
         buttons.data_button("Breakdown", f"mem {user_id} detail")
         if profiler.running:
@@ -169,6 +171,34 @@ def _menu(user_id, view="main"):
         )
         note = "Restart buttons: docker containers only (FlareSolverr/tunnels/...)."
         return _wz("VPS Services", rows, note), buttons.build_menu(2)
+
+    if view == "disk":
+        ds = disk_snapshot()
+        d = ds["disk"]
+        rows = [
+            ("Total", readable(d["total"])),
+            ("Used", readable(d["used"])),
+            ("Free", readable(d["free"])),
+            ("Usage", f"{d['pct']:.1f}%"),
+        ]
+        dock = ds["docker"]
+        if any(dock.values()):
+            for k, v in dock.items():
+                if v > 0:
+                    rows.append((f"Docker {k}", readable(v)))
+        note = ""
+        if d["pct"] >= 90:
+            note = "CRITICAL — prune Docker to reclaim space"
+        elif d["pct"] >= 80:
+            note = "High usage — consider pruning"
+        buttons.data_button("Refresh", f"mem {user_id} disk")
+        buttons.data_button("Prune Docker", f"mem {user_id} dprune")
+        buttons.data_button("Prune All", f"mem {user_id} dpruneall")
+        buttons.data_button("Back", f"mem {user_id} main", position="footer")
+        buttons.data_button(
+            "Close", f"mem {user_id} close", position="footer", style=ButtonStyle.DANGER
+        )
+        return _wz("Disk Guard", rows, note), buttons.build_menu(2)
 
     if view == "detail":
         snap = snapshot()
@@ -258,6 +288,37 @@ async def memory_callback(_, query):
             f"VPS trim done. Sent SIGHUP to: {', '.join(flags) or 'no services'}",
             show_alert=True,
         )
+    elif action in ("dprune", "dpruneall"):
+        aggressive = action == "dpruneall"
+        label = "All (images+volumes)" if aggressive else "Safe (unused only)"
+        btns = ButtonMaker()
+        btns.data_button(
+            "Confirm Prune", f"mem {user_id} dprunedo {'a' if aggressive else 's'}"
+        )
+        btns.data_button("Cancel", f"mem {user_id} disk")
+        await query.answer()
+        await edit_message(
+            query.message,
+            f"⚠️ <b>Confirm Docker prune?</b>\n\n"
+            f"Mode: <code>{label}</code>\n"
+            f"Safe = unused images + build cache.\n"
+            f"All = also dangling volumes + all unused images.",
+            btns.build_menu(2),
+        )
+        return
+    elif action == "dprunedo":
+        aggressive = len(data) > 3 and data[3] == "a"
+        await query.answer("Pruning...")
+        from ..helper.ext_utils.mem_guard import _docker_prune
+        ok, freed = await asyncio.to_thread(_docker_prune, aggressive)
+        btns = ButtonMaker()
+        btns.data_button("Back", f"mem {user_id} disk")
+        await edit_message(
+            query.message,
+            (f"✅ Prune done — <code>{freed}</code>" if ok else f"❌ Prune failed: {freed}"),
+            btns.build_menu(1),
+        )
+        return
     elif action == "rst":
         if len(data) < 4 or not data[3].isalnum():
             await query.answer("Bad service name", show_alert=True)
@@ -300,7 +361,7 @@ async def memory_callback(_, query):
     else:
         await query.answer()
 
-    view = action if action in ("main", "detail", "top", "vps", "vps_svc", "rcst") else "main"
+    view = action if action in ("main", "detail", "top", "vps", "vps_svc", "disk", "rcst") else "main"
     text, markup = _menu(user_id, view)
     await edit_message(query.message, text, markup)
 
