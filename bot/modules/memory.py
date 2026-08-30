@@ -13,6 +13,8 @@ from ..helper.ext_utils.mem_guard import (
     readable,
     snapshot,
     trim_caches,
+    vps_guard,
+    vps_snapshot,
 )
 from ..helper.telegram_helper.button_build import ButtonMaker
 from ..helper.telegram_helper.message_utils import (
@@ -67,10 +69,55 @@ def _overview():
     return snap, rows
 
 
+def _vps_overview():
+    vsnap = vps_snapshot()
+    pressure = vsnap["pressure"]
+    services = vsnap["services"]
+    rows = [
+        ("VPS Pressure", f"{pressure * 100:.0f}%"),
+        ("VPS Free", readable(vsnap["total"] - vsnap["used"])),
+        ("Services", str(len(services))),
+        ("Criticals", str(vsnap["critical"])),
+        ("Trims", str(vsnap["trims"])),
+    ]
+    note = ""
+    if pressure >= 0.95:
+        note = "CRITICAL — restarts may be triggered"
+    elif pressure >= 0.80:
+        note = "High pressure — monitoring closely"
+    return vsnap, rows, note
+
+
+def _vps_services_rows():
+    vsnap = vps_snapshot()
+    services = vsnap["services"]
+    rows = []
+    for s in services:
+        name = s["name"]
+        used = s["used"]
+        limit = s["limit"]
+        ratio = s["ratio"]
+        cont = s["cont"]
+        tag = "🐳" if cont else "⚙️"
+        lim_str = f" / {readable(limit)}" if limit else ""
+        pct_str = f" ({ratio * 100:.0f}%)" if ratio else ""
+        rows.append((f"{tag} {name}", f"{readable(used)}{lim_str}{pct_str}"))
+    if not rows:
+        rows = [("Services", "none tracked")]
+    top = vsnap["top"]
+    if top:
+        rows.append(("", ""))
+        rows.append(("--- Top Processes ---", ""))
+        for p in top[:5]:
+            rows.append((f"PID {p['pid']}", f"{readable(p['rss'])} — {p['cmd'][:60]}"))
+    return rows
+
+
 def _menu(user_id, view="main"):
     buttons = ButtonMaker()
     if view == "main":
         snap, rows = _overview()
+        buttons.data_button("VPS Guard", f"mem {user_id} vps", position="header")
         buttons.data_button("Refresh", f"mem {user_id} main", position="header")
         buttons.data_button("Breakdown", f"mem {user_id} detail")
         if profiler.running:
@@ -92,6 +139,26 @@ def _menu(user_id, view="main"):
         elif not snap["profiling"]:
             note = "Start the profiler, reproduce the load, then read the top allocations."
         return _wz("Memory", rows, note), buttons.build_menu(2)
+
+    if view == "vps":
+        vsnap, rows, note = _vps_overview()
+        buttons.data_button("Services", f"mem {user_id} vps_svc")
+        buttons.data_button("Refresh", f"mem {user_id} vps")
+        buttons.data_button("VPS Trim", f"mem {user_id} vpstrim")
+        buttons.data_button("Back", f"mem {user_id} main", position="footer")
+        buttons.data_button(
+            "Close", f"mem {user_id} close", position="footer", style=ButtonStyle.DANGER
+        )
+        return _wz("VPS Guard", rows, note), buttons.build_menu(2)
+
+    if view == "vps_svc":
+        rows = _vps_services_rows()
+        buttons.data_button("Refresh", f"mem {user_id} vps_svc")
+        buttons.data_button("Back", f"mem {user_id} vps", position="footer")
+        buttons.data_button(
+            "Close", f"mem {user_id} close", position="footer", style=ButtonStyle.DANGER
+        )
+        return _wz("VPS Services", rows, ""), buttons.build_menu(2)
 
     if view == "detail":
         snap = snapshot()
@@ -168,7 +235,6 @@ async def memory_callback(_, query):
         before = snapshot()["rss"]
         freed = trim_caches(aggressive=True)
         from gc import collect
-
         collected = collect()
         after = snapshot()["rss"]
         await query.answer(
@@ -176,19 +242,27 @@ async def memory_callback(_, query):
             f"Resident {readable(before)} to {readable(after)}.",
             show_alert=True,
         )
+    elif action == "vpstrim":
+        flags = vps_guard.trim()
+        await query.answer(
+            f"VPS trim done. Sent SIGHUP to: {', '.join(flags) or 'no services'}",
+            show_alert=True,
+        )
     else:
         await query.answer()
 
-    view = action if action in ("main", "detail", "top") else "main"
+    view = action if action in ("main", "detail", "top", "vps", "vps_svc") else "main"
     text, markup = _menu(user_id, view)
     await edit_message(query.message, text, markup)
 
 
 def memory_report():
     snap = snapshot()
+    vsnap = vps_snapshot()
     return (
         f"resident {readable(snap['rss'])} of {readable(limit_bytes())} "
         f"({snap['pressure'] * 100:.0f}%), transfers "
         f"{readable(snap['budget']['used'])}/{readable(budget.limit)}, "
-        f"caches {readable(snap['cache_total'])}"
+        f"caches {readable(snap['cache_total'])}, "
+        f"vps {vsnap['pressure'] * 100:.0f}% pressure"
     )
