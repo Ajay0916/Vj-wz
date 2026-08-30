@@ -826,12 +826,14 @@ class VPSGuard:
     async def _loop(self):
         while True:
             try:
-                self.refresh()
+                import asyncio
+
+                await asyncio.to_thread(self.refresh)
                 self._check_critical()
                 self._check_services()
             except Exception as err:
                 LOGGER.error(f"VPS guard loop: {err}")
-            await sleep(max(15, _vps_conf["interval"] or 30))
+            await sleep(max(30, (_vps_conf["interval"] or 30) * 2))
 
     def start(self):
         if self._task is not None:
@@ -905,7 +907,8 @@ vps_guard = VPSGuard()
 
 def vps_snapshot():
     guard = vps_guard
-    guard.refresh()
+    if time() - guard.last_scan > 12:
+        guard.refresh()
     st = guard.state()
     services = []
     for name, s in st["services"].items():
@@ -1049,8 +1052,8 @@ class CpuGuard:
         try:
             stats = _docker_json(
                 "GET",
-                f"/v1.44/containers/name/{name}/stats?stream=true&one-shot=false&since=0",
-                timeout=4.0,
+                f"/v1.44/containers/name/{name}/stats?stream=false&one-shot=true",
+                timeout=3.0,
             )
             if stats is None:
                 return 0.0
@@ -1112,7 +1115,7 @@ class CpuGuard:
                 self._check()
             except Exception as err:
                 LOGGER.error(f"CPU Guard loop: {err}")
-            await sleep(max(20, _vps_conf.get("interval", 30) or 30))
+            await sleep(max(60, (_vps_conf.get("interval") or 30) * 2))
 
     def start(self):
         if self._task is not None:
@@ -1466,16 +1469,21 @@ SAFE_CLEANUPS = {
 # Disk + RAM breakdown helpers (safe — read-only)
 # ============================================================
 
-def disk_breakdown():
-    """Top-level dir sizes via du (safe, per-dir, timeout-protected).
-    Uses du -x --max-depth=0 on each dir to avoid slow full-fs scans.
-    Returns dict of path -> bytes."""
+_disk_breakdown_cache = {}
+_DISK_BREAKDOWN_TTL = 300  # seconds
+
+def disk_breakdown(force=False):
+    """Top-level dir sizes via du (safe, cached 5min). du on a big VPS is slow —
+    cache it so button presses don't re-scan. For /memory "Disk Details"."""
+    now = time()
+    if not force and _disk_breakdown_cache and now - _disk_breakdown_cache["ts"] < _DISK_BREAKDOWN_TTL:
+        return _disk_breakdown_cache["data"]
     dirs = {}
     for path in ("/var", "/home", "/root", "/tmp", "/opt", "/snap"):
         try:
             r = subprocess.run(
                 ["du", "-x", "--max-depth=0", "-b", path],
-                capture_output=True, text=True, timeout=15
+                capture_output=True, text=True, timeout=5
             )
             for line in (r.stdout or "").split("\n"):
                 parts = line.split("\t", 1)
@@ -1511,7 +1519,9 @@ def disk_breakdown():
         dirs["/var/lib/docker"] = docker_total
     except Exception:
         pass
-    return dict(sorted(dirs.items(), key=lambda x: x[1], reverse=True)[:10])
+    _disk_breakdown_cache["ts"] = time()
+    _disk_breakdown_cache["data"] = dict(sorted(dirs.items(), key=lambda x: x[1], reverse=True)[:10])
+    return _disk_breakdown_cache["data"]
 
 
 def ram_breakdown():
