@@ -1,3 +1,4 @@
+import os
 from ast import literal_eval
 from pyrogram import Client, enums
 from pyrogram.errors import FloodWait
@@ -14,6 +15,30 @@ _DB_PARTITION_SALT = b"wzmlx_v3_db_partition_salt"
 def db_partition_id(bot_id):
     raw = sha256(_DB_PARTITION_SALT + str(bot_id).encode("utf-8")).hexdigest()
     return f"p_{raw[:24]}"
+
+
+
+_SESSION_FILE = "/usr/src/app/accounts/bot_session.txt"
+
+
+def _load_session_string():
+    try:
+        with open(_SESSION_FILE) as f:
+            v = f.read().strip()
+            return v or None
+    except Exception:
+        return None
+
+
+def _save_session_string(value):
+    try:
+        os.makedirs(os.path.dirname(_SESSION_FILE), exist_ok=True)
+        tmp = _SESSION_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            f.write(value)
+        os.replace(tmp, _SESSION_FILE)
+    except Exception as err:
+        LOGGER.error(f"save bot session failed: {err}")
 
 
 class TgClient:
@@ -256,11 +281,14 @@ class TgClient:
         LOGGER.info("Generating client from BOT_TOKEN")
         cls.ID = Config.BOT_TOKEN.split(":", 1)[0]
         cls.PARTITION = db_partition_id(cls.ID)
-        cls.bot = cls.wztgClient(
-            f"WZ-Bot{cls.ID}",
+        session = _load_session_string()
+        kwargs = dict(
             bot_token=Config.BOT_TOKEN,
             workdir="/usr/src/app",
         )
+        if session:
+            kwargs["session_string"] = session
+        cls.bot = cls.wztgClient(f"WZ-Bot{cls.ID}", **kwargs)
         while True:
             try:
                 await cls.bot.start()
@@ -269,6 +297,10 @@ class TgClient:
                 cap = min(e.value, 30)
                 LOGGER.warning(f"FloodWait: sleeping {cap}s before retry (reported {e.value}s)")
                 await sleep(cap)
+        try:
+            _save_session_string(await cls.bot.export_session_string())
+        except Exception as err:
+            LOGGER.error(f"export bot session failed: {err}")
         cls.BNAME = cls.bot.me.username
         cls.ID = Config.BOT_TOKEN.split(":", 1)[0]
         LOGGER.info(f"WZ Bot : [@{cls.BNAME}] Started!")
