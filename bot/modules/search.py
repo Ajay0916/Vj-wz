@@ -1210,6 +1210,7 @@ _FLAG_ONLY = {
     "-ov": "only_video",
     "-ff": "fast",
     "-stf": "strict_filters",
+    "-sl": "strict_links",
     "--help": "help",
     "--status": "status",
     "--live": "live",
@@ -1441,6 +1442,8 @@ def _api_extra_params(opts, method, is_all=False):
             params.append("fast=1")
         if opts.get("strict_filters"):
             params.append("strict_filters=1")
+        if opts.get("strict_links"):
+            params.append("strict_links=1")
         min_quality = opts.get("min_quality")
         if min_quality:
             params.append(f"min_quality={quote(str(min_quality).lower().replace('p', ''))}")
@@ -1833,6 +1836,7 @@ SEARCH_HELP_TEXT = (
     "&nbsp;&nbsp;&nbsp;&nbsp;Multi: <code>-q 1080p,4k</code>\n"
     "• <code>-min &lt;q&gt;</code> → min quality ladder: <code>-min 720</code> = 720p se upar sab\n"
     "• <code>-stf</code> → STRICT filters: auto-relax band, sirf exactly jo manga wahi\n"
+    "• <code>-sl</code> → STRICT links: sirf wahi rows jinke paas usable link (magnet/torrent/download) ho; default me linkless rows bhi aati hain\n"
     "• <code>-lng &lt;lang&gt;</code> → <code>hindi</code>, <code>english</code>, <code>tamil</code>, <code>telugu</code>, <code>dual</code>\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Multi: <code>-lng hindi,english</code>\n"
     "• <code>-c &lt;cat&gt;</code> → <code>movies</code>, <code>tv</code>, <code>music</code>, <code>anime</code>, <code>audiobook</code>, <code>course</code>, <code>book</code>, <code>game</code>, <code>app</code>\n"
