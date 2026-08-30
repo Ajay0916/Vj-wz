@@ -1178,6 +1178,7 @@ _DIGIT_FLAGS = {
     "-se": "season",
     "-ep": "episode",
     "-to": "timeout",
+    "-tops": "tops",
 }
 _WORD_FLAGS = {
     "-p": "page",
@@ -1196,6 +1197,7 @@ _WORD_FLAGS = {
     "-k": "keywords",
     "-w": "format",
     "-au": "author",
+    "-min": "min_quality",
 }
 _FLAG_ONLY = {
     "-f": "fresh",
@@ -1206,6 +1208,8 @@ _FLAG_ONLY = {
     "-ad": "adult",
     "-nv": "no_video",
     "-ov": "only_video",
+    "-ff": "fast",
+    "-stf": "strict_filters",
     "--help": "help",
     "--status": "status",
     "--live": "live",
@@ -1433,6 +1437,15 @@ def _api_extra_params(opts, method, is_all=False):
             params.append(
                 "max_size={}".format(quote(str(opts["max_size"]).replace(" ", "").lower()))
             )
+        if opts.get("fast"):
+            params.append("fast=1")
+        if opts.get("strict_filters"):
+            params.append("strict_filters=1")
+        min_quality = opts.get("min_quality")
+        if min_quality:
+            params.append(f"min_quality={quote(str(min_quality).lower().replace('p', ''))}")
+        if opts.get("tops"):
+            params.append(f"tops={int(opts['tops'])}")
     return ("&" + "&".join(params)) if params else ""
 
 
@@ -1799,6 +1812,8 @@ SEARCH_HELP_TEXT = (
     "• <code>-s &lt;n&gt;</code> → min seeders\n"
     "• <code>-p &lt;spec&gt;</code> → pages: <code>-p 1</code>, range <code>-p 1-4</code>, unlimited <code>-p 0</code>\n"
     "• <code>-to &lt;sec&gt;</code> → speed: slow sites skip (<code>-to 10</code> = max 10s)\n"
+    "• <code>-ff</code> → FAST mode: list-only results, detail link check skip (sabse tez)\n"
+    "• <code>-tops &lt;n&gt;</code> → per-site result cap in combo/all (<code>-tops 5</code> = har site se 5)\n"
     "• <code>-f</code> → fresh (cache skip)\n"
     "• <code>-du</code> → duplicate protection ON\n"
     "• <code>-x &lt;word&gt;</code> → sirf us word wale results\n"
@@ -1816,6 +1831,8 @@ SEARCH_HELP_TEXT = (
     "• <code>-a</code> → general + courses + books ek sath\n"
     "• <code>-q &lt;quality&gt;</code> → <code>480</code>, <code>720</code>, <code>1080</code>, <code>4k</code>\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Multi: <code>-q 1080p,4k</code>\n"
+    "• <code>-min &lt;q&gt;</code> → min quality ladder: <code>-min 720</code> = 720p se upar sab\n"
+    "• <code>-stf</code> → STRICT filters: auto-relax band, sirf exactly jo manga wahi\n"
     "• <code>-lng &lt;lang&gt;</code> → <code>hindi</code>, <code>english</code>, <code>tamil</code>, <code>telugu</code>, <code>dual</code>\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Multi: <code>-lng hindi,english</code>\n"
     "• <code>-c &lt;cat&gt;</code> → <code>movies</code>, <code>tv</code>, <code>music</code>, <code>anime</code>, <code>audiobook</code>, <code>course</code>, <code>book</code>, <code>game</code>, <code>app</code>\n"
