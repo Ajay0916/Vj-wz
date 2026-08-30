@@ -18,12 +18,15 @@ def db_partition_id(bot_id):
 
 
 
-_SESSION_FILE = "/usr/src/app/accounts/bot_session.txt"
+def _session_file():
+    # key by bot id so swapping BOT_TOKEN never reuses another bot's auth
+    bid = Config.BOT_TOKEN.split(":", 1)[0]
+    return f"/usr/src/app/accounts/bot_{bid}.session"
 
 
 def _load_session_string():
     try:
-        with open(_SESSION_FILE) as f:
+        with open(_session_file()) as f:
             v = f.read().strip()
             return v or None
     except Exception:
@@ -32,7 +35,7 @@ def _load_session_string():
 
 def _drop_session_string():
     try:
-        os.remove(_SESSION_FILE)
+        os.remove(_session_file())
     except FileNotFoundError:
         pass
     except Exception as err:
@@ -41,11 +44,12 @@ def _drop_session_string():
 
 def _save_session_string(value):
     try:
-        os.makedirs(os.path.dirname(_SESSION_FILE), exist_ok=True)
-        tmp = _SESSION_FILE + ".tmp"
+        path = _session_file()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = path + ".tmp"
         with open(tmp, "w") as f:
             f.write(value)
-        os.replace(tmp, _SESSION_FILE)
+        os.replace(tmp, path)
     except Exception as err:
         LOGGER.error(f"save bot session failed: {err}")
 
@@ -53,7 +57,8 @@ def _save_session_string(value):
 def _load_sessions(store):
     try:
         import json
-        with open(f"/usr/src/app/accounts/{store}.json") as f:
+        bid = Config.BOT_TOKEN.split(":", 1)[0]
+        with open(f"/usr/src/app/accounts/{store}_{bid}.json") as f:
             data = json.load(f)
         return data if isinstance(data, dict) else {}
     except Exception:
@@ -63,7 +68,8 @@ def _load_sessions(store):
 def _save_session(store, key, value):
     try:
         import json
-        path = f"/usr/src/app/accounts/{store}.json"
+        bid = Config.BOT_TOKEN.split(":", 1)[0]
+        path = f"/usr/src/app/accounts/{store}_{bid}.json"
         os.makedirs(os.path.dirname(path), exist_ok=True)
         data = _load_sessions(store)
         data[key] = value
