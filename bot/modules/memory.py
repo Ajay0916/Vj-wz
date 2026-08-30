@@ -9,14 +9,18 @@ from ..helper.ext_utils.bot_utils import new_task
 from ..helper.ext_utils.mem_guard import (
     budget,
     disk_snapshot,
+    disk_breakdown,
+    docker_disk_breakdown,
     limit_bytes,
     monitor,
     profiler,
+    ram_breakdown,
     readable,
     snapshot,
     trim_caches,
     vps_guard,
     vps_snapshot,
+    SAFE_CLEANUPS,
 )
 from ..helper.telegram_helper.button_build import ButtonMaker
 from ..helper.telegram_helper.message_utils import (
@@ -192,20 +196,51 @@ def _menu(user_id, view="main"):
         elif d["pct"] >= 80:
             note = "High usage — consider pruning"
         buttons.data_button("Refresh", f"mem {user_id} disk")
-        buttons.data_button("Prune Docker", f"mem {user_id} dprune")
+        buttons.data_button("Disk Details", f"mem {user_id} disk_detail")
+        buttons.data_button("Cleanup", f"mem {user_id} dclean")
         buttons.data_button("Back", f"mem {user_id} main", position="footer")
         buttons.data_button(
             "Close", f"mem {user_id} close", position="footer", style=ButtonStyle.DANGER
         )
         return _wz("Disk Guard", rows, note), buttons.build_menu(2)
 
+    if view == "disk_detail":
+        ds = disk_snapshot()
+        d = ds["disk"]
+        rows = [("Free Space", f"{readable(d['free'])} / {readable(d['total'])}")]
+        rows.append(("", ""))
+        rows.append(("--- Top Dirs (disk used) ---", ""))
+        for p, used in disk_breakdown().items():
+            rows.append((p, readable(used)))
+        rows.append(("", ""))
+        rows.append(("--- Docker Containers (disk) ---", ""))
+        ctrs = docker_disk_breakdown()
+        if ctrs:
+            for c in ctrs:
+                rows.append((f"{c['name']} ({c['state']})", readable(c["used"])))
+        else:
+            rows.append(("Containers", "no data"))
+        buttons.data_button("Refresh", f"mem {user_id} disk_detail")
+        buttons.data_button("Back", f"mem {user_id} disk", position="footer")
+        buttons.data_button(
+            "Close", f"mem {user_id} close", position="footer", style=ButtonStyle.DANGER
+        )
+        return _wz("Disk Usage Details", rows, ""), buttons.build_menu(2)
+
     if view == "detail":
         snap = snapshot()
         rows = []
+        # top RAM consumers (whole VPS process view)
+        rows.append(("--- Top RAM Processes ---", ""))
+        for p in ram_breakdown()[:8]:
+            rows.append((f"PID {p['pid']} {p['name']}", f"{readable(p['rss_kb'] * 1024)}"))
+        if not rows[1:]:
+            rows.append(("Procs", "no data"))
+        rows.append(("", ""))
         for name, size in sorted(snap["caches"].items(), key=lambda kv: -kv[1]):
             rows.append((name, readable(size)))
-        if not rows:
-            rows = [("Caches", "none registered")]
+        if not any("caches" in r[0] for r in rows):
+            rows.append(("Caches", "none registered"))
         try:
             rows.append(("Async Tasks", str(len(all_tasks()))))
         except RuntimeError:
@@ -287,31 +322,70 @@ async def memory_callback(_, query):
             f"VPS trim done. Sent SIGHUP to: {', '.join(flags) or 'no services'}",
             show_alert=True,
         )
-    elif action == "dprune":
+    elif action == "dclean":
+        rows = [("Clean All (Safe)", "Run all safe cleanups sequentially"), ("", "")]
+        for key, (label, _) in SAFE_CLEANUPS.items():
+            rows.append((label, f"Run safely"))
+        buttons = ButtonMaker()
+        buttons.data_button("Run Clean All", f"mem {user_id} dcrun all", style=ButtonStyle.PRIMARY)
+        for key, (label, _) in SAFE_CLEANUPS.items():
+            buttons.data_button(label, f"mem {user_id} dcrun {key}", style=ButtonStyle.DANGER)
+        buttons.data_button("Back", f"mem {user_id} disk", position="footer")
+        buttons.data_button(
+            "Close", f"mem {user_id} close", position="footer", style=ButtonStyle.DANGER
+        )
+        note = "All actions are safe — temp/cache/logs only. No data loss possible."
+        await query.answer()
+        await edit_message(query.message, _wz("Safe Cleanup", rows, note), buttons.build_menu(2))
+        return
+    elif action == "dcrun":
+        target = data[3] if len(data) > 3 else None
+        if target not in SAFE_CLEANUPS and target != "all":
+            await query.answer("Invalid cleanup target", show_alert=True)
+            return
+        # confirm dialog
+        if target == "all":
+            label = "ALL safe cleanups (Docker + APT + logs + pip)"
+        else:
+            label = SAFE_CLEANUPS[target][0]
         btns = ButtonMaker()
-        btns.data_button("Confirm Prune", f"mem {user_id} dprunedo")
-        btns.data_button("Cancel", f"mem {user_id} disk")
+        btns.data_button("Confirm", f"mem {user_id} dcrundo {target}")
+        btns.data_button("Cancel", f"mem {user_id} dclean")
         await query.answer()
         await edit_message(
             query.message,
-            "⚠️ <b>Confirm Docker prune?</b>\n\n"
-            "Mode: <code>Safe</code>\n"
-            "Sirf unused (dangling) images + build cache + stopped containers.\n"
-            "Running containers, volumes aur used images safe rehte hain.",
+            f"⚠️ <b>Confirm cleanup?</b>\n\n<code>{label}</code>\n\n"
+            f"Temp/cache/logs sirf hatenge. Containers/volumes/images safe.",
             btns.build_menu(2),
         )
         return
-    elif action == "dprunedo":
-        await query.answer("Pruning...")
-        from ..helper.ext_utils.mem_guard import _docker_prune
-        ok, freed = await asyncio.to_thread(_docker_prune, False)
+    elif action == "dcrundo":
+        target = data[3] if len(data) > 3 else "all"
+        await query.answer("Cleaning...")
+        results = []
+        if target == "all":
+            for key in SAFE_CLEANUPS:
+                _, func = SAFE_CLEANUPS[key]
+                try:
+                    ok, msg = await asyncio.to_thread(func)
+                    results.append((key, ok, msg))
+                except Exception as err:
+                    results.append((key, False, str(err)))
+        else:
+            _, func = SAFE_CLEANUPS[target]
+            ok, msg = await asyncio.to_thread(func)
+            results.append((target, ok, msg))
+        # build result summary
+        lines = []
+        for key, ok, msg in results:
+            icon = "✅" if ok else "❌"
+            name = SAFE_CLEANUPS[key][0] if key in SAFE_CLEANUPS else key
+            lines.append(f"{icon} {name}: {msg[:80]}")
+        summary = "\n".join(lines)
         btns = ButtonMaker()
-        btns.data_button("Back", f"mem {user_id} disk")
-        await edit_message(
-            query.message,
-            (f"✅ Prune done — <code>{freed}</code>" if ok else f"❌ Prune failed: {freed}"),
-            btns.build_menu(1),
-        )
+        btns.data_button("Back to Cleanup", f"mem {user_id} dclean")
+        btns.data_button("Disk View", f"mem {user_id} disk", position="footer")
+        await edit_message(query.message, f"<b>Cleanup Results</b>\n\n{summary}", btns.build_menu(2))
         return
     elif action == "rst":
         if len(data) < 4 or not data[3].isalnum():
@@ -355,7 +429,7 @@ async def memory_callback(_, query):
     else:
         await query.answer()
 
-    view = action if action in ("main", "detail", "top", "vps", "vps_svc", "disk", "rcst") else "main"
+    view = action if action in ("main", "detail", "top", "vps", "vps_svc", "disk", "disk_detail", "rcst") else "main"
     text, markup = _menu(user_id, view)
     await edit_message(query.message, text, markup)
 

@@ -1,6 +1,7 @@
 import gc
 import json
 import linecache
+import os
 import socket
 import subprocess
 import tracemalloc
@@ -1324,3 +1325,251 @@ def disk_snapshot():
         "docker": st["docker"],
         "last_scan": st["last_scan"],
     }
+
+
+
+
+# ============================================================
+# Safe system cleanups (all non-destructive — temp/cache/logs only)
+# ============================================================
+
+def safe_cleanup_docker():
+    """docker system prune -f — dangling images, build cache, stopped containers. Safe."""
+    return _docker_prune(aggressive=False)
+
+
+def safe_cleanup_docker_images():
+    """docker image prune -f — unused dangling images only. Safe."""
+    try:
+        r = subprocess.run(
+            "docker image prune -f", shell=True, timeout=120, capture_output=True, text=True
+        )
+        out = (r.stdout or "") + (r.stderr or "")
+        freed = "unknown"
+        for line in out.split("\n"):
+            if "freed" in line.lower():
+                freed = line.strip()
+                break
+        return True, freed
+    except Exception as err:
+        return False, str(err)
+
+
+def safe_cleanup_docker_build():
+    """docker builder prune -f — build cache only. Safe."""
+    try:
+        r = subprocess.run(
+            "docker builder prune -f", shell=True, timeout=120, capture_output=True, text=True
+        )
+        out = (r.stdout or "") + (r.stderr or "")
+        freed = "unknown"
+        for line in out.split("\n"):
+            if "freed" in line.lower():
+                freed = line.strip()
+                break
+        return True, freed
+    except Exception as err:
+        return False, str(err)
+
+
+def safe_cleanup_apt():
+    """apt-get clean + autoremove --purge — package caches + unused packages. Safe."""
+    try:
+        r = subprocess.run(
+            "apt-get clean && apt-get -y autoremove --purge",
+            shell=True,
+            timeout=180,
+            capture_output=True,
+            text=True,
+        )
+        if r.returncode != 0:
+            return False, (r.stderr or r.stdout or "").strip()[:200]
+        return True, "APT clean + autoremove done"
+    except Exception as err:
+        return False, str(err)
+
+
+def safe_cleanup_logs():
+    """journalctl --vacuum-size=200M — older systemd logs. Safe."""
+    try:
+        r = subprocess.run(
+            "journalctl --vacuum-size=200M 2>/dev/null || true",
+            shell=True,
+            timeout=120,
+            capture_output=True,
+            text=True,
+        )
+        # Vacuum also tmp files older than 10 days (safe)
+        subprocess.run(
+            "find /tmp /var/tmp -type f -mtime +10 -delete 2>/dev/null || true",
+            shell=True,
+            timeout=120,
+            capture_output=True,
+            text=True,
+        )
+        return True, "Logs vacuum + old tmp cleaned"
+    except Exception as err:
+        return False, str(err)
+
+
+def safe_cleanup_pip():
+    """pip cache purge — downloaded wheel cache. Safe."""
+    try:
+        r = subprocess.run(
+            "pip cache purge 2>/dev/null || true",
+            shell=True,
+            timeout=60,
+            capture_output=True,
+            text=True,
+        )
+        return True, "pip cache purged"
+    except Exception as err:
+        return False, str(err)
+
+
+SAFE_CLEANUPS = {
+    "docker": ("Prune Docker", safe_cleanup_docker),
+    "images": ("Prune Images", safe_cleanup_docker_images),
+    "build": ("Prune Build Cache", safe_cleanup_docker_build),
+    "apt": ("Clean APT", safe_cleanup_apt),
+    "logs": ("Vacuum Logs", safe_cleanup_logs),
+    "pip": ("Purge pip cache", safe_cleanup_pip),
+}
+
+
+
+
+# ============================================================
+# Disk + RAM breakdown helpers (safe — read-only)
+# ============================================================
+
+def disk_breakdown():
+    """Top-level dir sizes via du (safe, per-dir, timeout-protected).
+    Uses du -x --max-depth=0 on each dir to avoid slow full-fs scans.
+    Returns dict of path -> bytes."""
+    dirs = {}
+    for path in ("/var", "/home", "/root", "/tmp", "/opt", "/snap"):
+        try:
+            r = subprocess.run(
+                ["du", "-x", "--max-depth=0", "-b", path],
+                capture_output=True, text=True, timeout=15
+            )
+            for line in (r.stdout or "").split("\n"):
+                parts = line.split("\t", 1)
+                if len(parts) == 2 and parts[0].isdigit():
+                    dirs[parts[1].rstrip("/") or path] = int(parts[0])
+        except Exception:
+            pass
+    # /usr subdirs (fast, already counted above for /var etc)
+    try:
+        r = subprocess.run(
+            ["du", "-x", "--max-depth=1", "-b", "--exclude=var", "--exclude=home", "/usr"],
+            capture_output=True, text=True, timeout=15
+        )
+        for line in (r.stdout or "").split("\n"):
+            parts = line.split("\t", 1)
+            if len(parts) == 2 and parts[0].isdigit():
+                try:
+                    dirs[parts[1].rstrip("/") or "/usr"] = int(parts[0])
+                except ValueError:
+                    pass
+    except Exception:
+        pass
+    # docker overlay (from socket + cgroup, always fast)
+    try:
+        docker_total = 0
+        for e in os.scandir("/var/lib/docker/overlay2"):
+            if e.is_dir():
+                try:
+                    with os.scandir(e.path) as inner:
+                        docker_total += sum(f.stat().st_size for f in inner if f.is_file())
+                except Exception:
+                    pass
+        dirs["/var/lib/docker"] = docker_total
+    except Exception:
+        pass
+    return dict(sorted(dirs.items(), key=lambda x: x[1], reverse=True)[:10])
+
+
+def ram_breakdown():
+    """Per-process RSS snapshot — reads /proc (container sees own procs + host procs via /proc mount).
+    Returns sorted top consumers (list of dicts)."""
+    procs = []
+    try:
+        for pid in os.listdir("/proc"):
+            if not pid.isdigit():
+                continue
+            try:
+                with open(f"/proc/{pid}/status") as f:
+                    info = {}
+                    for line in f:
+                        if line.startswith(("Name:", "RSS:", "PPid:")):
+                            parts = line.split()
+                            if len(parts) >= 2:
+                                info[parts[0].rstrip(":")] = parts[1]
+                rss_kb = int(info.get("RSS") or 0)
+                if rss_kb > 1024:
+                    name = info.get("Name", "")
+                    cmdline = ""
+                    try:
+                        cmdline = open(f"/proc/{pid}/cmdline").read().replace("\x00", " ").strip()[:60]
+                    except Exception:
+                        pass
+                    procs.append({
+                        "pid": int(pid),
+                        "name": name,
+                        "cmd": cmdline or name,
+                        "rss_kb": rss_kb,
+                    })
+            except Exception:
+                continue
+    except Exception:
+        pass
+    procs.sort(key=lambda p: p["rss_kb"], reverse=True)
+    return procs[:15]
+
+
+def docker_disk_breakdown():
+    """Per-container disk usage (read-only)."""
+    out = []
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(4.0)
+            s.connect("/var/run/docker.sock")
+            req = (
+                "GET /v1.41/containers/json?all=1 HTTP/1.1\r\n"
+                "Host: docker\r\nConnection: close\r\n\r\n"
+            ).encode()
+            s.sendall(req)
+            data = b""
+            while True:
+                chunk = s.recv(65536)
+                if not chunk:
+                    break
+                data += chunk
+        body = data.split(b"\r\n\r\n", 1)[-1]
+        items = json.loads(body)
+        for item in items:
+            name = (item.get("Names") or [""])[0].lstrip("/")
+            cid = (item.get("Id") or "")[:12]
+            state = item.get("State") or ""
+            cg = _container_mem(cid)
+            used = cg.get("cur") or 0
+            if used:
+                out.append({"name": name, "state": state, "used": used})
+    except Exception:
+        pass
+    return sorted(out, key=lambda x: x["used"], reverse=True)[:10]
+
+
+def snap_disk_breakdown():
+    """Snap package sizes."""
+    out = []
+    try:
+        for entry in os.scandir("/var/lib/snapd/cache"):
+            if entry.is_file() and entry.name.endswith(".snap"):
+                out.append({"name": entry.name, "size": entry.stat().st_size})
+    except Exception:
+        pass
+    out.sort(key=lambda x: x["size"], reverse=True)
+    return out[:10]
