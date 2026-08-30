@@ -265,8 +265,9 @@ class TgClient:
                 await cls.bot.start()
                 break
             except FloodWait as e:
-                LOGGER.warning(f"FloodWait: Sleeping for {e.value} seconds...")
-                await sleep(e.value)
+                cap = min(e.value, 30)
+                LOGGER.warning(f"FloodWait: sleeping {cap}s before retry (reported {e.value}s)")
+                await sleep(cap)
         cls.BNAME = cls.bot.me.username
         cls.ID = Config.BOT_TOKEN.split(":", 1)[0]
         LOGGER.info(f"WZ Bot : [@{cls.BNAME}] Started!")
