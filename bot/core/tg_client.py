@@ -30,6 +30,15 @@ def _load_session_string():
         return None
 
 
+def _drop_session_string():
+    try:
+        os.remove(_SESSION_FILE)
+    except FileNotFoundError:
+        pass
+    except Exception as err:
+        LOGGER.error(f"drop bot session failed: {err}")
+
+
 def _save_session_string(value):
     try:
         os.makedirs(os.path.dirname(_SESSION_FILE), exist_ok=True)
@@ -39,6 +48,31 @@ def _save_session_string(value):
         os.replace(tmp, _SESSION_FILE)
     except Exception as err:
         LOGGER.error(f"save bot session failed: {err}")
+
+
+def _load_sessions(store):
+    try:
+        import json
+        with open(f"/usr/src/app/accounts/{store}.json") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _save_session(store, key, value):
+    try:
+        import json
+        path = f"/usr/src/app/accounts/{store}.json"
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        data = _load_sessions(store)
+        data[key] = value
+        tmp = path + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(data, f)
+        os.replace(tmp, path)
+    except Exception as err:
+        LOGGER.error(f"save session {store}/{key} failed: {err}")
 
 
 class TgClient:
@@ -79,6 +113,10 @@ class TgClient:
         return Client(*args, **kwargs)
 
     @classmethod
+    def _session_kwargs(cls, session_string):
+        return {"session_string": session_string} if session_string else {}
+
+    @classmethod
     def _parse_proxies(cls, raw):
         if not raw:
             return []
@@ -99,15 +137,19 @@ class TgClient:
     async def _retry_hclient(cls, no, b_token, delay, proxy=None):
         await sleep(delay)
         try:
+            sessions = _load_sessions("helper_sessions")
+            kw = cls._session_kwargs(sessions.get(str(no)))
             hbot = cls.wztgClient(
                 f"WZ-HBot{no}",
                 bot_token=b_token,
                 no_updates=True,
                 proxy=proxy,
+                **kw,
             )
             await hbot.start()
             LOGGER.info(f"Helper Bot [@{hbot.me.username}] Started!")
             cls.helper_bots[no], cls.helper_loads[no] = hbot, 0
+            _save_session("helper_sessions", str(no), await hbot.export_session_string())
         except FloodWait as e:
             LOGGER.warning(f"Helper Bot{no} FloodWait: Retrying in {e.value}s...")
             bot_loop.create_task(cls._retry_hclient(no, b_token, e.value, proxy))
@@ -116,16 +158,21 @@ class TgClient:
 
     @classmethod
     async def start_hclient(cls, no, b_token, proxy=None):
+        await sleep((no - 1) * 0.5)
         try:
+            sessions = _load_sessions("helper_sessions")
+            kw = cls._session_kwargs(sessions.get(str(no)))
             hbot = cls.wztgClient(
                 f"WZ-HBot{no}",
                 bot_token=b_token,
                 no_updates=True,
                 proxy=proxy,
+                **kw,
             )
             await hbot.start()
             LOGGER.info(f"Helper Bot [@{hbot.me.username}] Started!")
             cls.helper_bots[no], cls.helper_loads[no] = hbot, 0
+            _save_session("helper_sessions", str(no), await hbot.export_session_string())
         except FloodWait as e:
             LOGGER.warning(
                 f"Helper Bot{no} FloodWait: Retrying in {e.value}s (non-blocking)..."
@@ -159,15 +206,19 @@ class TgClient:
     async def _retry_sclient(cls, no, b_token, delay, proxy=None):
         await sleep(delay)
         try:
+            sessions = _load_sessions("stream_sessions")
+            kw = cls._session_kwargs(sessions.get(str(no)))
             sbot = cls.wztgClient(
                 f"WZ-SBot{no}",
                 bot_token=b_token,
                 no_updates=True,
                 proxy=proxy,
+                **kw,
             )
             await sbot.start()
             LOGGER.info(f"Stream Bot [@{sbot.me.username}] Started!")
             cls.stream_bots[no], cls.stream_loads[no] = sbot, 0
+            _save_session("stream_sessions", str(no), await sbot.export_session_string())
         except FloodWait as e:
             LOGGER.warning(f"Stream Bot{no} FloodWait: Retrying in {e.value}s...")
             bot_loop.create_task(cls._retry_sclient(no, b_token, e.value, proxy))
@@ -176,16 +227,21 @@ class TgClient:
 
     @classmethod
     async def start_sclient(cls, no, b_token, proxy=None):
+        await sleep((no - 1) * 0.5)
         try:
+            sessions = _load_sessions("stream_sessions")
+            kw = cls._session_kwargs(sessions.get(str(no)))
             sbot = cls.wztgClient(
                 f"WZ-SBot{no}",
                 bot_token=b_token,
                 no_updates=True,
                 proxy=proxy,
+                **kw,
             )
             await sbot.start()
             LOGGER.info(f"Stream Bot [@{sbot.me.username}] Started!")
             cls.stream_bots[no], cls.stream_loads[no] = sbot, 0
+            _save_session("stream_sessions", str(no), await sbot.export_session_string())
         except FloodWait as e:
             LOGGER.warning(
                 f"Stream Bot{no} FloodWait: Retrying in {e.value}s (non-blocking)..."
@@ -279,17 +335,19 @@ class TgClient:
     @classmethod
     async def start_bot(cls):
         LOGGER.info("Generating client from BOT_TOKEN")
+        from pyrogram.errors import Unauthorized
+
         cls.ID = Config.BOT_TOKEN.split(":", 1)[0]
         cls.PARTITION = db_partition_id(cls.ID)
-        session = _load_session_string()
-        kwargs = dict(
-            bot_token=Config.BOT_TOKEN,
-            workdir="/usr/src/app",
-        )
-        if session:
-            kwargs["session_string"] = session
-        cls.bot = cls.wztgClient(f"WZ-Bot{cls.ID}", **kwargs)
         while True:
+            session = _load_session_string()
+            kwargs = dict(
+                bot_token=Config.BOT_TOKEN,
+                workdir="/usr/src/app",
+            )
+            if session:
+                kwargs["session_string"] = session
+            cls.bot = cls.wztgClient(f"WZ-Bot{cls.ID}", **kwargs)
             try:
                 await cls.bot.start()
                 break
@@ -297,6 +355,13 @@ class TgClient:
                 cap = min(e.value, 30)
                 LOGGER.warning(f"FloodWait: sleeping {cap}s before retry (reported {e.value}s)")
                 await sleep(cap)
+            except Unauthorized as err:
+                if session:
+                    LOGGER.warning(f"Bot session invalid ({err}) — refreshing session, retrying with token")
+                    _drop_session_string()
+                    continue
+                LOGGER.error(f"Bot token rejected: {err}")
+                raise
         try:
             _save_session_string(await cls.bot.export_session_string())
         except Exception as err:
