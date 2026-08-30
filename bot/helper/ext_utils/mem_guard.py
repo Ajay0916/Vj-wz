@@ -675,12 +675,11 @@ class VPSGuard:
         self.last_scan = time()
         self.services = state["services"]
         self.servers = state["servers"]
-        self.top = [
-            {"pid": p["pid"], "rss": p["rss"], "cmd": p["cmd"], "name": k}
-            for k, s in list(state["services"].items()) + list(state["servers"].items())
-            for p in s["top"]
-        ]
-        self.top = sorted(self.top, key=lambda x: x["rss"], reverse=True)[:6]
+        self.top = []
+        for k, s in list(state["services"].items()) + list(state["servers"].items()):
+            for p in s.get("top") or []:
+                self.top.append({"pid": p.get("pid"), "rss": p.get("rss"), "cmd": p.get("cmd"), "name": k})
+        self.top = sorted(self.top, key=lambda x: x.get("rss") or 0, reverse=True)[:6]
         return state
 
     # ---------------- criticality & alerts ----------------
