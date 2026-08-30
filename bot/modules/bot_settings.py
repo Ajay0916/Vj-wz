@@ -632,12 +632,27 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
             )
         msg = f"⌬ <b><u>Config Variables</u></b> | <b><u>Page: {int(start / 10) + 1}</b></u>"
     elif key == "setonoff":
-        buttons.data_button("On/Off Settings", "botset settoggle")
+        for k in ONOFF_VARS:
+            val = Config.get(k)
+            label = k.removeprefix("DISABLE_")
+            if not val:
+                buttons.data_button(
+                    f"✓ {label}",
+                    f"botset toggleonoff {k} on",
+                    style=ButtonStyle.PRIMARY,
+                )
+            else:
+                buttons.data_button(
+                    label,
+                    f"botset toggleonoff {k} off",
+                    style=ButtonStyle.DANGER,
+                )
+        buttons.data_button("Page 2 ⏭", "botset setonoff2")
         buttons.data_button("Back", "botset back", position="footer")
         buttons.data_button(
             "Close", "botset close", position="footer", style=ButtonStyle.DANGER
         )
-        msg = "⌬ <b><u>Module Settings</u></b>"
+        msg = "⌬ <b><u>Module Settings</u></b> | Page 1"
     elif key == "settoggle":
         for k in ONOFF_VARS:
             val = Config.get(k)
@@ -665,9 +680,17 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
             val = Config.get(k)
             label = k.removeprefix("DISABLE_")
             if not val:
-                buttons.data_button(f"✓ {label}", f"botset toggleonoff {k} on")
+                buttons.data_button(
+                    f"✓ {label}",
+                    f"botset toggleonoff {k} on",
+                    style=ButtonStyle.PRIMARY,
+                )
             else:
-                buttons.data_button(label, f"botset toggleonoff {k} off")
+                buttons.data_button(
+                    label,
+                    f"botset toggleonoff {k} off",
+                    style=ButtonStyle.DANGER,
+                )
         buttons.data_button("Page 1 ⏮", "botset setonoff")
         buttons.data_button("Back", "botset back", position="footer")
         buttons.data_button(
@@ -682,7 +705,7 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
                 f"botset editvar {k}",
                 style=ButtonStyle.SUCCESS if Config.get(k) else None,
             )
-        buttons.data_button("Back", "botset back setonoff", position="footer")
+        buttons.data_button("Back", "botset back", position="footer")
         buttons.data_button(
             "Close", "botset close", position="footer", style=ButtonStyle.DANGER
         )
