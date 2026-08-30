@@ -263,15 +263,44 @@ async def memory_callback(_, query):
             await query.answer("Bad service name", show_alert=True)
         else:
             name = data[3]
-            ok, msg = await asyncio.to_thread(vps_guard.restart, name)
-            await query.answer(
-                f"{'Restarted' if ok else 'Restart failed'}: {name} ({msg})",
-                show_alert=not ok,
+            btns = ButtonMaker()
+            btns.data_button("Confirm Restart", f"mem {user_id} rcst {name}", style=ButtonStyle.DANGER)
+            btns.data_button("Cancel", f"mem {user_id} vps_svc")
+            await query.answer()
+            await edit_message(
+                query.message,
+                f"⚠️ <b>Confirm restart?</b>\n\n"
+                f"<code>{name}</code> will be docker restarted.\n"
+                f"Data in flight may be lost. Continue?",
+                btns.build_menu(2),
             )
+            return
+    elif action == "rcst":
+        if len(data) < 4 or not data[3].isalnum():
+            await query.answer("Bad service name", show_alert=True)
+        else:
+            name = data[3]
+            await query.answer(f"Restarting {name}...")
+            ok, msg = await asyncio.to_thread(vps_guard.restart, name)
+            if ok:
+                await edit_message(
+                    query.message,
+                    f"✅ <b>{name}</b> restart issued. Recovery in ~5s.",
+                )
+            else:
+                btns = ButtonMaker()
+                btns.data_button("Retry", f"mem {user_id} rst {name}", style=ButtonStyle.DANGER)
+                btns.data_button("Back", f"mem {user_id} vps_svc")
+                await edit_message(
+                    query.message,
+                    f"❌ <b>Restart failed</b> for <code>{name}</code>. ({msg})",
+                    btns.build_menu(2),
+                )
+            return
     else:
         await query.answer()
 
-    view = action if action in ("main", "detail", "top", "vps", "vps_svc") else "main"
+    view = action if action in ("main", "detail", "top", "vps", "vps_svc", "rcst") else "main"
     text, markup = _menu(user_id, view)
     await edit_message(query.message, text, markup)
 
