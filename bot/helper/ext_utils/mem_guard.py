@@ -492,7 +492,7 @@ def _docker_stats_socket():
             s.settimeout(3.0)
             s.connect("/var/run/docker.sock")
             req = (
-                "GET /v1.41/containers/json?all=0 HTTP/1.1\r\n"
+                "GET /v1.44/containers/json?all=0 HTTP/1.1\r\n"
                 "Host: docker\r\n"
                 "Connection: close\r\n\r\n"
             ).encode()
@@ -529,7 +529,7 @@ def _container_mem(id_):
             s.settimeout(4.0)
             s.connect("/var/run/docker.sock")
             req = (
-                f"GET /v1.41/containers/{id_}/stats?stream=0 HTTP/1.1\r\n"
+                f"GET /v1.44/containers/{id_}/stats?stream=0 HTTP/1.1\r\n"
                 "Host: docker\r\nConnection: close\r\n\r\n"
             ).encode()
             s.sendall(req)
@@ -570,7 +570,7 @@ def _trim_container(name, aggressive=False):
             s.settimeout(2.0)
             s.connect("/var/run/docker.sock")
             req = (
-                f"POST /v1.41/containers/{name}/kill?signal=SIGHUP HTTP/1.1\r\n"
+                f"POST /v1.44/containers/{name}/kill?signal=SIGHUP HTTP/1.1\r\n"
                 "Host: docker\r\nConnection: close\r\n\r\n"
             ).encode()
             s.sendall(req)
@@ -1024,7 +1024,7 @@ class CpuGuard:
                 s.settimeout(4.0)
                 s.connect("/var/run/docker.sock")
                 req = (
-                    f"GET /v1.41/containers/name/{name}/stats?stream=true&one-shot=false&since=0 HTTP/1.1\r\n"
+                    f"GET /v1.44/containers/name/{name}/stats?stream=true&one-shot=false&since=0 HTTP/1.1\r\n"
                     "Host: docker\r\nConnection: close\r\n\r\n"
                 ).encode()
                 s.sendall(req)
@@ -1228,7 +1228,7 @@ def _docker_df():
             s.settimeout(5.0)
             s.connect("/var/run/docker.sock")
             req = (
-                "GET /v1.41/system/df HTTP/1.1\r\n"
+                "GET /v1.44/system/df HTTP/1.1\r\n"
                 "Host: docker\r\nConnection: close\r\n\r\n"
             ).encode()
             s.sendall(req)
@@ -1559,7 +1559,7 @@ def docker_disk_breakdown():
             s.settimeout(4.0)
             s.connect("/var/run/docker.sock")
             req = (
-                "GET /v1.41/containers/json?all=1 HTTP/1.1\r\n"
+                "GET /v1.44/containers/json?all=1 HTTP/1.1\r\n"
                 "Host: docker\r\nConnection: close\r\n\r\n"
             ).encode()
             s.sendall(req)
