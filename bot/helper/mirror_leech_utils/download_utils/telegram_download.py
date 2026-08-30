@@ -139,7 +139,7 @@ class TelegramDownloadHelper:
                 return
         except (FloodWait, FloodPremiumWait) as f:
             LOGGER.warning(str(f))
-            await sleep(f.value)
+            await sleep(min(f.value, 15))
             await self._download(message, path)
             return
         except Exception as e:

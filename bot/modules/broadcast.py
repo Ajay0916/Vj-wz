@@ -31,7 +31,7 @@ async def delete_broadcast(bc_id, message):
             await (await TgClient.bot.get_messages(uid, msg_id)).delete()
             success += 1
         except FloodWait as e:
-            await sleep(e.value)
+            await sleep(min(e.value, 5))
             await (await TgClient.bot.get_messages(uid, msg_id)).delete()
             success += 1
         except Exception as e:
@@ -73,7 +73,7 @@ async def edit_broadcast(bc_id, message, rply):
             await sleep(0.3)
             success += 1
         except FloodWait as e:
-            await sleep(e.value)
+            await sleep(min(e.value, 5))
             await msg.edit(
                 text=rply.text,
                 entities=rply.entities,
@@ -170,7 +170,7 @@ async def broadcast(_, message):
             )
             s += 1
         except FloodWait as e:
-            await sleep(e.value * 1.1)
+            await sleep(min(e.value, 5))
             bc_msg = (
                 await rply.forward(uid, disable_notification=quietly)
                 if forwarded

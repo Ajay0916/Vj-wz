@@ -46,7 +46,7 @@ async def _call_with_flood_retry(method, *args, **kwargs):
             return await method(*args, **kwargs)
         except (FloodWait, FloodPremiumWait) as f:
             LOGGER.warning(f"FloodWait {f.value}s, retrying {method.__name__}")
-            await sleep(f.value + 1)
+            await sleep(min(f.value + 1, 15))
 
 
 class TelegramUploader:

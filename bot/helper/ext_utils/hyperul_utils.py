@@ -202,7 +202,7 @@ class HypertgUpload(HypertgTransfer):
                 return await send_func(**kwargs)
             except (FloodWait, FloodPremiumWait) as f:
                 LOGGER.warning(f"HypertgUL flood {f.value}s on {self._up_file}")
-                await sleep(f.value + 1)
+                await sleep(min(f.value + 1, 15))
 
     async def _try_send(self, key, client, kwargs):
         try:

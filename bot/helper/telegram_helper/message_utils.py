@@ -65,6 +65,14 @@ def _is_edit_spam(chat_id, msg_id, text, buttons):
     return False
 
 
+def _flood_sleep(f_value):
+    """Sleep for a FloodWait, capped at 15s so a 35-min ban can never freeze
+    the bot. Marks global cooldown too (subsequent edits get dropped)."""
+    cap = min(int(f_value), 15)
+    _mark_flood(cap)
+    return cap
+
+
 def _mark_flood(seconds):
     global _FLOOD_UNTIL
     _FLOOD_UNTIL = time() + seconds
@@ -134,7 +142,7 @@ async def send_message(message, text, buttons=None, block=True, photo=None, **kw
                 LOGGER.warning(str(f))
                 if not block:
                     return str(f)
-                await sleep(f.value * 1.2)
+                await sleep(_flood_sleep(f.value))
                 return await send_message(message, text, buttons, block, photo)
             except MediaCaptionTooLong:
                 return await send_message(
@@ -184,7 +192,7 @@ async def send_message(message, text, buttons=None, block=True, photo=None, **kw
         LOGGER.warning(str(f))
         if not block:
             return str(f)
-        await sleep(f.value * 1.2)
+        await sleep(_flood_sleep(f.value))
         return await send_message(message, text, buttons)
     except ReplyMarkupInvalid as rmi:
         LOGGER.warning(str(rmi))
@@ -277,7 +285,7 @@ async def edit_reply_markup(message, buttons):
         pass
     except FloodWait as f:
         LOGGER.warning(str(f))
-        await sleep(f.value * 1.2)
+        await sleep(_flood_sleep(f.value))
         return await edit_reply_markup(message, buttons)
     except OSError:
         return
@@ -297,7 +305,7 @@ async def send_file(message, file, caption="", buttons=None):
         )
     except FloodWait as f:
         LOGGER.warning(str(f))
-        await sleep(f.value * 1.2)
+        await sleep(_flood_sleep(f.value))
         return await send_file(message, file, caption)
     except ConnectionError:
         return
@@ -317,7 +325,7 @@ async def send_rss(text, chat_id, thread_id):
         )
     except (FloodWait, FloodPremiumWait) as f:
         LOGGER.warning(str(f))
-        await sleep(f.value * 1.2)
+        await sleep(_flood_sleep(f.value))
         return await send_rss(text, chat_id, thread_id)
     except ConnectionError:
         return
