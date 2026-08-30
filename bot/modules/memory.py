@@ -317,11 +317,33 @@ async def memory_callback(_, query):
             show_alert=True,
         )
     elif action == "vpstrim":
-        flags = vps_guard.trim()
-        await query.answer(
-            f"VPS trim done. Sent SIGHUP to: {', '.join(flags) or 'no services'}",
-            show_alert=True,
+        btns = ButtonMaker()
+        btns.data_button("Confirm Trim", f"mem {user_id} vpstrimdo")
+        btns.data_button("Cancel", f"mem {user_id} vps")
+        await query.answer()
+        await edit_message(
+            query.message,
+            "⚠️ <b>Confirm VPS trim?</b>\n\n"
+            "FlareSolverr ko SIGHUP bhejega — purane Chrome sessions clean honge.\n"
+            "Koi data loss nahi, full restart se light action.",
+            btns.build_menu(2),
         )
+        return
+    elif action == "vpstrimdo":
+        await query.answer("Trimming...")
+        flags = vps_guard.trim()
+        btns = ButtonMaker()
+        btns.data_button("Back", f"mem {user_id} vps")
+        await edit_message(
+            query.message,
+            (
+                f"✅ VPS trim done — SIGHUP sent to: {', '.join(flags) or 'no services'}"
+                if flags
+                else "⚠️ VPS trim: no services trimmed (docker socket unavailable?)"
+            ),
+            btns.build_menu(1),
+        )
+        return
     elif action == "dclean":
         rows = [("Clean All (Safe)", "Run all safe cleanups sequentially"), ("", "")]
         for key, (label, _) in SAFE_CLEANUPS.items():
