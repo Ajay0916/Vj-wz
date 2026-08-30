@@ -682,13 +682,22 @@ class VPSGuard:
 
     def pressure(self):
         try:
-            total = limit_bytes()
-            used = available_bytes()
+            import psutil
+            vm = psutil.virtual_memory()
+            total = vm.total
+            used = vm.used
             if total <= 0:
                 return 0.0
             return min(1.0, used / total)
         except Exception:
-            return 0.0
+            try:
+                total = limit_bytes()
+                used = available_bytes()
+                if total <= 0:
+                    return 0.0
+                return min(1.0, used / total)
+            except Exception:
+                return 0.0
 
     def _check_critical(self):
         flag = False
