@@ -2,6 +2,22 @@ import asyncio
 from asyncio import all_tasks
 from time import time
 
+_LAST_ANSWER_TS = 0.0
+
+
+async def _safe_answer(query, text=None, show_alert=False):
+    """Answer a callback query, throttled to avoid Telegram FloodWait on rapid
+    button presses. Duplicate/too-fast presses get a no-op (no visible alert)."""
+    global _LAST_ANSWER_TS
+    now = time()
+    if show_alert:
+        _LAST_ANSWER_TS = now
+        return await _safe_answer(query, text, show_alert=True)
+    if now - _LAST_ANSWER_TS >= 0.4:
+        _LAST_ANSWER_TS = now
+        await _safe_answer(query, text)
+    # else: silent no-op to avoid flood
+
 from pyrogram.enums import ButtonStyle
 
 from ..core.config_manager import Config
@@ -338,17 +354,18 @@ async def memory_callback(_, query):
     user_id = query.from_user.id
     data = query.data.split()
     if len(data) < 3 or user_id != int(data[1]):
-        return await query.answer("Not yours!", show_alert=True)
+        return await _safe_answer(query, "Not yours!", show_alert=True)
 
     action = data[2]
     if action == "close":
-        await query.answer()
+        await _safe_answer(query)
         await delete_message(query.message.reply_to_message)
         return await delete_message(query.message)
 
     if action == "pron":
         started = profiler.start()
-        await query.answer(
+        await _safe_answer(
+            query,
             "Profiler on. Reproduce the load, then read Top Allocations."
             if started
             else "Already running.",
@@ -356,14 +373,15 @@ async def memory_callback(_, query):
         )
     elif action == "proff":
         profiler.stop()
-        await query.answer("Profiler off.")
+        await _safe_answer(query, "Profiler off.")
     elif action == "trim":
         before = snapshot()["rss"]
         freed = trim_caches(aggressive=True)
         from gc import collect
         collected = collect()
         after = snapshot()["rss"]
-        await query.answer(
+        await _safe_answer(
+            query,
             f"Freed {readable(freed)} of caches and {collected} objects. "
             f"Resident {readable(before)} to {readable(after)}.",
             show_alert=True,
@@ -372,7 +390,7 @@ async def memory_callback(_, query):
         btns = ButtonMaker()
         btns.data_button("Confirm Trim", f"mem {user_id} vpstrimdo")
         btns.data_button("Cancel", f"mem {user_id} vps")
-        await query.answer()
+        await _safe_answer(query)
         await edit_message(
             query.message,
             "⚠️ <b>Confirm VPS trim?</b>\n\n"
@@ -382,7 +400,7 @@ async def memory_callback(_, query):
         )
         return
     elif action == "vpstrimdo":
-        await query.answer("Trimming...")
+        await _safe_answer(query, "Trimming...")
         flags = await asyncio.to_thread(vps_guard.trim)
         btns = ButtonMaker()
         btns.data_button("Back", f"mem {user_id} vps")
@@ -397,17 +415,17 @@ async def memory_callback(_, query):
         )
         return
     elif action == "vsed":
-        await query.answer()
+        await _safe_answer(query)
         view = "vset"
     elif action == "vsetdo":
         if len(data) < 5:
-            await query.answer("Bad data", show_alert=True)
+            await _safe_answer(query, "Bad data", show_alert=True)
         else:
             key = data[3]
             raw = data[4]
             item = next((s for s in vps_schema() if s["key"] == key), None)
             if item is None:
-                await query.answer("Unknown key", show_alert=True)
+                await _safe_answer(query, "Unknown key", show_alert=True)
             else:
                 try:
                     if item["type"] == "int":
@@ -417,9 +435,9 @@ async def memory_callback(_, query):
                     else:
                         nv = raw == "1"
                     vps_set(key, nv)
-                    await query.answer(f"{key} → {nv}", show_alert=True)
+                    await _safe_answer(query, f"{key} → {nv}", show_alert=True)
                 except Exception as err:
-                    await query.answer(f"Error: {err}", show_alert=True)
+                    await _safe_answer(query, f"Error: {err}", show_alert=True)
         view = "vsettings"
     elif action == "dclean":
         rows = [("Clean All (Safe)", "Run all safe cleanups sequentially"), ("", "")]
@@ -434,13 +452,13 @@ async def memory_callback(_, query):
             "Close", f"mem {user_id} close", position="footer", style=ButtonStyle.DANGER
         )
         note = "All actions are safe — temp/cache/logs only. No data loss possible."
-        await query.answer()
+        await _safe_answer(query)
         await edit_message(query.message, _wz("Safe Cleanup", rows, note), buttons.build_menu(2))
         return
     elif action == "dcrun":
         target = data[3] if len(data) > 3 else None
         if target not in SAFE_CLEANUPS and target != "all":
-            await query.answer("Invalid cleanup target", show_alert=True)
+            await _safe_answer(query, "Invalid cleanup target", show_alert=True)
             return
         # confirm dialog
         if target == "all":
@@ -450,7 +468,7 @@ async def memory_callback(_, query):
         btns = ButtonMaker()
         btns.data_button("Confirm", f"mem {user_id} dcrundo {target}")
         btns.data_button("Cancel", f"mem {user_id} dclean")
-        await query.answer()
+        await _safe_answer(query)
         await edit_message(
             query.message,
             f"⚠️ <b>Confirm cleanup?</b>\n\n<code>{label}</code>\n\n"
@@ -460,7 +478,7 @@ async def memory_callback(_, query):
         return
     elif action == "dcrundo":
         target = data[3] if len(data) > 3 else "all"
-        await query.answer("Cleaning...")
+        await _safe_answer(query, "Cleaning...")
         results = []
         if target == "all":
             for key in SAFE_CLEANUPS:
@@ -488,13 +506,13 @@ async def memory_callback(_, query):
         return
     elif action == "rst":
         if len(data) < 4 or not data[3].isalnum():
-            await query.answer("Bad service name", show_alert=True)
+            await _safe_answer(query, "Bad service name", show_alert=True)
         else:
             name = data[3]
             btns = ButtonMaker()
             btns.data_button("Confirm Restart", f"mem {user_id} rcst {name}", style=ButtonStyle.DANGER)
             btns.data_button("Cancel", f"mem {user_id} vps_svc")
-            await query.answer()
+            await _safe_answer(query)
             await edit_message(
                 query.message,
                 f"⚠️ <b>Confirm restart?</b>\n\n"
@@ -505,10 +523,10 @@ async def memory_callback(_, query):
             return
     elif action == "rcst":
         if len(data) < 4 or not data[3].isalnum():
-            await query.answer("Bad service name", show_alert=True)
+            await _safe_answer(query, "Bad service name", show_alert=True)
         else:
             name = data[3]
-            await query.answer(f"Restarting {name}...")
+            await _safe_answer(query, f"Restarting {name}...")
             ok, msg = await asyncio.to_thread(vps_guard.restart, name)
             if ok:
                 await edit_message(
@@ -526,7 +544,7 @@ async def memory_callback(_, query):
                 )
             return
     else:
-        await query.answer()
+        await _safe_answer(query)
 
     view = action if action in ("main", "detail", "top", "vps", "vps_svc", "vsettings", "vset", "disk", "disk_detail", "rcst") else "main"
     if action == "vsed":
@@ -537,7 +555,7 @@ async def memory_callback(_, query):
         text, markup = await asyncio.to_thread(_menu, user_id, view, data)
         await edit_message(query.message, text, markup)
     except Exception as err:
-        await query.answer(f"Error: {err}", show_alert=True)
+        await _safe_answer(query, f"Error: {err}", show_alert=True)
         from ..helper.ext_utils.mem_guard import LOGGER as mg_logger
         mg_logger.error(f"memory menu {view}: {err}")
 

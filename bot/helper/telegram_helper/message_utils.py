@@ -26,6 +26,50 @@ try:
 except ImportError:
     FloodPremiumWait = FloodWait
 
+# ---- Flood-safe edit throttling ----
+_EDIT_LAST = {}          # (chat_id, msg_id) -> (ts, content_signature)
+_EDIT_MIN_GAP = 1.5      # seconds: skip submits faster than this
+_FLOOD_UNTIL = 0.0       # global cooldown: if a FloodWait fired, skip edits until this time
+
+
+def _edit_signature(text, buttons):
+    import json as _json
+
+    sig = text if isinstance(text, str) else repr(text)
+    if buttons is not None:
+        try:
+            sig += _json.dumps(getattr(buttons, "inline_keyboard", None), default=str)
+        except Exception:
+            sig += repr(buttons)
+    return sig
+
+
+def _is_edit_spam(chat_id, msg_id, text, buttons):
+    """Return True if this edit should be skipped (duplicate or too fast)."""
+    global _FLOOD_UNTIL
+    now = time()
+    if _FLOOD_UNTIL > now:
+        return True
+    key = (chat_id, msg_id)
+    sig = _edit_signature(text, buttons)
+    prev = _EDIT_LAST.get(key)
+    if prev and prev[0] > now - _EDIT_MIN_GAP:
+        return True
+    if prev and prev[1] == sig:
+        return True
+    _EDIT_LAST[key] = (now, sig)
+    # keep dict bounded
+    if len(_EDIT_LAST) > 400:
+        for k in list(_EDIT_LAST)[:100]:
+            _EDIT_LAST.pop(k, None)
+    return False
+
+
+def _mark_flood(seconds):
+    global _FLOOD_UNTIL
+    _FLOOD_UNTIL = time() + seconds
+
+
 from ... import (
     LOGGER,
     bot_cache,
@@ -161,6 +205,10 @@ async def send_message(message, text, buttons=None, block=True, photo=None, **kw
 
 
 async def edit_message(message, text, buttons=None, block=True, photo=None):
+    chat_id = getattr(message, "chat", None) and getattr(message.chat, "id", None)
+    msg_id = getattr(message, "id", None)
+    if chat_id is not None and msg_id is not None and _is_edit_spam(chat_id, msg_id, text, buttons):
+        return None
     try:
         if not isinstance(text, str):
             return await TgClient.bot.edit_message_text(
@@ -213,10 +261,8 @@ async def edit_message(message, text, buttons=None, block=True, photo=None):
         return await edit_message(message, text, None, block, photo)
     except FloodWait as f:
         LOGGER.warning(str(f))
-        if not block:
-            return str(f)
-        await sleep(f.value * 1.2)
-        return await edit_message(message, text, buttons, block, photo)
+        _mark_flood(min(f.value, 120))
+        return str(f)
     except OSError:
         return
     except Exception as e:
