@@ -305,15 +305,16 @@ def snapshot():
 
 def _vps_conf_load():
     try:
+        ov = _vps_overrides
         return {
-            "guard": bool(getattr(Config, "VPS_GUARD", True)),
-            "fs_limit": int(getattr(Config, "VPS_FLARESOLVERR_LIMIT", 0) or 0),
-            "tapi_limit": int(getattr(Config, "VPS_TAPI_LIMIT", 0) or 0),
-            "restart": bool(getattr(Config, "VPS_GUARD_RESTART", True)),
-            "interval": int(getattr(Config, "VPS_GUARD_INTERVAL", 30) or 30),
-            "warn": float(getattr(Config, "VPS_GUARD_WARN", 0.8) or 0.8),
-            "crit": float(getattr(Config, "VPS_GUARD_CRIT", 0.95) or 0.95),
-            "restart_cooldown": int(getattr(Config, "VPS_GUARD_RESTART_COOLDOWN", 600) or 600),
+            "guard": bool(ov.get("VPS_GUARD", getattr(Config, "VPS_GUARD", True))),
+            "fs_limit": int(ov.get("VPS_FLARESOLVERR_LIMIT", getattr(Config, "VPS_FLARESOLVERR_LIMIT", 0) or 0)),
+            "tapi_limit": int(ov.get("VPS_TAPI_LIMIT", getattr(Config, "VPS_TAPI_LIMIT", 0) or 0)),
+            "restart": bool(ov.get("VPS_GUARD_RESTART", getattr(Config, "VPS_GUARD_RESTART", True))),
+            "interval": int(ov.get("VPS_GUARD_INTERVAL", getattr(Config, "VPS_GUARD_INTERVAL", 30) or 30)),
+            "warn": float(ov.get("VPS_GUARD_WARN", getattr(Config, "VPS_GUARD_WARN", 0.8) or 0.8)),
+            "crit": float(ov.get("VPS_GUARD_CRIT", getattr(Config, "VPS_GUARD_CRIT", 0.95) or 0.95)),
+            "restart_cooldown": int(ov.get("VPS_GUARD_RESTART_COOLDOWN", getattr(Config, "VPS_GUARD_RESTART_COOLDOWN", 600) or 600)),
         }
     except Exception:
         return {
@@ -329,6 +330,18 @@ def _vps_conf_load():
 
 
 _vps_conf = _vps_conf_load()
+
+
+def _vps_load_persisted_caller():
+    try:
+        globals()["_vps_load_persisted"]()
+    except Exception:
+        pass
+
+
+# delayed so the function (defined later in module) exists by call time
+import threading
+threading.Timer(2.0, _vps_load_persisted_caller).start()
 
 
 def _proc_pids():
@@ -1582,3 +1595,90 @@ def snap_disk_breakdown():
         pass
     out.sort(key=lambda x: x["size"], reverse=True)
     return out[:10]
+
+
+
+
+# ============================================================
+# Persistent VPS settings (runtime + JSON backup)
+# ============================================================
+
+import pathlib
+
+_VPS_SETTINGS_DIR = pathlib.Path("/usr/src/app/downloads")
+_VPS_SETTINGS_FILE = _VPS_SETTINGS_DIR / "vps_settings.json"
+
+_VPS_SCHEMA = [
+    {"key": "VPS_GUARD",               "label": "VPS Guard",                "default": True,     "type": "bool"},
+    {"key": "VPS_GUARD_INTERVAL",      "label": "Scan interval (s)",        "default": 30,       "type": "int", "step": 10, "min": 15, "max": 300},
+    {"key": "VPS_GUARD_WARN",          "label": "Warn threshold",           "default": 0.8,      "type": "float", "step": 0.05, "min": 0.5, "max": 0.95},
+    {"key": "VPS_GUARD_CRIT",          "label": "Crit threshold",           "default": 0.95,     "type": "float", "step": 0.05, "min": 0.6, "max": 1.0},
+    {"key": "VPS_GUARD_RESTART",       "label": "Auto-restart",             "default": True,     "type": "bool"},
+    {"key": "VPS_GUARD_RESTART_COOLDOWN", "label": "Restart cooldown (s)",  "default": 600,      "type": "int", "step": 60, "min": 60, "max": 7200},
+    {"key": "VPS_FLARESOLVERR_LIMIT",  "label": "FlareSolverr limit (MB)",  "default": 3072,     "type": "int", "step": 512, "min": 512, "max": 12288},
+    {"key": "VPS_TAPI_LIMIT",          "label": "t-api limit (MB, 0=auto)", "default": 0,        "type": "int", "step": 512, "min": 0, "max": 8192},
+    {"key": "VPS_CPU_LIMIT",           "label": "CPU limit (cores, 0=auto)","default": 0,        "type": "int", "step": 1, "min": 0, "max": 16},
+    {"key": "VPS_DISK_WARN",           "label": "Disk warn (%)",            "default": 80,       "type": "int", "step": 5, "min": 50, "max": 95},
+    {"key": "VPS_DISK_CRIT",           "label": "Disk crit (%)",            "default": 90,       "type": "int", "step": 5, "min": 60, "max": 100},
+]
+
+_vps_overrides = {}
+
+
+def _vps_load_persisted():
+    """Load overrides from JSON file + apply to Config."""
+    try:
+        data = json.loads(_VPS_SETTINGS_FILE.read_text())
+        for item in _VPS_SCHEMA:
+            key = item["key"]
+            if key in data:
+                val = data[key]
+                _vps_overrides[key] = val
+                try:
+                    from ..core.config_manager import Config
+                    setattr(Config, key, val)
+                except Exception:
+                    pass
+    except FileNotFoundError:
+        pass
+    except Exception as err:
+        LOGGER.error(f"VPS settings load: {err}")
+
+
+def _vps_save_persisted():
+    """Persist current overrides to JSON file (untracked by git, survives reset --hard)."""
+    try:
+        _VPS_SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
+        _VPS_SETTINGS_FILE.write_text(json.dumps(_vps_overrides, indent=2))
+    except Exception as err:
+        LOGGER.error(f"VPS settings save: {err}")
+
+
+def vps_get(key):
+    if key in _vps_overrides:
+        return _vps_overrides[key]
+    schema = next((s for s in _VPS_SCHEMA if s["key"] == key), None)
+    if schema is None:
+        return None
+    default = schema["default"]
+    try:
+        from ..core.config_manager import Config
+        return getattr(Config, key, default)
+    except Exception:
+        return default
+
+
+def vps_set(key, value):
+    _vps_overrides[key] = value
+    try:
+        from ..core.config_manager import Config
+        setattr(Config, key, value)
+    except Exception:
+        pass
+    # refresh live guard config
+    _vps_conf.update(_vps_conf_load())
+    _vps_save_persisted()
+
+
+def vps_schema():
+    return _VPS_SCHEMA

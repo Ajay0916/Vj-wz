@@ -20,6 +20,9 @@ from ..helper.ext_utils.mem_guard import (
     trim_caches,
     vps_guard,
     vps_snapshot,
+    vps_get,
+    vps_set,
+    vps_schema,
     SAFE_CLEANUPS,
 )
 from ..helper.telegram_helper.button_build import ButtonMaker
@@ -119,7 +122,7 @@ def _vps_services_rows():
     return rows
 
 
-def _menu(user_id, view="main"):
+def _menu(user_id, view="main", data=None):
     buttons = ButtonMaker()
     if view == "main":
         snap, rows = _overview()
@@ -150,6 +153,7 @@ def _menu(user_id, view="main"):
     if view == "vps":
         vsnap, rows, note = _vps_overview()
         buttons.data_button("Services", f"mem {user_id} vps_svc")
+        buttons.data_button("Settings", f"mem {user_id} vsettings")
         buttons.data_button("Refresh", f"mem {user_id} vps")
         buttons.data_button("VPS Trim", f"mem {user_id} vpstrim")
         buttons.data_button("Back", f"mem {user_id} main", position="footer")
@@ -226,6 +230,54 @@ def _menu(user_id, view="main"):
             "Close", f"mem {user_id} close", position="footer", style=ButtonStyle.DANGER
         )
         return _wz("Disk Usage Details", rows, ""), buttons.build_menu(2)
+
+    if view == "vsettings":
+        rows = [("Variable", "Value")]
+        rows.append(("", ""))
+        for item in vps_schema():
+            key = item["key"]
+            val = vps_get(key)
+            rows.append((item["label"], str(val)))
+        rows.append(("", ""))
+        rows.append(("Note", "Tap a var to change. Changes persist (survive /restart)."))
+        buttons = ButtonMaker()
+        for item in vps_schema():
+            buttons.data_button(item["key"], f"mem {user_id} vsed {item['key']}", style=ButtonStyle.PRIMARY)
+        buttons.data_button("Back", f"mem {user_id} vps", position="footer")
+        buttons.data_button(
+            "Close", f"mem {user_id} close", position="footer", style=ButtonStyle.DANGER
+        )
+        return _wz("VPS Settings", rows, ""), buttons.build_menu(2)
+
+    if view == "vset":
+        key = data[3] if data and len(data) > 3 else None
+        item = next((s for s in vps_schema() if s["key"] == key), None)
+        if item is None:
+            return "<i>Unknown setting</i>", ButtonMaker().build_menu(1)
+        val = vps_get(key)
+        if item["type"] == "bool":
+            btns = ButtonMaker()
+            btns.data_button("ON", f"mem {user_id} vsetdo {key} 1", style=ButtonStyle.SUCCESS)
+            btns.data_button("OFF", f"mem {user_id} vsetdo {key} 0", style=ButtonStyle.DANGER)
+            btns.data_button("Back", f"mem {user_id} vsettings", position="footer")
+            return _wz(f"Set {item['label']}", [("Current", str(val))], ""), btns.build_menu(2)
+        # numeric: show -step / +step / halve / double quick buttons
+        step = item.get("step", 1)
+        lo, hi = item.get("min"), item.get("max")
+        btns = ButtonMaker()
+        for label, delta in [("-", -step), ("+", +step)]:
+            nv = val + delta
+            if lo is not None:
+                nv = max(lo, nv)
+            if hi is not None:
+                nv = min(hi, nv)
+            btns.data_button(f"{label}{step}", f"mem {user_id} vsetdo {key} {nv}", style=ButtonStyle.PRIMARY)
+        btns.data_button("Back", f"mem {user_id} vsettings", position="footer")
+        return _wz(
+            f"Set {item['label']}",
+            [("Current", str(val)), ("Range", f"{lo}-{hi} (step {step})" if lo is not None else "any")],
+            "Tap +/- to adjust. Value saves immediately.",
+        ), btns.build_menu(2)
 
     if view == "detail":
         snap = snapshot()
@@ -344,6 +396,31 @@ async def memory_callback(_, query):
             btns.build_menu(1),
         )
         return
+    elif action == "vsed":
+        await query.answer()
+        view = "vset"
+    elif action == "vsetdo":
+        if len(data) < 5:
+            await query.answer("Bad data", show_alert=True)
+        else:
+            key = data[3]
+            raw = data[4]
+            item = next((s for s in vps_schema() if s["key"] == key), None)
+            if item is None:
+                await query.answer("Unknown key", show_alert=True)
+            else:
+                try:
+                    if item["type"] == "int":
+                        nv = int(raw)
+                    elif item["type"] == "float":
+                        nv = float(raw)
+                    else:
+                        nv = raw == "1"
+                    vps_set(key, nv)
+                    await query.answer(f"{key} → {nv}", show_alert=True)
+                except Exception as err:
+                    await query.answer(f"Error: {err}", show_alert=True)
+        view = "vsettings"
     elif action == "dclean":
         rows = [("Clean All (Safe)", "Run all safe cleanups sequentially"), ("", "")]
         for key, (label, _) in SAFE_CLEANUPS.items():
@@ -451,8 +528,12 @@ async def memory_callback(_, query):
     else:
         await query.answer()
 
-    view = action if action in ("main", "detail", "top", "vps", "vps_svc", "disk", "disk_detail", "rcst") else "main"
-    text, markup = _menu(user_id, view)
+    view = action if action in ("main", "detail", "top", "vps", "vps_svc", "vsettings", "vset", "disk", "disk_detail", "rcst") else "main"
+    if action == "vsed":
+        view = "vset"
+    elif action == "vsetdo":
+        view = "vsettings"
+    text, markup = _menu(user_id, view, data)
     await edit_message(query.message, text, markup)
 
 
