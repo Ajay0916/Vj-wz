@@ -2588,28 +2588,14 @@ function lmSwitchAudio(id, label) {
                 bindMedia(vid, true);
                 vid.addEventListener("error", function () {
                     el("loading").classList.add("gone");
-                    var e = vid.error;
-                    if (e && e.code === 4) {
-                        stall("Switching decoder",
-                            "This browser cannot decode the file natively. Loading "
-                            + "the advanced decoder.");
-                        startLibmedia(Math.max(0, vid.currentTime || 0));
-                    } else {
-                        stall("Playback stopped",
-                            "The connection dropped or the link expired. Reload " +
-                            "the page, or pick a player below.");
-                    }
+                    stall("Playback stopped",
+                        "The connection dropped or the link expired. Reload " +
+                        "the page, or pick a player below.");
                 });
 
-                if (nativeHopeless()) {
-                    lmLog("native cannot open " + MIME + ", decoding directly");
-                    warmDecoder();
-                    el("loadingText").textContent = "Starting the decoder";
-                    startLibmedia(0);
-                } else {
-                    vid.setAttribute("type", MIME);
-                    vid.src = STREAM;
-                }
+                warmDecoder();
+                el("loadingText").textContent = "Starting the decoder";
+                startLibmedia(0);
 
                 setTimeout(function () {
                     if (!el("loading").classList.contains("gone")) {
