@@ -54,6 +54,7 @@ class Config:
     DISABLE_API = False
     DISABLE_HELPER = False
     DISABLE_HYPER = False
+    DISABLE_MEMORY = False
     DISABLE_LIMITS = False
     DISABLE_QUEUE = False
     DISABLE_RCLONE = False

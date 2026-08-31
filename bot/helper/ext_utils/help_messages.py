@@ -483,6 +483,7 @@ DISABLE_COMMANDS = {
     "DISABLE_SESSION": {"RestartSessions", "GenPyroSess"},
     "DISABLE_GOOGLE": {"Clone", "GDClean", "Count"},
     "DISABLE_STREAM": {"Stream"},
+    "DISABLE_MEMORY": {"Memory"},
 }
 
 

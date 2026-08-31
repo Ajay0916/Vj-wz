@@ -346,6 +346,9 @@ def _menu(user_id, view="main", data=None):
 
 @new_task
 async def memory_stats(_, message):
+    if getattr(Config, 'DISABLE_MEMORY', False):
+        return
+
     text, markup = _menu(message.from_user.id)
     await send_message(message, text, markup)
 
