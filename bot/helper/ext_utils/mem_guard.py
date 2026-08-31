@@ -508,7 +508,7 @@ def _scan_tree_cached(skip_docker=True):
     return result
 
 
-def _docker_http(method, path, timeout=10.0):
+def _docker_http(method, path, timeout=15.0):
     """Raw Docker API request over unix socket. Returns parsed HTTP
     (status line, headers dict, de-chunked body bytes). Handles
     Transfer-Encoding: chunked responses."""
@@ -629,7 +629,7 @@ def _batch_docker_stats():
     if (now - _batch_docker_stats_cache[0]) < _BATCH_DOCKER_TTL:
         return _batch_docker_stats_cache[1]
     try:
-        items = _docker_json("GET", "/v1.44/containers/stats?stream=0")
+        items = _docker_json("GET", "/v1.44/containers/stats?stream=0", timeout=25.0)
         if not isinstance(items, list):
             return _batch_docker_stats_cache[1]
         out = {}
@@ -661,7 +661,7 @@ def _container_mem(id_):
         _container_mem_cache[id_] = (now, batch)
         return batch
     try:
-        stats = _docker_json("GET", f"/v1.44/containers/{id_}/stats?stream=0")
+        stats = _docker_json("GET", f"/v1.44/containers/{id_}/stats?stream=0", timeout=20.0)
         if stats is None:
             raise ValueError("no stats")
         ms = stats.get("memory_stats") or {}
