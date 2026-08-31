@@ -309,6 +309,13 @@
             aspect-ratio: 16 / 9;
         }
 
+        video-minimal-skin:fullscreen,
+        video-player:fullscreen {
+            width: 100vw !important;
+            height: 100vh !important;
+            border-radius: 0 !important;
+        }
+
         body.dark .frame {
             pointer-events: auto;
         }
@@ -2715,10 +2722,41 @@ function lmSwitchAudio(id, label) {
             seekInd.className = "seek-ind";
             el("frame").appendChild(seekInd);
 
+            function isControl(el) {
+                if (!el || !el.tagName) return false;
+                var tag = el.tagName.toLowerCase();
+                if (tag === "button" || tag === "input" || tag === "select"
+                    || tag === "a") return true;
+                if (el.getAttribute && (el.getAttribute("role") === "button"
+                    || el.getAttribute("role") === "slider"
+                    || el.getAttribute("role") === "option")) return true;
+                if (el.classList && (el.classList.contains("dd-btn")
+                    || el.classList.contains("dd-item")
+                    || el.classList.contains("media-button"))) return true;
+                return false;
+            }
+            function touchOnControl(e) {
+                var path = e.composedPath ? e.composedPath() : [];
+                for (var i = 0; i < path.length; i++) {
+                    if (isControl(path[i])) return true;
+                }
+                return isControl(e.target);
+            }
+
+            function applyVol(v) {
+                if (!vid) return;
+                try { vid.volume = v; } catch (e) { }
+                try {
+                    var p = vid.player;
+                    if (p && typeof p.setVolume === "function") p.setVolume(v);
+                } catch (e) { }
+            }
+
             var playerHost = document.querySelector("video-player");
             if (playerHost && "ontouchstart" in window) {
                 var gst = null;
                 playerHost.addEventListener("touchstart", function (e) {
+                    if (touchOnControl(e)) { gst = null; return; }
                     var t = e.touches[0];
                     gst = {
                         x: t.clientX,
@@ -2769,10 +2807,9 @@ function lmSwitchAudio(id, label) {
                         if (gst.kind === "bri") {
                             setBright(bri + step * 100);
                         } else {
-                            try {
-                                vid.volume = Math.max(0, Math.min(1,
-                                    (vid.volume || 0) + step));
-                            } catch (e2) { }
+                            var nv = Math.max(0, Math.min(1,
+                                (vid.volume || 0) + step));
+                            applyVol(nv);
                         }
                     }
                 }, { passive: false });
