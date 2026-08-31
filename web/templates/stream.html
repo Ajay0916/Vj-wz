@@ -2423,16 +2423,9 @@ function lmSwitchAudio(id, label) {
                 var subs = (info && info.subtitle) || [];
                 lmLog("probe: " + auds.length + " audio, " + subs.length + " subtitle");
 
-                if (auds.length > 1) {
-                    dropdown(el("audDd"), "Audio",
-                        [{ items: auds.map(function (t, i) {
-                            return { label: t.title, value: String(i) };
-                        }) }],
-                        "0",
-                        function (it) {
-                            startLibmedia(Math.max(0, vid.currentTime || 0),
-                                Number(it.value));
-                        });
+                if (auds.length > 0) {
+                    startLibmedia(Math.max(0, vid.currentTime || 0), 0);
+                    return;
                 }
 
                 buildSubMenu();
