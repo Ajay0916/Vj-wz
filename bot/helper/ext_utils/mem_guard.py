@@ -15,7 +15,7 @@ from .bot_lock import get_system_resources_cached
 MB = 1024 * 1024
 _MIN_BUDGET = 48 * MB
 _MAX_BUDGET = 512 * MB
-_SAMPLE_SECONDS = 20
+_SAMPLE_SECONDS = 60
 _HISTORY = 90
 
 
@@ -485,6 +485,20 @@ def _scan_tree(skip_docker=True):
     return seen
 
 
+_scan_cache = {}
+_SCAN_TTL = 30
+
+
+def _scan_tree_cached(skip_docker=True):
+    key = skip_docker
+    cached = _scan_cache.get(key)
+    if cached and (time() - cached[0]) < _SCAN_TTL:
+        return cached[1]
+    result = _scan_tree(skip_docker=skip_docker)
+    _scan_cache[key] = (time(), result)
+    return result
+
+
 def _docker_http(method, path, timeout=6.0):
     """Raw Docker API request over unix socket. Returns parsed HTTP
     (status line, headers dict, de-chunked body bytes). Handles
@@ -542,7 +556,15 @@ def _docker_json(method, path, timeout=6.0):
         return None
 
 
+_docker_stats_cache = (0, {})
+_DOCKER_STATS_TTL = 30
+
+
 def _docker_stats_socket():
+    global _docker_stats_cache
+    now = time()
+    if (now - _docker_stats_cache[0]) < _DOCKER_STATS_TTL:
+        return _docker_stats_cache[1]
     out = {}
     items = _docker_json("GET", "/v1.44/containers/json?all=0")
     if not isinstance(items, list):
@@ -557,6 +579,7 @@ def _docker_stats_socket():
             }
         except Exception:
             continue
+    _docker_stats_cache = (time(), out)
     return out
 
 
@@ -644,7 +667,7 @@ class VPSGuard:
             _dock = True
         except Exception:
             _dock = False
-        scan = _scan_tree(skip_docker=_dock)
+        scan = _scan_tree_cached(skip_docker=_dock)
         for key, procs in scan.items():
             if not procs:
                 continue
@@ -833,7 +856,7 @@ class VPSGuard:
                 self._check_services()
             except Exception as err:
                 LOGGER.error(f"VPS guard loop: {err}")
-            await sleep(max(30, (_vps_conf["interval"] or 30) * 2))
+            await sleep(max(120, (_vps_conf["interval"] or 30) * 4))
 
     def start(self):
         if self._task is not None:
@@ -1010,7 +1033,7 @@ class CpuGuard:
         return max(1.0, total * 0.5)
 
     def refresh(self):
-        scan = _scan_tree(skip_docker=True)
+        scan = _scan_tree_cached(skip_docker=True)
         state = {
             "services": {},
         }
@@ -1136,7 +1159,7 @@ class CpuGuard:
                 self._check()
             except Exception as err:
                 LOGGER.error(f"CPU Guard loop: {err}")
-            await sleep(max(60, (_vps_conf.get("interval") or 30) * 2))
+            await sleep(max(120, (_vps_conf.get("interval") or 30) * 4))
 
     def start(self):
         if self._task is not None:
@@ -1323,7 +1346,7 @@ class DiskGuard:
                     )
             except Exception as err:
                 LOGGER.error(f"Disk Guard scan: {err}")
-            time.sleep(max(60, (_vps_conf.get("interval") or 30) * 2))
+            time.sleep(max(120, (_vps_conf.get("interval") or 30) * 4))
 
     async def _aloop(self):
         import asyncio
