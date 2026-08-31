@@ -182,13 +182,11 @@ from .helper.ext_utils.mem_guard import monitor as memory_monitor, vps_guard, cp
 
 if not getattr(Config, "DISABLE_MEMORY", False):
     memory_monitor.start()
+    vps_guard.start()
     cpu_guard.start()
     disk_guard.start()
-
-vps_guard.start()
-
-if getattr(Config, "DISABLE_MEMORY", False):
-    LOGGER.info("Memory monitor/CPU Guard/Disk Guard disabled by DISABLE_MEMORY")
+else:
+    LOGGER.info("Memory monitors disabled by DISABLE_MEMORY")
 
 from pyrogram.filters import regex
 from pyrogram.handlers import CallbackQueryHandler
