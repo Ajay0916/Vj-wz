@@ -309,11 +309,25 @@
             aspect-ratio: 16 / 9;
         }
 
+        .frame:fullscreen,
         video-minimal-skin:fullscreen,
         video-player:fullscreen {
             width: 100vw !important;
             height: 100vh !important;
+            max-width: 100vw !important;
+            max-height: 100vh !important;
             border-radius: 0 !important;
+            aspect-ratio: unset !important;
+            --content: 100vw !important;
+        }
+
+        .frame:fullscreen .shell,
+        .frame:fullscreen .fill,
+        .frame:fullscreen video-player,
+        .frame:fullscreen video-minimal-skin,
+        .frame:fullscreen libmedia-video {
+            width: 100% !important;
+            height: 100% !important;
         }
 
         body.dark .frame {
@@ -2710,10 +2724,11 @@ function lmSwitchAudio(id, label) {
                     (document.exitFullscreen || document.webkitExitFullscreen)
                         .call(document);
                 } else {
-                    var target = document.querySelector("video-minimal-skin")
-                        || document.documentElement;
-                    (target.requestFullscreen || target.webkitRequestFullscreen)
-                        .call(target);
+                    var target = el("frame");
+                    if (target) {
+                        (target.requestFullscreen || target.webkitRequestFullscreen)
+                            .call(target);
+                    }
                 }
             }
             el("fsBtn").onclick = toggleFullscreen;
