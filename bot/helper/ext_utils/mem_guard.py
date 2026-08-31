@@ -625,6 +625,7 @@ _BATCH_DOCKER_TTL = 45
 
 
 def _batch_docker_stats():
+    global _batch_docker_stats_cache
     """Fetch memory stats for all running containers.
     Uses individual /containers/{id}/stats calls (fast, non-blocking)
     instead of the batch /containers/stats endpoint which blocks waiting
