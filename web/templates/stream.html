@@ -1506,8 +1506,6 @@
                         isLive: false
                     });
                     this.#player = p;
-                    try { p.setVolume(this.#muted ? 0 : this.#vol); }
-                    catch (e) { }
 
                     p.on("time", (pts) => {
                         this.#time = this.#seconds(pts);
@@ -1531,8 +1529,7 @@
                     });
 
                     await p.load(url);
-                    try { p.setVolume(this.#muted ? 0 : this.#vol); }
-                    catch (e) { }
+                    this.#applyVol();
                     this.#loaded = true;
                     this.#streams = p.getStreams ? p.getStreams() : [];
                     this.#dur = this.#durationFrom(this.#streams);
@@ -1695,19 +1692,32 @@
                 this.#run(() => this.#doSeek(t));
             }
 
+            #applyVol() {
+                var v = this.#muted ? 0 : this.#vol;
+                var p = this.#player;
+                try {
+                    if (p) {
+                        if (typeof p.setVolume === "function") p.setVolume(v);
+                        else if ("volume" in p) p.volume = v;
+                    }
+                } catch (e) { }
+                try {
+                    var vid = this.#host && this.#host.querySelector("video");
+                    if (vid) vid.volume = v;
+                } catch (e) { }
+            }
+
             get volume() { return this.#vol; }
             set volume(v) {
                 this.#vol = Math.max(0, Math.min(1, Number(v)));
-                try { this.#player && this.#player.setVolume(this.#muted ? 0 : this.#vol); }
-                catch (e) { }
+                this.#applyVol();
                 this.#emit("volumechange");
             }
 
             get muted() { return this.#muted; }
             set muted(v) {
                 this.#muted = !!v;
-                try { this.#player && this.#player.setVolume(this.#muted ? 0 : this.#vol); }
-                catch (e) { }
+                this.#applyVol();
                 this.#emit("volumechange");
             }
 
