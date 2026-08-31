@@ -129,11 +129,15 @@ bot_loop.run_until_complete(main())
 
 def _handle_asyncio_exception(loop, context):
     exc = context.get("exception")
-    if exc and isinstance(exc, (KeyError, ValueError)):
-        msg = str(exc)
-        msg_lower = msg.lower()
-        if "unknown constructor" in msg_lower or "server sent an unknown" in msg_lower:
-            LOGGER.warning(f"Pyrogram schema mismatch (tg side): {msg}")
+    if exc:
+        if isinstance(exc, (KeyError, ValueError)):
+            msg = str(exc)
+            msg_lower = msg.lower()
+            if "unknown constructor" in msg_lower or "server sent an unknown" in msg_lower:
+                LOGGER.warning(f"Pyrogram schema mismatch (tg side): {msg}")
+                return
+        elif isinstance(exc, AttributeError) and "NoneType" in str(exc):
+            # benign: storage teardown race during restart/shutdown
             return
     send_async_exception(context)
     loop.default_exception_handler(context)
