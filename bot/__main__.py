@@ -180,10 +180,13 @@ bot_loop.run_until_complete(plugin_manager.boot())
 
 from .helper.ext_utils.mem_guard import monitor as memory_monitor, vps_guard, cpu_guard, disk_guard
 
-memory_monitor.start()
-vps_guard.start()
-cpu_guard.start()
-disk_guard.start()
+if not getattr(Config, "DISABLE_MEMORY", False):
+    memory_monitor.start()
+    vps_guard.start()
+    cpu_guard.start()
+    disk_guard.start()
+else:
+    LOGGER.info("Memory monitors disabled by DISABLE_MEMORY")
 
 from pyrogram.filters import regex
 from pyrogram.handlers import CallbackQueryHandler
