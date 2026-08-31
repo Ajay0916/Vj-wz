@@ -625,26 +625,39 @@ _BATCH_DOCKER_TTL = 45
 
 
 def _batch_docker_stats():
+    """Fetch memory stats for all running containers.
+    Uses individual /containers/{id}/stats calls (fast, non-blocking)
+    instead of the batch /containers/stats endpoint which blocks waiting
+    for CPU samples across ALL containers."""
     now = time()
     if (now - _batch_docker_stats_cache[0]) < _BATCH_DOCKER_TTL:
         return _batch_docker_stats_cache[1]
+    out = {}
+    # Get running container IDs from /containers/json (fast, always works)
     try:
-        items = _docker_json("GET", "/v1.44/containers/stats?stream=0", timeout=25.0)
+        items = _docker_json("GET", "/v1.44/containers/json?all=0", timeout=10.0)
         if not isinstance(items, list):
             return _batch_docker_stats_cache[1]
-        out = {}
         for item in items:
-            cid = (item.get("id") or "")[:12]
-            ms = item.get("memory_stats") or {}
-            out[cid] = {
-                "cur": int(ms.get("usage") or 0),
-                "peak": int(ms.get("max_usage") or 0),
-                "limit": int(ms.get("limit") or 0),
-            }
+            cid = (item.get("Id") or "")[:12]
+            try:
+                stats = _docker_json(
+                    "GET", f"/v1.44/containers/{cid}/stats?stream=0", timeout=8.0
+                )
+                if stats and isinstance(stats, dict):
+                    ms = stats.get("memory_stats") or {}
+                    out[cid] = {
+                        "cur": int(ms.get("usage") or 0),
+                        "peak": int(ms.get("max_usage") or 0),
+                        "limit": int(ms.get("limit") or 0),
+                    }
+            except Exception:
+                pass
+    except Exception as err:
+        LOGGER.debug(f"vps guard: _batch_docker_stats failed: {err}")
+    if out:
         _batch_docker_stats_cache = (now, out)
-        return out
-    except Exception:
-        return _batch_docker_stats_cache[1]
+    return out
 
 
 _container_mem_cache = {}
@@ -660,21 +673,6 @@ def _container_mem(id_):
     if batch is not None:
         _container_mem_cache[id_] = (now, batch)
         return batch
-    try:
-        stats = _docker_json("GET", f"/v1.44/containers/{id_}/stats?stream=0", timeout=20.0)
-        if stats is None:
-            raise ValueError("no stats")
-        ms = stats.get("memory_stats") or {}
-        out = {
-            "cur": int(ms.get("usage") or 0),
-            "peak": int(ms.get("max_usage") or 0),
-            "limit": int(ms.get("limit") or 0),
-        }
-        if out["cur"]:
-            _container_mem_cache[id_] = (time(), out)
-            return out
-    except Exception:
-        pass
     # fallback: cgroup files (host-visible paths only when socket is absent)
     prefix = "/sys/fs/cgroup/memory/docker"
     prefix2 = "/sys/fs/cgroup/docker"
