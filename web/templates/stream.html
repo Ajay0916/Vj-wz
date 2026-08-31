@@ -2649,9 +2649,10 @@
                     (document.exitFullscreen || document.webkitExitFullscreen)
                         .call(document);
                 } else {
-                    var host = document.documentElement;
-                    if (host.requestFullscreen) host.requestFullscreen();
-                    else if (host.webkitRequestFullscreen) host.webkitRequestFullscreen();
+                    var target = document.querySelector("video-minimal-skin")
+                        || document.documentElement;
+                    (target.requestFullscreen || target.webkitRequestFullscreen)
+                        .call(target);
                 }
             }
             el("fsBtn").onclick = toggleFullscreen;
@@ -2664,32 +2665,52 @@
                     gst = {
                         x: t.clientX,
                         y: t.clientY,
+                        lastX: t.clientX,
                         lastY: t.clientY,
                         kind: t.clientX < (window.innerWidth / 2) ? "bri" : "vol",
-                        engaged: false
+                        engaged: false,
+                        dir: null,
+                        seekAt: 0
                     };
                 }, { passive: true });
                 playerHost.addEventListener("touchmove", function (e) {
                     if (!gst) return;
                     var t = e.touches[0];
-                    var dy = t.clientY - gst.y;
+                    var dy = Math.abs(t.clientY - gst.y);
                     var dx = Math.abs(t.clientX - gst.x);
                     if (!gst.engaged) {
-                        if (Math.abs(dy) < 12 || Math.abs(dy) < dx) return;
+                        if (dy < 12 && dx < 12) return;
                         gst.engaged = true;
+                        gst.dir = dx > dy ? "h" : "v";
+                        gst.lastX = t.clientX;
                         gst.lastY = t.clientY;
+                        gst.seekAt = vid.currentTime || 0;
                     }
                     if (e.cancelable) e.preventDefault();
-                    var step = (gst.lastY - t.clientY) /
-                        ((window.innerHeight * 0.6) || 480);
-                    gst.lastY = t.clientY;
-                    if (gst.kind === "bri") {
-                        setBright(bri + step * 100);
+
+                    if (gst.dir === "h") {
+                        var seekPx = t.clientX - gst.x;
+                        var vw = window.innerWidth || 400;
+                        var seekSec = (seekPx / vw) * 60;
+                        var dur = vid.duration || 0;
+                        var target = Math.max(0, gst.seekAt + seekSec);
+                        if (dur > 0) target = Math.min(target, dur);
+                        vid.currentTime = target;
+                        gst.lastX = t.clientX;
+                        toast((seekSec >= 0 ? "\u25b6 " : "\u25c0 ")
+                            + clock(target));
                     } else {
-                        try {
-                            vid.volume = Math.max(0, Math.min(1,
-                                (vid.volume || 0) + step));
-                        } catch (e2) { }
+                        var step = (gst.lastY - t.clientY) /
+                            ((window.innerHeight * 0.6) || 480);
+                        gst.lastY = t.clientY;
+                        if (gst.kind === "bri") {
+                            setBright(bri + step * 100);
+                        } else {
+                            try {
+                                vid.volume = Math.max(0, Math.min(1,
+                                    (vid.volume || 0) + step));
+                            } catch (e2) { }
+                        }
                     }
                 }, { passive: false });
                 playerHost.addEventListener("touchend", function () { gst = null; });
