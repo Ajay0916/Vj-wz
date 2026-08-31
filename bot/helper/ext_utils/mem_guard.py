@@ -633,28 +633,31 @@ def _batch_docker_stats():
     if (now - _batch_docker_stats_cache[0]) < _BATCH_DOCKER_TTL:
         return _batch_docker_stats_cache[1]
     out = {}
-    # Get running container IDs from /containers/json (fast, always works)
     try:
         items = _docker_json("GET", "/v1.44/containers/json?all=0", timeout=10.0)
         if not isinstance(items, list):
+            LOGGER.warning(f"vps guard: /containers/json returned {type(items).__name__}, not list")
             return _batch_docker_stats_cache[1]
         for item in items:
             cid = (item.get("Id") or "")[:12]
+            name = (item.get("Names") or ["?"])[0].lstrip("/")
             try:
                 stats = _docker_json(
                     "GET", f"/v1.44/containers/{cid}/stats?stream=0", timeout=8.0
                 )
                 if stats and isinstance(stats, dict):
                     ms = stats.get("memory_stats") or {}
-                    out[cid] = {
-                        "cur": int(ms.get("usage") or 0),
-                        "peak": int(ms.get("max_usage") or 0),
-                        "limit": int(ms.get("limit") or 0),
-                    }
-            except Exception:
-                pass
+                    cur = int(ms.get("usage") or 0)
+                    peak = int(ms.get("max_usage") or 0)
+                    limit = int(ms.get("limit") or 0)
+                    out[cid] = {"cur": cur, "peak": peak, "limit": limit}
+                    LOGGER.info(f"vps guard: {name} stats ok usage={cur} limit={limit}")
+                else:
+                    LOGGER.warning(f"vps guard: {name} stats returned {type(stats).__name__}")
+            except Exception as err:
+                LOGGER.warning(f"vps guard: {name} stats failed: {err}")
     except Exception as err:
-        LOGGER.debug(f"vps guard: _batch_docker_stats failed: {err}")
+        LOGGER.warning(f"vps guard: _batch_docker_stats failed: {err}")
     if out:
         _batch_docker_stats_cache = (now, out)
     return out
@@ -672,6 +675,10 @@ def _container_mem(id_):
     batch = _batch_docker_stats().get(id_)
     if batch is not None:
         _container_mem_cache[id_] = (now, batch)
+        if batch.get("cur"):
+            return batch
+        # Got batch entry but zero usage — log once
+        LOGGER.debug(f"vps guard: container {id_} stats all zero from batch")
         return batch
     # fallback: cgroup files (host-visible paths only when socket is absent)
     prefix = "/sys/fs/cgroup/memory/docker"
@@ -779,7 +786,7 @@ class VPSGuard:
         try:
             docker_containers = _docker_stats_socket()
         except Exception as err:
-            LOGGER.debug(f"vps guard: _docker_stats_socket failed: {err}")
+            LOGGER.warning(f"vps guard: _docker_stats_socket failed: {err}")
         if not docker_containers:
             docker_containers = _docker_ps_fallback()
         for cname, cdata in docker_containers.items():
@@ -803,7 +810,7 @@ class VPSGuard:
                     },
                 }
             except Exception as err:
-                LOGGER.debug(f"vps guard: container {cname} stats failed: {err}")
+                LOGGER.warning(f"vps guard: container {cname} stats failed: {err}")
                 state["services"][cname] = {
                     "rss": 0,
                     "pids": 1,
