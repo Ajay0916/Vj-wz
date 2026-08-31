@@ -2752,10 +2752,10 @@ function lmSwitchAudio(id, label) {
                 } catch (e) { }
             }
 
-            var playerHost = document.querySelector("video-player");
-            if (playerHost && "ontouchstart" in window) {
+            var gestureTarget = el("frame") || document.querySelector("video-player");
+            if (gestureTarget && "ontouchstart" in window) {
                 var gst = null;
-                playerHost.addEventListener("touchstart", function (e) {
+                gestureTarget.addEventListener("touchstart", function (e) {
                     if (touchOnControl(e)) { gst = null; return; }
                     var t = e.touches[0];
                     gst = {
@@ -2769,8 +2769,8 @@ function lmSwitchAudio(id, label) {
                         seekAt: 0,
                         targetTime: 0
                     };
-                }, { passive: true });
-                playerHost.addEventListener("touchmove", function (e) {
+                }, { capture: true });
+                gestureTarget.addEventListener("touchmove", function (e) {
                     if (!gst) return;
                     var t = e.touches[0];
                     var dy = Math.abs(t.clientY - gst.y);
@@ -2812,18 +2812,18 @@ function lmSwitchAudio(id, label) {
                             applyVol(nv);
                         }
                     }
-                }, { passive: false });
-                playerHost.addEventListener("touchend", function () {
+                }, { capture: true });
+                gestureTarget.addEventListener("touchend", function () {
                     if (gst && gst.dir === "h" && gst.engaged) {
                         vid.currentTime = gst.targetTime;
                     }
                     seekInd.classList.remove("show");
                     gst = null;
-                });
-                playerHost.addEventListener("touchcancel", function () {
+                }, { capture: true });
+                gestureTarget.addEventListener("touchcancel", function () {
                     seekInd.classList.remove("show");
                     gst = null;
-                });
+                }, { capture: true });
             }
 
             if (!TOKEN) {
