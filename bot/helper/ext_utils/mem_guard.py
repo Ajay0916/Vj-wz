@@ -583,7 +583,15 @@ def _docker_stats_socket():
     return out
 
 
+_container_mem_cache = {}
+_CONTAINER_MEM_TTL = 45
+
+
 def _container_mem(id_):
+    now = time()
+    cached = _container_mem_cache.get(id_)
+    if cached and (now - cached[0]) < _CONTAINER_MEM_TTL:
+        return cached[1]
     try:
         stats = _docker_json("GET", f"/v1.44/containers/{id_}/stats?stream=0")
         if stats is None:
@@ -595,6 +603,7 @@ def _container_mem(id_):
             "limit": int(ms.get("limit") or 0),
         }
         if out["cur"]:
+            _container_mem_cache[id_] = (time(), out)
             return out
     except Exception:
         pass
@@ -606,6 +615,7 @@ def _container_mem(id_):
             cg = _cgroup_mem(f"{base}/{sub}", limits=True)
             if cg["cur"]:
                 return cg
+    _container_mem_cache[id_] = (time(), {"cur": 0, "peak": 0, "limit": 0})
     return {"cur": 0, "peak": 0, "limit": 0}
 
 
@@ -1000,13 +1010,22 @@ def _system_cpu():
     except Exception:
         return 0.0
 
+_proc_cpu_cache = {}
+_PROC_CPU_TTL = 30
+
+
 def _proc_cpu(pid):
+    now = time()
+    cached = _proc_cpu_cache.get(pid)
+    if cached and (now - cached[0]) < _PROC_CPU_TTL:
+        return cached[1]
     try:
         import psutil
         if not psutil.pid_exists(pid):
             return None
         p = psutil.Process(pid)
         pct = p.cpu_percent(interval=0.05)
+        _proc_cpu_cache[pid] = (now, pct)
         return pct
     except Exception:
         return None
@@ -1092,7 +1111,14 @@ class CpuGuard:
         )[:6]
         return state
 
+    _container_cpu_cache = {}
+    _CONTAINER_CPU_TTL = 30
+
     def _container_cpu(self, name):
+        now = time()
+        cached = self._container_cpu_cache.get(name)
+        if cached and (now - cached[0]) < self._CONTAINER_CPU_TTL:
+            return cached[1]
         try:
             stats = _docker_json(
                 "GET",
@@ -1111,6 +1137,7 @@ class CpuGuard:
             delta_sys = max(1, sys - pre_sys)
             num_cpus = cur_stats.get("online_cpus") or 1
             cpu_percent = (delta_cpu / delta_sys) * num_cpus * 100
+            self._container_cpu_cache[name] = (now, round(cpu_percent, 1))
             return round(cpu_percent, 1)
         except Exception:
             return 0.0
