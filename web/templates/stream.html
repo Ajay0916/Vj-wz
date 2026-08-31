@@ -2234,7 +2234,19 @@
                 return bits.length ? bits.join(" \u00b7 ") : "Track " + (i + 1);
             }
 
-            function lmSwitchAudio(id, label) {
+            function lmSelectAudio(id) {
+    return Promise.resolve(lmEl.selectAudio(id))
+        .then(function () {
+            lmCurAudio = id;
+            lmRebuildMenus();
+            lmLog("auto-selectAudio id=" + id);
+        })
+        .catch(function (e) {
+            lmErr(e);
+        });
+}
+
+function lmSwitchAudio(id, label) {
                 return Promise.resolve(lmEl.selectAudio(id))
                     .then(function () {
                         lmCurAudio = id;
@@ -2307,6 +2319,13 @@
                                     return lmSwitchAudio(pick[wantAudioNth].id);
                                 }
                             });
+                        } else {
+                            var auds = lmByType("audio");
+                            if (auds.length > 0) {
+                                chain = chain.then(function () {
+                                    return lmSelectAudio(auds[0].id);
+                                });
+                            }
                         }
                         chain.catch(lmErr);
                     });
