@@ -1003,6 +1003,8 @@ def _bg_refresh(owner, refresh_fn, ttl):
 def vps_snapshot():
     guard = vps_guard
     _bg_refresh(guard, lambda g: g.refresh(), 12)
+    if not guard.services:
+        guard.refresh()
     st = guard.state()
     services = []
     for name, s in st["services"].items():
