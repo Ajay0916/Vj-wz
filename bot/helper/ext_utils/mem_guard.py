@@ -508,7 +508,7 @@ def _scan_tree_cached(skip_docker=True):
     return result
 
 
-def _docker_http(method, path, timeout=6.0):
+def _docker_http(method, path, timeout=10.0):
     """Raw Docker API request over unix socket. Returns parsed HTTP
     (status line, headers dict, de-chunked body bytes). Handles
     Transfer-Encoding: chunked responses."""
@@ -565,6 +565,33 @@ def _docker_json(method, path, timeout=6.0):
         return None
 
 
+
+def _docker_ps_fallback():
+    """Fallback: parse ``docker ps`` via CLI when socket API returns empty."""
+    out = {}
+    try:
+        import subprocess as _sp
+        result = _sp.run(
+            ["docker", "ps", "--format", "{{.Names}}|{{.Image}}|{{.ID}}"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode != 0:
+            return out
+        for line in result.stdout.strip().splitlines():
+            parts = line.split("|", 2)
+            if len(parts) < 3:
+                continue
+            name, image, cid = parts[0], parts[1], parts[2]
+            out[name] = {
+                "id": cid[:12],
+                "image": image.split("@")[0][:60],
+                "state": "running",
+            }
+    except Exception:
+        pass
+    return out
+
+
 _docker_stats_cache = (0, {})
 _DOCKER_STATS_TTL = 30
 
@@ -577,6 +604,7 @@ def _docker_stats_socket():
     out = {}
     items = _docker_json("GET", "/v1.44/containers/json?all=0")
     if not isinstance(items, list):
+        LOGGER.debug(f"vps guard: docker containers/json returned {type(items).__name__}, not list")
         return out
     for item in items:
         try:
@@ -688,20 +716,24 @@ class VPSGuard:
             "servers": {},
             "services": {},
         }
-        self.services = {}
-        self.servers = {}
-        self.top = []
         try:
             self._refresh_inner(state)
         except Exception as err:
             LOGGER.error(f"VPS refresh: {err}")
         self.last_scan = time()
-        self.services = state["services"]
-        self.servers = state["servers"]
+        # Only replace services/servers if we got meaningful data
+        # (prevents clearing on Docker socket failure)
+        if state["services"] or state["servers"]:
+            self.services = state["services"]
+            self.servers = state["servers"]
+        elif not self.services:
+            # First run with no data — still set it
+            self.services = state["services"]
+            self.servers = state["servers"]
         self.top = sorted(
             [
                 {"pid": p.get("pid"), "rss": p.get("rss"), "cmd": p.get("cmd"), "name": k}
-                for k, s in list(state["services"].items()) + list(state["servers"].items())
+                for k, s in list(self.services.items()) + list(self.servers.items())
                 for p in (s.get("top") or [])
             ],
             key=lambda x: x.get("rss") or 0,
@@ -745,8 +777,15 @@ class VPSGuard:
                     },
                 }
         # Docker containers via socket (FlareSolverr, etc.)
+        docker_containers = {}
         try:
-            for cname, cdata in _docker_stats_socket().items():
+            docker_containers = _docker_stats_socket()
+        except Exception as err:
+            LOGGER.debug(f"vps guard: _docker_stats_socket failed: {err}")
+        if not docker_containers:
+            docker_containers = _docker_ps_fallback()
+        for cname, cdata in docker_containers.items():
+            try:
                 m = _container_mem(cdata["id"])
                 limit = m.get("limit") or 0
                 if limit and not (0 < limit < (1 << 62)):
@@ -765,9 +804,22 @@ class VPSGuard:
                         "age": time() - self.last_scan,
                     },
                 }
-        except Exception:
-            pass
-        return state
+            except Exception as err:
+                LOGGER.debug(f"vps guard: container {cname} stats failed: {err}")
+                state["services"][cname] = {
+                    "rss": 0,
+                    "pids": 1,
+                    "cont": True,
+                    "limit": 0,
+                    "peak": 0,
+                    "image": cdata.get("image", ""),
+                    "info": {
+                        "pid": None,
+                        "name": cname,
+                        "cmd": cdata.get("image", ""),
+                        "age": time() - self.last_scan,
+                    },
+                }
 
     # ---------------- criticality & alerts ----------------
     def _safe_limit(self, name):
