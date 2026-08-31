@@ -368,8 +368,6 @@ def _proc_info(pid):
                     "memory_info",
                     "create_time",
                     "ppid",
-                    "status",
-                    "uids",
                 ]
             )
         except Exception:
@@ -431,16 +429,27 @@ def _scan_tree(skip_docker=True):
     seen = {}
     for pid in _proc_pids():
         try:
+            if pid <= 2:
+                continue
+            try:
+                with open(f"/proc/{pid}/stat", "rb") as f:
+                    parts = f.read(256).split(b")")
+                    if len(parts) > 1:
+                        st = parts[1].split()[2:3]
+                        if st and st[0] in (b"Z", b"x", b"X"):
+                            continue
+            except Exception:
+                continue
             info = _proc_info(pid)
             if info is None:
                 continue
             ppid = info["ppid"]
             ccid = None
             try:
-                for line in open(f"/proc/{pid}/cgroup", "rb"):
-                    line = line.decode(errors="replace").strip()
-                    if line and "docker" in line:
-                        ccid = line.rsplit("/", 1)[-1][:12]
+                cg_data = open(f"/proc/{pid}/cgroup", "rb").read(512)
+                for line in cg_data.split(b"\n"):
+                    if b"docker" in line:
+                        ccid = line.decode(errors="replace").rsplit("/", 1)[-1][:12]
                         break
             except Exception:
                 pass
@@ -456,7 +465,7 @@ def _scan_tree(skip_docker=True):
                 host = False
                 try:
                     parse = json.loads(
-                        open(f"/proc/{pid}/cmdline", "rb").read().replace(b"\0", b" ").strip()
+                        open(f"/proc/{pid}/cmdline", "rb").read(512).replace(b"\0", b" ").strip()
                         or b"[]"
                     )
                     if isinstance(parse, list) and parse:
@@ -583,6 +592,33 @@ def _docker_stats_socket():
     return out
 
 
+_batch_docker_stats_cache = (0, {})
+_BATCH_DOCKER_TTL = 45
+
+
+def _batch_docker_stats():
+    now = time()
+    if (now - _batch_docker_stats_cache[0]) < _BATCH_DOCKER_TTL:
+        return _batch_docker_stats_cache[1]
+    try:
+        items = _docker_json("GET", "/v1.44/containers/stats?stream=0")
+        if not isinstance(items, list):
+            return _batch_docker_stats_cache[1]
+        out = {}
+        for item in items:
+            cid = (item.get("id") or "")[:12]
+            ms = item.get("memory_stats") or {}
+            out[cid] = {
+                "cur": int(ms.get("usage") or 0),
+                "peak": int(ms.get("max_usage") or 0),
+                "limit": int(ms.get("limit") or 0),
+            }
+        _batch_docker_stats_cache = (now, out)
+        return out
+    except Exception:
+        return _batch_docker_stats_cache[1]
+
+
 _container_mem_cache = {}
 _CONTAINER_MEM_TTL = 45
 
@@ -592,6 +628,10 @@ def _container_mem(id_):
     cached = _container_mem_cache.get(id_)
     if cached and (now - cached[0]) < _CONTAINER_MEM_TTL:
         return cached[1]
+    batch = _batch_docker_stats().get(id_)
+    if batch is not None:
+        _container_mem_cache[id_] = (now, batch)
+        return batch
     try:
         stats = _docker_json("GET", f"/v1.44/containers/{id_}/stats?stream=0")
         if stats is None:
