@@ -1045,6 +1045,27 @@
             transform: translate(-50%, 0);
         }
 
+        .seek-ind {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, .72);
+            color: #fff;
+            font-family: var(--mono);
+            font-size: 1.1rem;
+            padding: .35em .9em;
+            border-radius: .4em;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity .12s;
+            z-index: 2147483646;
+        }
+
+        .seek-ind.show {
+            opacity: 1;
+        }
+
         .err {
             display: grid;
             place-content: center;
@@ -2680,6 +2701,10 @@ function lmSwitchAudio(id, label) {
             }
             el("fsBtn").onclick = toggleFullscreen;
 
+            var seekInd = document.createElement("div");
+            seekInd.className = "seek-ind";
+            el("frame").appendChild(seekInd);
+
             var playerHost = document.querySelector("video-player");
             if (playerHost && "ontouchstart" in window) {
                 var gst = null;
@@ -2693,7 +2718,8 @@ function lmSwitchAudio(id, label) {
                         kind: t.clientX < (window.innerWidth / 2) ? "bri" : "vol",
                         engaged: false,
                         dir: null,
-                        seekAt: 0
+                        seekAt: 0,
+                        targetTime: 0
                     };
                 }, { passive: true });
                 playerHost.addEventListener("touchmove", function (e) {
@@ -2708,6 +2734,7 @@ function lmSwitchAudio(id, label) {
                         gst.lastX = t.clientX;
                         gst.lastY = t.clientY;
                         gst.seekAt = vid.currentTime || 0;
+                        gst.targetTime = gst.seekAt;
                     }
                     if (e.cancelable) e.preventDefault();
 
@@ -2718,10 +2745,13 @@ function lmSwitchAudio(id, label) {
                         var dur = vid.duration || 0;
                         var target = Math.max(0, gst.seekAt + seekSec);
                         if (dur > 0) target = Math.min(target, dur);
-                        vid.currentTime = target;
+                        gst.targetTime = target;
                         gst.lastX = t.clientX;
-                        toast((seekSec >= 0 ? "\u25b6 " : "\u25c0 ")
-                            + clock(target));
+                        var diff = target - gst.seekAt;
+                        seekInd.textContent =
+                            (diff >= 0 ? "\u25b6 " : "\u25c0 ")
+                            + clock(Math.abs(diff));
+                        seekInd.classList.add("show");
                     } else {
                         var step = (gst.lastY - t.clientY) /
                             ((window.innerHeight * 0.6) || 480);
@@ -2736,8 +2766,17 @@ function lmSwitchAudio(id, label) {
                         }
                     }
                 }, { passive: false });
-                playerHost.addEventListener("touchend", function () { gst = null; });
-                playerHost.addEventListener("touchcancel", function () { gst = null; });
+                playerHost.addEventListener("touchend", function () {
+                    if (gst && gst.dir === "h" && gst.engaged) {
+                        vid.currentTime = gst.targetTime;
+                    }
+                    seekInd.classList.remove("show");
+                    gst = null;
+                });
+                playerHost.addEventListener("touchcancel", function () {
+                    seekInd.classList.remove("show");
+                    gst = null;
+                });
             }
 
             if (!TOKEN) {
