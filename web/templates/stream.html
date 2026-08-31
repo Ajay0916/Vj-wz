@@ -2649,9 +2649,9 @@
                     (document.exitFullscreen || document.webkitExitFullscreen)
                         .call(document);
                 } else {
-                    var host = el("root") || document.documentElement;
-                    (host.requestFullscreen || host.webkitRequestFullscreen)
-                        .call(host);
+                    var host = document.documentElement;
+                    if (host.requestFullscreen) host.requestFullscreen();
+                    else if (host.webkitRequestFullscreen) host.webkitRequestFullscreen();
                 }
             }
             el("fsBtn").onclick = toggleFullscreen;
