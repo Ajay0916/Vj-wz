@@ -1485,6 +1485,8 @@
                         isLive: false
                     });
                     this.#player = p;
+                    try { p.setVolume(this.#muted ? 0 : this.#vol); }
+                    catch (e) { }
 
                     p.on("time", (pts) => {
                         this.#time = this.#seconds(pts);
@@ -1508,6 +1510,8 @@
                     });
 
                     await p.load(url);
+                    try { p.setVolume(this.#muted ? 0 : this.#vol); }
+                    catch (e) { }
                     this.#loaded = true;
                     this.#streams = p.getStreams ? p.getStreams() : [];
                     this.#dur = this.#durationFrom(this.#streams);
