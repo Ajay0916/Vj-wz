@@ -937,10 +937,7 @@ class VPSGuard:
         try:
             # --- Docker containers: use socket API (no docker CLI in container) ---
             if name != "t-api":
-                # Find container ID by name
-                resp = _docker_http("GET", "/containers/json?all=1")
-                body = resp[2] if len(resp) > 2 else b""
-                containers = json.loads(body) if body else []
+                containers = _docker_json("GET", "/containers/json?all=1") or []
                 cont_id = None
                 for c in containers:
                     cname = (c.get("Names") or [""])[0].lstrip("/")
@@ -948,50 +945,32 @@ class VPSGuard:
                         cont_id = c.get("Id", "")[:12]
                         break
                 if not cont_id:
-                    LOGGER.error(f"VPS guard restart {name}: container not found")
+                    LOGGER.error(f"VPS guard restart {name}: container not found in {len(containers)} containers")
                     return False, "container not found"
                 # POST /containers/{id}/restart
-                restart_resp = _docker_http("POST", f"/containers/{cont_id}/restart?t=10")
-                status_line = restart_resp[0] if restart_resp else ""
-                if "204" not in status_line and "200" not in status_line:
-                    LOGGER.error(f"VPS guard restart {name} FAILED: {status_line}")
-                    return False, f"docker API: {status_line}"
-                LOGGER.info(f"VPS guard: {name} restart API call OK (204)")
+                status, _ = _docker_http("POST", f"/containers/{cont_id}/restart?t=10")
+                if status is None or (b"204" not in status and b"200" not in status):
+                    LOGGER.error(f"VPS guard restart {name} FAILED: {status}")
+                    return False, f"docker API: {status}"
+                LOGGER.info(f"VPS guard: {name} restart API call OK")
             else:
-                # t-api: systemctl (host command not available inside container)
-                LOGGER.info(f"VPS guard: t-api restart — must be done manually or via API")
+                LOGGER.info(f"VPS guard: t-api restart — use API /restart")
                 return False, "t-api restart from bot not supported, use API /restart"
 
             # --- Verify container came back up (wait up to 15s) ---
             import time as _t
             _t.sleep(3)
             for _attempt in range(4):
-                if name == "flaresolverr":
-                    vr = _docker_http("GET", "/containers/json?all=1")
-                    vr_body = vr[2] if len(vr) > 2 else b""
-                    vr_containers = json.loads(vr_body) if vr_body else []
-                    for vc in vr_containers:
-                        vcname = (vc.get("Names") or [""])[0].lstrip("/")
-                        if vcname == name or vcname.endswith("/" + name):
-                            state = (vc.get("State") or "").lower()
-                            if state == "running":
-                                self.restarts[name] = now
-                                LOGGER.info(f"VPS guard: {name} restart OK + verified running")
-                                return True, "restart successful"
-                            break
-                else:
-                    vr = _docker_http("GET", f"/containers/json?all=1")
-                    vr_body = vr[2] if len(vr) > 2 else b""
-                    vr_containers = json.loads(vr_body) if vr_body else []
-                    for vc in vr_containers:
-                        vcname = (vc.get("Names") or [""])[0].lstrip("/")
-                        if vcname == name or vcname.endswith("/" + name):
-                            state = (vc.get("State") or "").lower()
-                            if state == "running":
-                                self.restarts[name] = now
-                                LOGGER.info(f"VPS guard: {name} restart OK + verified running")
-                                return True, "restart successful"
-                            break
+                all_containers = _docker_json("GET", "/containers/json?all=1") or []
+                for vc in all_containers:
+                    vcname = (vc.get("Names") or [""])[0].lstrip("/")
+                    if vcname == name or vcname.endswith("/" + name):
+                        state = (vc.get("State") or "").lower()
+                        if state == "running":
+                            self.restarts[name] = now
+                            LOGGER.info(f"VPS guard: {name} restart OK + verified running")
+                            return True, "restart successful"
+                        break
                 _t.sleep(3)
             self.restarts[name] = now
             LOGGER.warning(f"VPS guard: {name} restart issued but health check pending")
