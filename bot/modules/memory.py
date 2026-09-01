@@ -533,9 +533,10 @@ async def memory_callback(_, query):
             await _safe_answer(query, f"Restarting {name}...")
             ok, msg = await asyncio.to_thread(vps_guard.restart, name)
             if ok:
+                status_text = "restart successful" if msg == "restart successful" else "restart issued, checking..."
                 await edit_message(
                     query.message,
-                    f"✅ <b>{name}</b> restart issued. Recovery in ~5s.",
+                    f"✅ <b>{name}</b> {status_text}",
                 )
             else:
                 btns = ButtonMaker()

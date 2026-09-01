@@ -945,13 +945,46 @@ class VPSGuard:
             return False
         LOGGER.warning(f"VPS guard: restarting {name} ({readable(s.get('rss') or 0)} used)")
         try:
-            subprocess.run(command, shell=True, timeout=60, capture_output=True)
+            r = subprocess.run(command, shell=True, timeout=60, capture_output=True, text=True)
+            if r.returncode != 0:
+                err_msg = (r.stderr or r.stdout or "unknown error").strip()[:200]
+                LOGGER.error(f"VPS guard restart {name} FAILED rc={r.returncode}: {err_msg}")
+                return False, f"command failed: {err_msg}"
+            # Verify container came back up (wait up to 15s)
+            import time as _t
+            _t.sleep(3)
+            for _attempt in range(4):
+                if name == "t-api":
+                    vr = subprocess.run(["curl", "-s", "-m", "3", "http://132.145.136.242:8009/health"],
+                                        capture_output=True, text=True, timeout=5)
+                    if vr.returncode == 0 and "Ajay-api" in vr.stdout:
+                        self.restarts[name] = now
+                        LOGGER.info(f"VPS guard: {name} restart OK + verified healthy")
+                        return True, "restart successful"
+                elif name == "flaresolverr":
+                    vr = subprocess.run(["curl", "-s", "-m", "3", "-X", "POST", "http://localhost:8191/v1",
+                                         "-H", "Content-Type: application/json",
+                                         "-d", '{"cmd":"sessions.list"}'],
+                                        capture_output=True, text=True, timeout=5)
+                    if vr.returncode == 0 and '"ok"' in vr.stdout:
+                        self.restarts[name] = now
+                        LOGGER.info(f"VPS guard: {name} restart OK + verified healthy")
+                        return True, "restart successful"
+                else:
+                    vr = subprocess.run(["docker", "inspect", "--format", "{{.State.Running}}", name],
+                                        capture_output=True, text=True, timeout=5)
+                    if vr.returncode == 0 and "true" in vr.stdout.lower():
+                        self.restarts[name] = now
+                        LOGGER.info(f"VPS guard: {name} restart OK + verified running")
+                        return True, "restart successful"
+                _t.sleep(3)
+            # Container restarted but health check timed out
             self.restarts[name] = now
-            LOGGER.info(f"VPS guard: {name} restart issued")
-            return True
+            LOGGER.warning(f"VPS guard: {name} restart issued but health check pending")
+            return True, "restart issued, health check pending"
         except Exception as err:
             LOGGER.error(f"VPS guard restart {name}: {err}")
-            return False
+            return False, str(err)[:200]
 
     # ---------------- loop ----------------
     async def _loop(self):
@@ -1004,8 +1037,10 @@ class VPSGuard:
         if force:
             # temporarily clear cooldown for this manual call
             self.restarts.pop(name, None)
-        ok = self._restart_service(name, s, s.get("ratio") or 0.0, force=force)
-        return ok, "ok"
+        result = self._restart_service(name, s, s.get("ratio") or 0.0, force=force)
+        if isinstance(result, tuple):
+            return result
+        return result, "ok"
 
     def trim(self):
         flags = []
