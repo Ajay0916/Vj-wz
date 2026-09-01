@@ -493,6 +493,8 @@ PAGE2_SITES = {
     "bt4g",
     "nyaasi",
     "yts",
+    "oceanofpdf",
+    "rutracker",
 }
 
 # Dedicated/special sites never flood grouped searches. They remain available
@@ -503,6 +505,8 @@ ALL_SITES_EXCLUDE = {
     "bt4g",
     "nyaasi",
     "yts",
+    "oceanofpdf",
+    "rutracker",
 }
 
 
@@ -2047,13 +2051,11 @@ COURSE_SITES = {
     "downarchive",
     "freecourseweb",
     "freecoursesites",
-    "rutracker",
     "pimpmymind",
     "thedownloadly",
 }
 BOOK_GROUP_SITES = BOOK_SITES | {
     "hindiaudio",
-    "oceanofpdf",
 }
 GROUP_SITES = {
     "courses": COURSE_SITES,
