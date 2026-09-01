@@ -532,7 +532,7 @@ def _docker_http(method, path, timeout=15.0):
     head, sep, body = data.partition(b"\r\n\r\n")
     if not sep:
         return None, None
-    status = head.split(b" ", 1)[0] if head else b""
+    status = head.split(b"\r\n", 1)[0] if head else b""
     headers = {}
     for line in head.split(b"\r\n")[1:]:
         k, _, v = line.partition(b":")
@@ -949,9 +949,10 @@ class VPSGuard:
                     return False, "container not found"
                 # POST /containers/{id}/restart
                 status, _ = _docker_http("POST", f"/containers/{cont_id}/restart?t=10")
-                if status is None or (b"204" not in status and b"200" not in status):
-                    LOGGER.error(f"VPS guard restart {name} FAILED: {status}")
-                    return False, f"docker API: {status}"
+                if status is None:
+                    LOGGER.error(f"VPS guard restart {name} FAILED: no response")
+                    return False, "docker API: no response"
+                LOGGER.info(f"VPS guard: {name} restart API response: {status}")
                 LOGGER.info(f"VPS guard: {name} restart API call OK")
             else:
                 LOGGER.info(f"VPS guard: t-api restart — use API /restart")
