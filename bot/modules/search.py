@@ -495,6 +495,11 @@ PAGE2_SITES = {
     "yts",
     "oceanofpdf",
     "rutracker",
+    "knaben",
+    "torrentscsv",
+    "btsow",
+    "filemood",
+    "oxtorrent",
 }
 
 # Dedicated/special sites never flood grouped searches. They remain available
@@ -507,6 +512,11 @@ ALL_SITES_EXCLUDE = {
     "yts",
     "oceanofpdf",
     "rutracker",
+    "knaben",
+    "torrentscsv",
+    "btsow",
+    "filemood",
+    "oxtorrent",
 }
 
 
