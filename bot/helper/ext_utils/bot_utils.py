@@ -168,7 +168,7 @@ def compare_versions(v1, v2):
     )
 
 
-def bt_selection_buttons(id_):
+def bt_selection_buttons(id_, message=None):
     gid = id_[:12] if len(id_) > 25 else id_
     bot_id = _resolve_bot_id()
     pin = derive_pin(id_, bot_id)
