@@ -1,27 +1,28 @@
-"""Generate token.pickle — exact same logic as CodeRed-001/TokenPickle."""
+"""Generate token.pickle via /token command in bot.
+Uses bot's BASE_URL as redirect URI — no localhost issue."""
 import os
+import secrets
 from asyncio import Event, wait_for, TimeoutError as AsyncTimeout
 from pickle import dump as pdump, load as pload
+from urllib.parse import urlencode, urlparse, parse_qs
 
 from pyrogram.enums import ChatType
 from pyrogram.filters import create, user, text, private
 from pyrogram.handlers import CallbackQueryHandler, MessageHandler
 
 from ..core.tg_client import TgClient
+from ..core.config_manager import Config
 from ..helper.ext_utils.bot_utils import new_task
 from ..helper.ext_utils.status_utils import get_readable_time
 from ..helper.telegram_helper.button_build import ButtonMaker
-from ..helper.telegram_helper.message_utils import (
-    send_message,
-    edit_message,
-    delete_message,
-)
+from ..helper.telegram_helper.message_utils import send_message, delete_message
 
 _STOP = "gentoken_stop"
 _TIMEOUT = 300
-SCOPES = ["https://www.googleapis.com/auth/drive"]
+SCOPES = "https://www.googleapis.com/auth/drive"
 CREDENTIALS_FILE = "/usr/src/app/credentials.json"
 TOKEN_FILE = "/usr/src/app/token.pickle"
+_pending = {}
 
 
 def _stop_filter(uid):
@@ -36,35 +37,28 @@ def _stop_btns():
     return btns.build_menu(1)
 
 
-def _header(user_name):
-    return (
-        "⌬ <u><i><b>Google Drive Token Generator</b></i></u>\n│\n"
-        f"│ <b>User</b> → <b>{user_name}</b>"
-    )
+def _header(name):
+    return f"⌬ <u><b>Google Drive Token Generator</b></u>\n│ <b>{name}</b>"
 
 
-async def _invoke_text(user_id, timeout=_TIMEOUT):
+async def _wait_input(user_id, timeout=_TIMEOUT):
     event = Event()
     result = [None]
 
-    async def _on_text(_, message):
-        await delete_message(message)
-        result[0] = message.text or ""
+    async def _on_text(_, msg):
+        await delete_message(msg)
+        result[0] = ("text", msg.text or "")
         event.set()
 
-    async def _on_stop(_, query):
-        await query.answer()
-        result[0] = _STOP
+    async def _on_stop(_, q):
+        await q.answer()
+        result[0] = ("stop", None)
         event.set()
 
     h1 = TgClient.bot.add_handler(
-        MessageHandler(_on_text, filters=user(user_id) & text & private),
-        group=-1,
-    )
+        MessageHandler(_on_text, filters=user(user_id) & text & private), group=-1)
     h2 = TgClient.bot.add_handler(
-        CallbackQueryHandler(_on_stop, filters=_stop_filter(user_id)),
-        group=-1,
-    )
+        CallbackQueryHandler(_on_stop, filters=_stop_filter(user_id)), group=-1)
     try:
         await wait_for(event.wait(), timeout)
     except AsyncTimeout:
@@ -75,6 +69,65 @@ async def _invoke_text(user_id, timeout=_TIMEOUT):
     return result[0]
 
 
+async def _handle_token_exchange(code, user_id, h):
+    """Exchange code for token — called by callback handler."""
+    try:
+        import json
+        from google_auth_oauthlib.flow import InstalledAppFlow
+        with open(CREDENTIALS_FILE) as f:
+            cid = json.load(f).get("installed", {}).get("web", {}).get("client_id", "")
+
+        # Create flow with our redirect_uri
+        flow = InstalledAppFlow.from_client_secrets_file(
+            CREDENTIALS_FILE, [SCOPES],
+            redirect_uri=f"{Config.BASE_URL.rstrip('/')}/token_callback"
+        )
+        flow.fetch_token(code=code)
+        creds = flow.credentials
+        with open(TOKEN_FILE, "wb") as f:
+            pdump(creds, f)
+        await TgClient.bot.send_message(
+            user_id,
+            f"{_header('Ajay')}\n┃\n"
+            "┠  <b>token.pickle generated!</b>\n"
+            "┠ Set: <code>USE_SERVICE_ACCOUNTS=False</code>\n"
+            "┖ <code>/restart</code>",
+        )
+    except Exception as e:
+        await TgClient.bot.send_message(
+            user_id,
+            f"{_header('Ajay')}\n┃\n┖ <b>Failed:</b> <i>{e}</i>",
+        )
+    _pending.pop(user_id, None)
+
+
+async def token_callback_handler(request):
+    """Web callback — Google redirects here after auth."""
+    from aiohttp import web
+    params = parse_qs(request.query_string)
+    code = params.get("code", [None])[0]
+    state = params.get("state", [None])[0]
+    error = params.get("error", [None])[0]
+
+    if error:
+        return web.Response(
+            text=f"<h2>Error: {error}</h2><p>Close and try /token again.</p>",
+            content_type="text/html")
+
+    if not code or state not in _pending:
+        return web.Response(
+            text="<h2>Invalid request</h2>", content_type="text/html")
+
+    user_id = _pending[state]
+    import __main__
+    import asyncio
+    asyncio.get_event_loop().create_task(_handle_token_exchange(code, user_id, ""))
+
+    return web.Response(
+        text="<h2>Token saved!</h2><p>You can close this tab.</p>",
+        content_type="text/html")
+
+
 @new_task
 async def gen_gdrive_token(_, message):
     if message.chat.type != ChatType.PRIVATE:
@@ -82,97 +135,77 @@ async def gen_gdrive_token(_, message):
 
     user_id = message.from_user.id
     user_name = message.from_user.first_name or "User"
-    btns = _stop_btns()
     h = _header(user_name)
+    btns = _stop_btns()
 
+    # Check credentials.json
     if not os.path.exists(CREDENTIALS_FILE):
-        await send_message(
+        return await send_message(
             message,
-            f"{h}\n┃\n"
-            "┖ <b>credentials.json not found!</b>\n"
-            "Send your <code>credentials.json</code> file here first.",
-        )
-        return
+            f"{h}\n┃\n┖ <b>credentials.json not found!</b>\nSend the file first.")
 
+    # Check valid token
     if os.path.exists(TOKEN_FILE):
         try:
             with open(TOKEN_FILE, "rb") as f:
                 creds = pload(f)
             if creds and creds.valid:
-                await send_message(
-                    message,
-                    f"{h}\n┃\n"
-                    "┖ <b>token.pickle already valid!</b>\n"
-                    "Remove it first to regenerate.",
-                )
-                return
+                return await send_message(
+                    message, f"{h}\n┃\n┖ <b>Already valid!</b>")
         except Exception:
             pass
 
-    try:
-        from google_auth_oauthlib.flow import InstalledAppFlow
-    except ImportError:
-        await send_message(message, f"{h}\n┃\n┖ <b>google-auth-oauthlib not installed.</b>")
-        return
-
-    # Same logic as CodeRed-001/TokenPickle
-    try:
-        flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
-        auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent")
-    except Exception as e:
-        await send_message(message, f"{h}\n┃\n┖ <b>Error:</b> <i>{e}</i>")
-        return
-
-    await send_message(
-        message,
-        f"{h}\n┃\n"
-        f"┖ <a href='{auth_url}'>🔐 Click here to Authorize</a>\n\n"
-        "After Allow, page will redirect with error (normal).\n"
-        "Copy the <b>code</b> from URL bar:\n"
-        "<code>...?code=<b>4/0Axx...</b>&amp;scope=...</code>\n\n"
-        "Paste the code here.",
-        btns,
-    )
-
-    code = await _invoke_text(user_id)
-    if code is None:
-        return await send_message(message, f"{h}\n┃\n┖ <b>Timed Out!</b>")
-    if code == _STOP:
-        return await send_message(message, f"{h}\n┃\n┖ <b>Cancelled.</b>")
-
-    code = code.strip()
-
-    # Extract from URL if full URL pasted
-    if "code=" in code:
-        from urllib.parse import urlparse, parse_qs
-        parsed = urlparse(code if code.startswith("http") else f"http://x?{code}")
-        extracted = parse_qs(parsed.query).get("code", [None])[0]
-        if extracted:
-            code = extracted
-
-    try:
-        flow2 = InstalledAppFlow.from_client_secrets_file(
-            CREDENTIALS_FILE, SCOPES,
-            redirect_uri="http://localhost",
-        )
-        flow2.fetch_token(code=code)
-        creds = flow2.credentials
-    except Exception as e:
+    # Check BASE_URL
+    base_url = (Config.BASE_URL or "").rstrip("/")
+    if not base_url:
         return await send_message(
-            message,
-            f"{h}\n┃\n┖ <b>Token exchange failed:</b> <i>{e}</i>",
-        )
+            message, f"{h}\n┃\n┖ <b>BASE_URL not set!</b>")
 
+    callback_url = f"{base_url}/token_callback"
+
+    # Build auth URL with explicit redirect_uri
+    import json
     try:
-        with open(TOKEN_FILE, "wb") as f:
-            pdump(creds, f)
+        with open(CREDENTIALS_FILE) as f:
+            creds_data = json.load(f)
+        client_id = creds_data.get("installed", creds_data.get("web", {}))["client_id"]
     except Exception as e:
-        return await send_message(message, f"{h}\n┃\n┖ <b>Save failed:</b> <i>{e}</i>")
+        return await send_message(message, f"{h}\n┃\n┖ <b>Error reading credentials.json:</b> <i>{e}</i>")
+
+    state = secrets.token_urlsafe(16)
+    _pending[state] = user_id
+
+    auth_url = "https://accounts.google.com/o/oauth2/auth?" + urlencode({
+        "client_id": client_id,
+        "redirect_uri": callback_url,
+        "response_type": "code",
+        "scope": SCOPES,
+        "access_type": "offline",
+        "prompt": "consent",
+        "state": state,
+    })
 
     await send_message(
         message,
         f"{h}\n┃\n"
-        "┠  <b>token.pickle generated!</b>\n"
-        "┠ Set config: <code>USE_SERVICE_ACCOUNTS=False</code>\n"
-        "┖ <code>/restart</code>",
-    )
+        f"┖ <a href='{auth_url}'>🔐 Authorize Google Drive</a>\n\n"
+        f"Click → Login → Allow\n"
+        f"Token auto-saves.",
+        btns)
+
+    # Wait for callback or timeout
+    done = Event()
+
+    async def _poll():
+        while state in _pending:
+            await __import__("asyncio").sleep(1)
+        done.set()
+
+    import asyncio
+    asyncio.get_event_loop().create_task(_poll())
+
+    try:
+        await wait_for(done.wait(), timeout=_TIMEOUT)
+    except AsyncTimeout:
+        _pending.pop(state, None)
+        await send_message(message, f"{h}\n┃\n┖ <b>Timed Out!</b>")

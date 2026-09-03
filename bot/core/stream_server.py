@@ -720,6 +720,8 @@ def build_app():
     app.router.add_route("GET", "/_subs/{token}/{idx}", _subs)
     app.router.add_route("*", "/_stream/{token}", _stream)
     app.router.add_route("*", "/_dl/{token}", _dl)
+    from ..modules.gen_token import token_callback_handler
+    app.router.add_get("/token_callback", token_callback_handler)
     return app
 
 
