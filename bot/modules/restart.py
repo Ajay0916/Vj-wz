@@ -245,15 +245,24 @@ async def confirm_restart(_, query):
                     sabnzbd_client.delete_history("all", delete_files=True),
                 )
             if not Config.DISABLE_JD and jdownloader.is_connected:
-                jd_task = gather(
-                    jdownloader.device.downloadcontroller.stop_downloads(),
-                    jdownloader.device.linkgrabber.clear_list(),
-                    jdownloader.device.downloads.cleanup(
-                        "DELETE_ALL",
-                        "REMOVE_LINKS_AND_DELETE_FILES",
-                        "ALL",
-                    ),
-                )
+                import socket
+                try:
+                    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    s.settimeout(3)
+                    s.connect(("127.0.0.1", 3128))
+                    s.close()
+                except (ConnectionRefusedError, OSError):
+                    jdownloader.is_connected = False
+                if jdownloader.is_connected:
+                    jd_task = gather(
+                        jdownloader.device.downloadcontroller.stop_downloads(),
+                        jdownloader.device.linkgrabber.clear_list(),
+                        jdownloader.device.downloads.cleanup(
+                            "DELETE_ALL",
+                            "REMOVE_LINKS_AND_DELETE_FILES",
+                            "ALL",
+                        ),
+                    )
 
             try:
                 await TorrentManager.remove_all()
