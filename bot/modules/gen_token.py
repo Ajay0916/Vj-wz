@@ -129,7 +129,6 @@ async def gen_gdrive_token(_, message):
         auth_url, _ = flow.authorization_url(
             access_type="offline",
             prompt="consent",
-            redirect_uri="http://localhost",
         )
     except Exception as e:
         await send_message(message, f"{h}\n┃\n┖ <b>Error:</b> <i>{e}</i>")
