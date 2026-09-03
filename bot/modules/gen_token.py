@@ -1,20 +1,20 @@
 """Generate token.pickle for Google Drive via /token command.
 
 Flow:
-1. /token → bot asks for credentials.json
-2. User sends credentials.json file (or sends /token again if already saved)
-3. Bot saves credentials.json → generates Google auth link
-4. User clicks link → authorizes → pastes code
-5. Bot saves token.pickle
+1. /token → bot sends Google auth link
+2. User clicks → authorizes → redirects to bot callback
+3. Bot auto-saves token.pickle
 """
 import os
+import secrets
 from asyncio import Event, wait_for, TimeoutError as AsyncTimeout
+from urllib.parse import urlencode, urlparse, parse_qs
 
-from pyrogram.enums import ChatType, MessageMediaType
+from aiohttp import web
+
+from pyrogram.enums import ChatType
 from pyrogram.filters import create, user, text, private
 from pyrogram.handlers import CallbackQueryHandler, MessageHandler
-
-from aiofiles.os import remove as aioremove
 
 from ..core.tg_client import TgClient
 from ..core.config_manager import Config
@@ -24,14 +24,14 @@ from ..helper.telegram_helper.button_build import ButtonMaker
 from ..helper.telegram_helper.message_utils import (
     send_message,
     edit_message,
-    delete_message,
 )
 
 _STOP = "gentoken_stop"
-_TIMEOUT = 180
+_TIMEOUT = 300
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 CREDENTIALS_FILE = "/usr/src/app/credentials.json"
-TOKEN_FILE = "token.pickle"
+TOKEN_FILE = "/usr/src/app/token.pickle"
+_state_store = {}
 
 
 def _stop_filter(uid):
@@ -53,66 +53,64 @@ def _header(user_name):
     )
 
 
-async def _wait_for_file_or_text(user_id, timeout=_TIMEOUT):
-    """Wait for user to send a file (credentials.json) or text (auth code)."""
-    event = Event()
-    result = [None]
+def _get_callback_url():
+    base = Config.BASE_URL or ""
+    if not base:
+        return None
+    # Ensure no trailing slash
+    base = base.rstrip("/")
+    return f"{base}/token_callback"
 
-    async def _on_media(_, message):
-        await delete_message(message)
-        if message.document and message.document.file_name and message.document.file_name.endswith(".json"):
-            path = await TgClient.bot.download_media(message, file_name=CREDENTIALS_FILE)
-            result[0] = ("FILE", path)
-            event.set()
 
-    async def _on_text(_, message):
-        await delete_message(message)
-        result[0] = ("TEXT", message.text or "")
-        event.set()
+async def _token_callback_handler(request):
+    """Handle Google OAuth callback → save token → notify user."""
+    params = parse_qs(request.query_string)
+    code = params.get("code", [None])[0]
+    state = params.get("state", [None])[0]
+    error = params.get("error", [None])[0]
 
-    async def _on_stop(_, query):
-        await query.answer()
-        result[0] = ("STOP", None)
-        event.set()
+    if error:
+        return web.Response(
+            text=f"<h2>❌ Authorization Failed</h2><p>{error}</p><p>Close this tab and try /token again.</p>",
+            content_type="text/html",
+        )
 
-    all_media = create(
-        lambda flt, _, m: bool(m.media and getattr(m.media, "value", None) != "text")
-    )
+    if not code or state not in _state_store:
+        return web.Response(
+            text="<h2>❌ Invalid request</h2><p>Close this tab.</p>",
+            content_type="text/html",
+        )
 
-    h1 = TgClient.bot.add_handler(
-        MessageHandler(_on_text, filters=user(user_id) & text & private),
-        group=-1,
-    )
-    h2 = TgClient.bot.add_handler(
-        MessageHandler(
-            _on_media,
-            filters=user(user_id) & private & (__import__("pyrogram.filters", fromlist=["document"]).document),
-        ),
-        group=-1,
-    )
-    h3 = TgClient.bot.add_handler(
-        CallbackQueryHandler(_on_stop, filters=_stop_filter(user_id)),
-        group=-1,
-    )
+    user_id = _state_store.pop(state)
     try:
-        await wait_for(event.wait(), timeout)
-    except AsyncTimeout:
-        result[0] = None
-    finally:
-        TgClient.bot.remove_handler(*h1)
-        TgClient.bot.remove_handler(*h2)
-        TgClient.bot.remove_handler(*h3)
-    return result[0]
+        from google_auth_oauthlib.flow import InstalledAppFlow
+        flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
+        flow.fetch_token(code=code)
+        creds = flow.credentials
+
+        from pickle import dump as pdump
+        with open(TOKEN_FILE, "wb") as f:
+            pdump(creds, f)
+
+        # Notify user
+        await TgClient.bot.send_message(
+            user_id,
+            "✅ <b>token.pickle generated successfully!</b>\n\n"
+            "Set config: <code>USE_SERVICE_ACCOUNTS=False</code>\n"
+            "Then <code>/restart</code>",
+        )
+    except Exception as e:
+        await TgClient.bot.send_message(
+            user_id,
+            f"❌ Token exchange failed: <code>{e}</code>",
+        )
+
+    return web.Response(
+        text="<h2>✅ token.pickle saved!</h2><p>You can close this tab.</p>",
+        content_type="text/html",
+    )
 
 
-async def _stop_or_timeout(value, msg, h):
-    if value is None:
-        await edit_message(msg, f"{h}\n┃\n┖ <b>Timed Out!</b>\n┖ <i>Process Stopped.</i>")
-        return True
-    if value == ("STOP", None):
-        await edit_message(msg, f"{h}\n┃\n┖ <b>Process Stopped.</b>")
-        return True
-    return False
 
 
 @new_task
@@ -125,133 +123,90 @@ async def gen_gdrive_token(_, message):
     btns = _stop_btns()
     h = _header(user_name)
 
-    # First check: does credentials.json already exist?
+
+    # Check credentials.json
     if not os.path.exists(CREDENTIALS_FILE):
         await send_message(
             message,
             f"{h}\n┃\n"
-            "┖ <b>Send your <code>credentials.json</code> file now.</b>\n\n"
-            "┃ How to get it:\n"
-            "┃ 1. Go to <a href='https://console.cloud.google.com/apis/credentials'>Google Cloud Console</a>\n"
-            "┃ 2. Create OAuth 2.0 Client ID → Desktop app\n"
-            "┃ 3. Download JSON file\n"
-            "┃\n"
-            "┖ <i>Send the file (not a link).</i>",
-            btns,
+            "┖ <b>credentials.json not found!</b>\n\n"
+            "Send your <code>credentials.json</code> file here first.",
         )
-
-        got = await _wait_for_file_or_text(user_id)
-        if await _stop_or_timeout(got, await message.reply("⏳"), h):
-            return
-
-        kind, val = got
-        if kind == "TEXT":
-            # If user sent a code instead, try it directly
-            code = val.strip()
-            return await _finish_token(message, h, code, btns)
-
-    # Now credentials.json exists — generate auth link
-    try:
-        from google_auth_oauthlib.flow import InstalledAppFlow
-    except ImportError:
-        await send_message(message, f"{h}\n┃\n┖ <b>google-auth-oauthlib not installed.</b>")
         return
 
     # Check if token already valid
     if os.path.exists(TOKEN_FILE):
-        from pickle import load as pload
         try:
+            from pickle import load as pload
             with open(TOKEN_FILE, "rb") as f:
                 creds = pload(f)
             if creds and creds.valid:
                 await send_message(
                     message,
                     f"{h}\n┃\n"
-                    "┖ <b>token.pickle already exists and is valid!</b>\n"
-                    "┃ Send <code>/token</code> again after removing existing token.pickle\nto regenerate.",
+                    "┖ <b>token.pickle already valid!</b>\n"
+                    "Remove it first to regenerate.",
                 )
                 return
         except Exception:
             pass
 
-    flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
-    auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent")
+    callback_url = _get_callback_url()
+    if not callback_url:
+        await send_message(
+            message,
+            f"{h}\n┃\n"
+            "┖ <b>BASE_URL not set!</b>\n"
+            "Set <code>BASE_URL</code> in config first.",
+        )
+        return
+
+    try:
+        from google_auth_oauthlib.flow import InstalledAppFlow
+    except ImportError:
+        await send_message(message, f"{h}\n┃\n┖ <b>google-auth-oauthlib not installed.</b>")
+        return
+
+    # Generate state token for CSRF protection
+    state = secrets.token_urlsafe(32)
+    _state_store[state] = user_id
+
+    try:
+        flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
+        auth_url, _ = flow.authorization_url(
+            access_type="offline",
+            prompt="consent",
+            state=state,
+        )
+    except Exception as e:
+        await send_message(message, f"{h}\n┃\n┖ <b>Error:</b> <i>{e}</i>")
+        return
 
     await send_message(
         message,
         f"{h}\n┃\n"
-        "┠ <b>Step 1:</b> Click the link below to authorize:\n"
+        "┠ <b>Step 1:</b> Click the link below:\n"
         f"┖ <a href='{auth_url}'>🔐 Authorize Google Drive</a>\n\n"
-        "┃ After authorizing, Google will show a code.\n"
-        "┃ Send that code here.\n\n"
+        "┃ <b>Step 2:</b> Login → Allow\n"
+        "┃ Token will be saved automatically.\n\n"
         f"<i>Timeout: {get_readable_time(_TIMEOUT)}</i>",
         btns,
     )
 
-    code = await _invoke_text(user_id)
-    if await _stop_or_timeout(code, await message.reply("⏳"), h):
-        return
-
-    return await _finish_token(message, h, code, btns)
-
-
-async def _invoke_text(user_id, timeout=_TIMEOUT):
+    # Wait for callback (or timeout)
     event = Event()
-    result = [None]
 
-    async def _on_text(_, message):
-        await delete_message(message)
-        result[0] = message.text or ""
+    async def _check_done():
+        while state in _state_store:
+            await __import__("asyncio").sleep(1)
         event.set()
 
-    async def _on_stop(_, query):
-        await query.answer()
-        result[0] = _STOP
-        event.set()
-
-    h1 = TgClient.bot.add_handler(
-        MessageHandler(_on_text, filters=user(user_id) & text & private),
-        group=-1,
-    )
-    h2 = TgClient.bot.add_handler(
-        CallbackQueryHandler(_on_stop, filters=_stop_filter(user_id)),
-        group=-1,
-    )
     try:
-        await wait_for(event.wait(), timeout)
+        await __import__("asyncio").create_task(_check_done())
+        await wait_for(event.wait(), timeout=_TIMEOUT)
     except AsyncTimeout:
-        result[0] = None
-    finally:
-        TgClient.bot.remove_handler(*h1)
-        TgClient.bot.remove_handler(*h2)
-    return result[0]
-
-
-async def _finish_token(message, h, code, btns):
-    try:
-        from google_auth_oauthlib.flow import InstalledAppFlow
-        flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
-        flow.fetch_token(code=code.strip())
-        creds = flow.credentials
-    except Exception as e:
-        await send_message(message, f"{h}\n┃\n┖ <b>Token exchange failed:</b> <i>{e}</i>")
-        return
-
-    try:
-        from pickle import dump as pdump
-        with open(TOKEN_FILE, "wb") as f:
-            pdump(creds, f)
-    except Exception as e:
-        await send_message(message, f"{h}\n┃\n┖ <b>Failed to save token.pickle:</b> <i>{e}</i>")
-        return
-
-    await send_message(
-        message,
-        f"{h}\n┃\n"
-        "┠  <b>token.pickle generated successfully!</b>\n"
-        "┃\n"
-        "┠ Now set in bot config:\n"
-        "┠  <code>USE_SERVICE_ACCOUNTS=False</code>\n"
-        "┃\n"
-        "┖ Then <code>/restart</code> the bot.",
-    )
+        _state_store.pop(state, None)
+        await send_message(
+            message,
+            f"{h}\n┃\n┖ <b>Timed Out!</b>\n┖ <i>Process Stopped.</i>",
+        )
