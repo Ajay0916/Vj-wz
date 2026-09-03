@@ -188,6 +188,13 @@ async def add_handlers():
     )
     TgClient.bot.add_handler(
         MessageHandler(
+            gen_gdrive_token,
+            filters=command(BotCommands.TokenCommand, case_sensitive=True)
+            & CustomFilters.sudo,
+        )
+    )
+    TgClient.bot.add_handler(
+        MessageHandler(
             cancel,
             filters=regex(rf"^/{BotCommands.CancelTaskCommand[1]}?(?:_\w+).*$")
             & CustomFilters.authorized,
