@@ -138,8 +138,8 @@ class GoogleDriveUpload(GoogleDriveHelper):
         return new_id
 
     @retry(
-        wait=wait_exponential(multiplier=2, min=3, max=6),
-        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=2, min=5, max=30),
+        stop=stop_after_attempt(10),
         retry=retry_if_exception_type(Exception),
     )
     def _upload_file(self, file_path, file_name, mime_type, dest_id, in_dir=True):
@@ -181,6 +181,12 @@ class GoogleDriveUpload(GoogleDriveHelper):
         while response is None and not self.listener.is_cancelled:
             try:
                 self.status, response = drive_file.next_chunk()
+            except (ConnectionError, BrokenPipeError, OSError) as err:
+                if retries < 10:
+                    retries += 1
+                    LOGGER.warning(f"Upload conn error (attempt {retries}/10): {err}")
+                    continue
+                raise
             except HttpError as err:
                 if err.resp.status in [500, 502, 503, 504, 429] and retries < 10:
                     retries += 1
