@@ -239,6 +239,10 @@ async def edit_message(message, text, buttons=None, block=True, photo=None):
                         return await message.edit_media(
                             InputMediaPhoto(photo, text), reply_markup=buttons
                         )
+                    except MediaCaptionTooLong:
+                        return await message.edit_media(
+                            InputMediaPhoto(photo, text[:1024]), reply_markup=buttons
+                        )
                     except (
                         PhotoInvalidDimensions,
                         WebpageCurlFailed,
@@ -248,16 +252,19 @@ async def edit_message(message, text, buttons=None, block=True, photo=None):
                         des_dir = await download_image_url(photo)
                         if des_dir:
                             msg = await message.edit_media(
-                                InputMediaPhoto(des_dir, text), reply_markup=buttons
+                                InputMediaPhoto(des_dir, text[:1024]), reply_markup=buttons
                             )
                             from aiofiles.os import remove as aioremove
 
                             await aioremove(des_dir)
                             return msg
                         return await message.edit_caption(
-                            caption=text, reply_markup=buttons
+                            caption=text[:1024], reply_markup=buttons
                         )
-            return await message.edit_caption(caption=text, reply_markup=buttons)
+            try:
+                return await message.edit_caption(caption=text, reply_markup=buttons)
+            except MediaCaptionTooLong:
+                return await message.edit_caption(caption=text[:1024], reply_markup=buttons)
         return await message.edit(
             text=text,
             disable_web_page_preview=True,
