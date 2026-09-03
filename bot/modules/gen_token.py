@@ -2,28 +2,25 @@
 
 Flow:
 1. /token → bot sends Google auth link
-2. User clicks → authorizes → redirects to bot callback
-3. Bot auto-saves token.pickle
+2. User clicks → authorizes → copies code from browser URL bar
+3. User pastes code → bot saves token.pickle
 """
 import os
-import secrets
 from asyncio import Event, wait_for, TimeoutError as AsyncTimeout
-from urllib.parse import urlencode, urlparse, parse_qs
-
-from aiohttp import web
+from pickle import dump as pdump, load as pload
 
 from pyrogram.enums import ChatType
 from pyrogram.filters import create, user, text, private
 from pyrogram.handlers import CallbackQueryHandler, MessageHandler
 
 from ..core.tg_client import TgClient
-from ..core.config_manager import Config
 from ..helper.ext_utils.bot_utils import new_task
 from ..helper.ext_utils.status_utils import get_readable_time
 from ..helper.telegram_helper.button_build import ButtonMaker
 from ..helper.telegram_helper.message_utils import (
     send_message,
     edit_message,
+    delete_message,
 )
 
 _STOP = "gentoken_stop"
@@ -31,7 +28,6 @@ _TIMEOUT = 300
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 CREDENTIALS_FILE = "/usr/src/app/credentials.json"
 TOKEN_FILE = "/usr/src/app/token.pickle"
-_state_store = {}
 
 
 def _stop_filter(uid):
@@ -53,64 +49,36 @@ def _header(user_name):
     )
 
 
-def _get_callback_url():
-    base = Config.BASE_URL or ""
-    if not base:
-        return None
-    # Ensure no trailing slash
-    base = base.rstrip("/")
-    return f"{base}/token_callback"
+async def _invoke_text(user_id, timeout=_TIMEOUT):
+    event = Event()
+    result = [None]
 
+    async def _on_text(_, message):
+        await delete_message(message)
+        result[0] = message.text or ""
+        event.set()
 
-async def _token_callback_handler(request):
-    """Handle Google OAuth callback → save token → notify user."""
-    params = parse_qs(request.query_string)
-    code = params.get("code", [None])[0]
-    state = params.get("state", [None])[0]
-    error = params.get("error", [None])[0]
+    async def _on_stop(_, query):
+        await query.answer()
+        result[0] = _STOP
+        event.set()
 
-    if error:
-        return web.Response(
-            text=f"<h2>❌ Authorization Failed</h2><p>{error}</p><p>Close this tab and try /token again.</p>",
-            content_type="text/html",
-        )
-
-    if not code or state not in _state_store:
-        return web.Response(
-            text="<h2>❌ Invalid request</h2><p>Close this tab.</p>",
-            content_type="text/html",
-        )
-
-    user_id = _state_store.pop(state)
-    try:
-        from google_auth_oauthlib.flow import InstalledAppFlow
-        flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
-        flow.fetch_token(code=code)
-        creds = flow.credentials
-
-        from pickle import dump as pdump
-        with open(TOKEN_FILE, "wb") as f:
-            pdump(creds, f)
-
-        # Notify user
-        await TgClient.bot.send_message(
-            user_id,
-            "✅ <b>token.pickle generated successfully!</b>\n\n"
-            "Set config: <code>USE_SERVICE_ACCOUNTS=False</code>\n"
-            "Then <code>/restart</code>",
-        )
-    except Exception as e:
-        await TgClient.bot.send_message(
-            user_id,
-            f"❌ Token exchange failed: <code>{e}</code>",
-        )
-
-    return web.Response(
-        text="<h2>✅ token.pickle saved!</h2><p>You can close this tab.</p>",
-        content_type="text/html",
+    h1 = TgClient.bot.add_handler(
+        MessageHandler(_on_text, filters=user(user_id) & text & private),
+        group=-1,
     )
-
-
+    h2 = TgClient.bot.add_handler(
+        CallbackQueryHandler(_on_stop, filters=_stop_filter(user_id)),
+        group=-1,
+    )
+    try:
+        await wait_for(event.wait(), timeout)
+    except AsyncTimeout:
+        result[0] = None
+    finally:
+        TgClient.bot.remove_handler(*h1)
+        TgClient.bot.remove_handler(*h2)
+    return result[0]
 
 
 @new_task
@@ -122,7 +90,6 @@ async def gen_gdrive_token(_, message):
     user_name = message.from_user.first_name or "User"
     btns = _stop_btns()
     h = _header(user_name)
-
 
     # Check credentials.json
     if not os.path.exists(CREDENTIALS_FILE):
@@ -137,7 +104,6 @@ async def gen_gdrive_token(_, message):
     # Check if token already valid
     if os.path.exists(TOKEN_FILE):
         try:
-            from pickle import load as pload
             with open(TOKEN_FILE, "rb") as f:
                 creds = pload(f)
             if creds and creds.valid:
@@ -151,32 +117,18 @@ async def gen_gdrive_token(_, message):
         except Exception:
             pass
 
-    callback_url = _get_callback_url()
-    if not callback_url:
-        await send_message(
-            message,
-            f"{h}\n┃\n"
-            "┖ <b>BASE_URL not set!</b>\n"
-            "Set <code>BASE_URL</code> in config first.",
-        )
-        return
-
     try:
         from google_auth_oauthlib.flow import InstalledAppFlow
     except ImportError:
         await send_message(message, f"{h}\n┃\n┖ <b>google-auth-oauthlib not installed.</b>")
         return
 
-    # Generate state token for CSRF protection
-    state = secrets.token_urlsafe(32)
-    _state_store[state] = user_id
-
+    # Generate auth URL — no redirect_uri needed, user copies code from URL bar
     try:
         flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
         auth_url, _ = flow.authorization_url(
             access_type="offline",
             prompt="consent",
-            state=state,
         )
     except Exception as e:
         await send_message(message, f"{h}\n┃\n┖ <b>Error:</b> <i>{e}</i>")
@@ -187,26 +139,69 @@ async def gen_gdrive_token(_, message):
         f"{h}\n┃\n"
         "┠ <b>Step 1:</b> Click the link below:\n"
         f"┖ <a href='{auth_url}'>🔐 Authorize Google Drive</a>\n\n"
-        "┃ <b>Step 2:</b> Login → Allow\n"
-        "┃ Token will be saved automatically.\n\n"
+        "┃ <b>Step 2:</b> Login → Allow\n\n"
+        "┃ <b>Step 3:</b> Page will show an error (this is normal!).\n"
+        "┃ Copy the <b>code</b> from the browser URL bar:\n"
+        "┃ URL looks like:\n"
+        "┃ <code>http://localhost...?code=<b>4/0Axx...copy_this</b>&scope=...</code>\n"
+        "┃ Just copy the part after <code>code=</code> and before <code>&</code>\n\n"
+        "┃ <b>Step 4:</b> Send that code here.\n\n"
         f"<i>Timeout: {get_readable_time(_TIMEOUT)}</i>",
         btns,
     )
 
-    # Wait for callback (or timeout)
-    event = Event()
+    code = await _invoke_text(user_id)
+    if code is None:
+        await send_message(message, f"{h}\n┃\n┖ <b>Timed Out!</b>")
+        return
+    if code == _STOP:
+        await send_message(message, f"{h}\n┃\n┖ <b>Cancelled.</b>")
+        return
 
-    async def _check_done():
-        while state in _state_store:
-            await __import__("asyncio").sleep(1)
-        event.set()
+    code = code.strip()
 
-    try:
-        await __import__("asyncio").create_task(_check_done())
-        await wait_for(event.wait(), timeout=_TIMEOUT)
-    except AsyncTimeout:
-        _state_store.pop(state, None)
+    # Extract code from full URL if user pasted the whole thing
+    if "code=" in code:
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(code if code.startswith("http") else f"http://x?{code}")
+        params = parse_qs(parsed.query)
+        extracted = params.get("code", [None])[0]
+        if extracted:
+            code = extracted
+
+    if not code or len(code) < 10:
         await send_message(
             message,
-            f"{h}\n┃\n┖ <b>Timed Out!</b>\n┖ <i>Process Stopped.</i>",
+            f"{h}\n┃\n┖ <b>Invalid code.</b> Make sure you copied the full code from the URL bar.",
         )
+        return
+
+    # Exchange code for token
+    try:
+        flow2 = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
+        flow2.fetch_token(code=code)
+        creds = flow2.credentials
+    except Exception as e:
+        await send_message(
+            message,
+            f"{h}\n┃\n┖ <b>Token exchange failed:</b> <i>{e}</i>\n\n"
+            "Make sure the code is correct and not expired.",
+        )
+        return
+
+    # Save token.pickle
+    try:
+        with open(TOKEN_FILE, "wb") as f:
+            pdump(creds, f)
+    except Exception as e:
+        await send_message(message, f"{h}\n┃\n┖ <b>Failed to save:</b> <i>{e}</i>")
+        return
+
+    await send_message(
+        message,
+        f"{h}\n┃\n"
+        "┠  <b>token.pickle generated!</b>\n"
+        "┃\n"
+        "┠ Set config: <code>USE_SERVICE_ACCOUNTS=False</code>\n"
+        "┖ Then <code>/restart</code>",
+    )
