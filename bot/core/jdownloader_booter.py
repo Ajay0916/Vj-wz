@@ -1,5 +1,5 @@
-from asyncio import sleep
-
+import asyncio
+from asyncio import sleep, create_subprocess_shell
 from json import dumps
 from random import randint
 from re import match
@@ -18,6 +18,8 @@ from .tg_client import TgClient
 
 _MAX_BOOT_RETRIES = 5
 _BOOT_RETRY_DELAY = 10
+_JD_API_PORT = 3128
+_JD_API_POLL_TIMEOUT = 60
 
 
 class JDownloader(MyJdApi):
@@ -32,6 +34,22 @@ class JDownloader(MyJdApi):
     async def _write_config(self, path, data):
         async with aiopen(path, "w") as f:
             await f.write(dumps(data))
+
+    async def _wait_for_api(self, timeout=_JD_API_POLL_TIMEOUT):
+        """Poll port 3128 until JD API is ready."""
+        import socket
+        for _ in range(timeout):
+            try:
+                _, writer = await asyncio.wait_for(
+                    asyncio.open_connection("127.0.0.1", _JD_API_PORT),
+                    timeout=1,
+                )
+                writer.close()
+                await writer.wait_closed()
+                return True
+            except (ConnectionRefusedError, OSError, TimeoutError):
+                await sleep(1)
+        return False
 
     @new_task
     async def boot(self, _retries=0):
@@ -58,7 +76,7 @@ class JDownloader(MyJdApi):
         }
         remote_data = {
             "localapiserverheaderaccesscontrollalloworigin": "",
-            "deprecatedapiport": 3128,
+            "deprecatedapiport": _JD_API_PORT,
             "localapiserverheaderxcontenttypeoptions": "nosniff",
             "localapiserverheaderxframeoptions": "DENY",
             "externinterfaceenabled": False,
@@ -101,12 +119,29 @@ class JDownloader(MyJdApi):
             cmd = f"taskset -c {svc_cores} cpulimit -l {Config.CPU_LIMIT} -- java -Xms256m -Xmx500m -Dsun.jnu.encoding=UTF-8 -Dfile.encoding=UTF-8 -Djava.awt.headless=true -jar /JDownloader/JDownloader.jar"
         else:
             cmd = f"cpulimit -l {Config.CPU_LIMIT} -- java -Xms256m -Xmx500m -Dsun.jnu.encoding=UTF-8 -Dfile.encoding=UTF-8 -Djava.awt.headless=true -jar /JDownloader/JDownloader.jar"
-        self.is_connected = True
-        _, __, code = await cmd_exec(cmd, shell=True)
+
+        # Start Java as background process (non-blocking)
+        proc = await create_subprocess_shell(
+            cmd, stdout=None, stderr=None
+        )
+
+        # Wait for JD API port to be ready
+        LOGGER.info(f"Waiting for JD API on port {_JD_API_PORT}...")
+        if await self._wait_for_api():
+            self.is_connected = True
+            self.error = ""
+            LOGGER.info("JDownloader API ready!")
+        else:
+            LOGGER.warning(f"JD API not ready after {_JD_API_POLL_TIMEOUT}s, proceeding anyway")
+            self.is_connected = True
+
+        # Block until Java exits
+        await proc.wait()
         self.is_connected = False
-        if code != -9 and _retries < _MAX_BOOT_RETRIES:
+
+        if proc.returncode != -9 and _retries < _MAX_BOOT_RETRIES:
             LOGGER.warning(
-                f"JDownloader exited with code {code}, retrying in {_BOOT_RETRY_DELAY}s ({_retries + 1}/{_MAX_BOOT_RETRIES})"
+                f"JDownloader exited with code {proc.returncode}, retrying in {_BOOT_RETRY_DELAY}s ({_retries + 1}/{_MAX_BOOT_RETRIES})"
             )
             await sleep(_BOOT_RETRY_DELAY)
             await self.boot(_retries + 1)
