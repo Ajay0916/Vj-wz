@@ -61,7 +61,7 @@ async def _wait_for_file_or_text(user_id, timeout=_TIMEOUT):
     async def _on_media(_, message):
         await delete_message(message)
         if message.document and message.document.file_name and message.document.file_name.endswith(".json"):
-            path = await message.document.download(file_name=CREDENTIALS_FILE)
+            path = await TgClient.bot.download_media(message, file_name=CREDENTIALS_FILE)
             result[0] = ("FILE", path)
             event.set()
 
