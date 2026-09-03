@@ -41,8 +41,8 @@ def _header(name):
     return f"⌬ <u><b>Google Drive Token Generator</b></u>\n│ <b>{name}</b>"
 
 
-def _clean_files():
-    for f in (TOKEN_FILE, CREDENTIALS_FILE):
+def _clean_credentials():
+    for f in (CREDENTIALS_FILE,):
         if os.path.exists(f):
             try:
                 os.remove(f)
@@ -118,7 +118,7 @@ async def gen_gdrive_token(_, message):
     btns = _stop_btns()
 
     # Step 0: Delete old credentials.json + token.pickle
-    _clean_files()
+    _clean_credentials()
 
     # Step 1: Ask user to send credentials.json
     await send_message(
@@ -159,7 +159,7 @@ async def gen_gdrive_token(_, message):
             redirect_uri=OOB_REDIRECT_URI,
         )
     except Exception as e:
-        _clean_files()
+        _clean_credentials()
         return await send_message(
             message, f"{h}\n┃\n┖ <b>Invalid credentials.json:</b> <i>{e}</i>")
 
@@ -187,23 +187,23 @@ async def gen_gdrive_token(_, message):
 
     if result is None:
         _pending.pop(user_id, None)
-        _clean_files()
+        _clean_credentials()
         return await send_message(message, f"{h}\n┃\n┖ <b>Timed Out!</b>")
 
     if result[0] == "stop":
         _pending.pop(user_id, None)
-        _clean_files()
+        _clean_credentials()
         return await send_message(message, f"{h}\n┃\n┖ <b>Cancelled.</b>")
 
     code = result[1].strip()
     if not code:
         _pending.pop(user_id, None)
-        _clean_files()
+        _clean_credentials()
         return await send_message(message, f"{h}\n┃\n┖ <b>No code provided.</b>")
 
     stored_flow = _pending.pop(user_id, None)
     if stored_flow is None:
-        _clean_files()
+        _clean_credentials()
         return await send_message(message, f"{h}\n┃\n┖ <b>Session expired. Try /token again.</b>")
 
     # Step 5: Exchange code for token
@@ -226,7 +226,7 @@ async def gen_gdrive_token(_, message):
             "┖  <code>/restart</code> to apply",
         )
     except Exception as e:
-        _clean_files()
+        _clean_credentials()
         err = str(e)
         if "invalid_grant" in err or "bad verification code" in err.lower():
             hint = "\n┠  <i>Code expired or invalid. Try /token again.</i>"
