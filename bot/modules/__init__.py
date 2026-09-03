@@ -42,7 +42,6 @@ from .restart import (
     restart_sessions,
 )
 from .rss import get_rss_menu, rss_listener
-from .gen_token import gen_gdrive_token
 from .search import torrent_search, torrent_search_update, initiate_search_tools
 from .services import start, start_cb, login, ping, log, log_cb
 from .shell import run_shell
@@ -126,5 +125,4 @@ __all__ = [
     "send_user_settings",
     "ytdl",
     "ytdl_leech",
-    "gen_gdrive_token",
 ]
