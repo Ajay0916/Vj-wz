@@ -1,10 +1,4 @@
-"""Generate token.pickle for Google Drive via /token command.
-
-Flow:
-1. /token → bot sends Google auth link
-2. User clicks → authorizes → copies code from browser URL bar
-3. User pastes code → bot saves token.pickle
-"""
+"""Generate token.pickle — exact same logic as CodeRed-001/TokenPickle."""
 import os
 from asyncio import Event, wait_for, TimeoutError as AsyncTimeout
 from pickle import dump as pdump, load as pload
@@ -91,17 +85,15 @@ async def gen_gdrive_token(_, message):
     btns = _stop_btns()
     h = _header(user_name)
 
-    # Check credentials.json
     if not os.path.exists(CREDENTIALS_FILE):
         await send_message(
             message,
             f"{h}\n┃\n"
-            "┖ <b>credentials.json not found!</b>\n\n"
+            "┖ <b>credentials.json not found!</b>\n"
             "Send your <code>credentials.json</code> file here first.",
         )
         return
 
-    # Check if token already valid
     if os.path.exists(TOKEN_FILE):
         try:
             with open(TOKEN_FILE, "rb") as f:
@@ -123,13 +115,10 @@ async def gen_gdrive_token(_, message):
         await send_message(message, f"{h}\n┃\n┖ <b>google-auth-oauthlib not installed.</b>")
         return
 
-    # Generate auth URL — no redirect_uri needed, user copies code from URL bar
+    # Same logic as CodeRed-001/TokenPickle
     try:
         flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
-        auth_url, _ = flow.authorization_url(
-            access_type="offline",
-            prompt="consent",
-        )
+        auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent")
     except Exception as e:
         await send_message(message, f"{h}\n┃\n┖ <b>Error:</b> <i>{e}</i>")
         return
@@ -137,71 +126,53 @@ async def gen_gdrive_token(_, message):
     await send_message(
         message,
         f"{h}\n┃\n"
-        "┠ <b>Step 1:</b> Click the link below:\n"
-        f"┖ <a href='{auth_url}'>🔐 Authorize Google Drive</a>\n\n"
-        "┃ <b>Step 2:</b> Login → Allow\n\n"
-        "┃ <b>Step 3:</b> Page will show an error (this is normal!).\n"
-        "┃ Copy the <b>code</b> from the browser URL bar:\n"
-        "┃ URL looks like:\n"
-        "┃ <code>http://localhost...?code=<b>4/0Axx...copy_this</b>&scope=...</code>\n"
-        "┃ Just copy the part after <code>code=</code> and before <code>&</code>\n\n"
-        "┃ <b>Step 4:</b> Send that code here.\n\n"
-        f"<i>Timeout: {get_readable_time(_TIMEOUT)}</i>",
+        f"┖ <a href='{auth_url}'>🔐 Click here to Authorize</a>\n\n"
+        "After Allow, page will redirect with error (normal).\n"
+        "Copy the <b>code</b> from URL bar:\n"
+        "<code>...?code=<b>4/0Axx...</b>&amp;scope=...</code>\n\n"
+        "Paste the code here.",
         btns,
     )
 
     code = await _invoke_text(user_id)
     if code is None:
-        await send_message(message, f"{h}\n┃\n┖ <b>Timed Out!</b>")
-        return
+        return await send_message(message, f"{h}\n┃\n┖ <b>Timed Out!</b>")
     if code == _STOP:
-        await send_message(message, f"{h}\n┃\n┖ <b>Cancelled.</b>")
-        return
+        return await send_message(message, f"{h}\n┃\n┖ <b>Cancelled.</b>")
 
     code = code.strip()
 
-    # Extract code from full URL if user pasted the whole thing
+    # Extract from URL if full URL pasted
     if "code=" in code:
         from urllib.parse import urlparse, parse_qs
         parsed = urlparse(code if code.startswith("http") else f"http://x?{code}")
-        params = parse_qs(parsed.query)
-        extracted = params.get("code", [None])[0]
+        extracted = parse_qs(parsed.query).get("code", [None])[0]
         if extracted:
             code = extracted
 
-    if not code or len(code) < 10:
-        await send_message(
-            message,
-            f"{h}\n┃\n┖ <b>Invalid code.</b> Make sure you copied the full code from the URL bar.",
-        )
-        return
-
-    # Exchange code for token
     try:
-        flow2 = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
+        flow2 = InstalledAppFlow.from_client_secrets_file(
+            CREDENTIALS_FILE, SCOPES,
+            redirect_uri="http://localhost",
+        )
         flow2.fetch_token(code=code)
         creds = flow2.credentials
     except Exception as e:
-        await send_message(
+        return await send_message(
             message,
-            f"{h}\n┃\n┖ <b>Token exchange failed:</b> <i>{e}</i>\n\n"
-            "Make sure the code is correct and not expired.",
+            f"{h}\n┃\n┖ <b>Token exchange failed:</b> <i>{e}</i>",
         )
-        return
 
-    # Save token.pickle
     try:
         with open(TOKEN_FILE, "wb") as f:
             pdump(creds, f)
     except Exception as e:
-        await send_message(message, f"{h}\n┃\n┖ <b>Failed to save:</b> <i>{e}</i>")
-        return
+        return await send_message(message, f"{h}\n┃\n┖ <b>Save failed:</b> <i>{e}</i>")
 
     await send_message(
         message,
         f"{h}\n┃\n"
         "┠  <b>token.pickle generated!</b>\n"
-        "┃\n"
         "┠ Set config: <code>USE_SERVICE_ACCOUNTS=False</code>\n"
-        "┖ Then <code>/restart</code>",
+        "┖ <code>/restart</code>",
     )
