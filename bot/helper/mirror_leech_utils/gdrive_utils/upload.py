@@ -195,6 +195,7 @@ class GoogleDriveUpload(GoogleDriveHelper):
                     if reason not in [
                         "userRateLimitExceeded",
                         "dailyLimitExceeded",
+                        "storageQuotaExceeded",
                     ]:
                         raise err
                     if self.use_sa:

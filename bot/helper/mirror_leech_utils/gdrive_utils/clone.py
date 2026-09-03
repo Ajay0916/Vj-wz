@@ -167,6 +167,7 @@ class GoogleDriveClone(GoogleDriveHelper):
                 if reason not in [
                     "userRateLimitExceeded",
                     "dailyLimitExceeded",
+                    "storageQuotaExceeded",
                     "cannotCopyFile",
                 ]:
                     raise err
