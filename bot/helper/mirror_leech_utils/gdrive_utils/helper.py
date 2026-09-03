@@ -115,7 +115,7 @@ class GoogleDriveHelper:
             reason = json_loads(err.content)["error"]["errors"][0]["reason"]
         except Exception:
             return False
-        if reason not in ("userRateLimitExceeded", "dailyLimitExceeded"):
+        if reason not in ("userRateLimitExceeded", "dailyLimitExceeded", "storageQuotaExceeded"):
             return False
         self.switch_service_account()
         LOGGER.info(f"Got: {reason}, Trying Again...")
