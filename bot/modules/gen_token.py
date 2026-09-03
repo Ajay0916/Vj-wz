@@ -30,7 +30,7 @@ from ..helper.telegram_helper.message_utils import (
 _STOP = "gentoken_stop"
 _TIMEOUT = 180
 SCOPES = ["https://www.googleapis.com/auth/drive"]
-CREDENTIALS_FILE = "credentials.json"
+CREDENTIALS_FILE = "/usr/src/app/credentials.json"
 TOKEN_FILE = "token.pickle"
 
 
