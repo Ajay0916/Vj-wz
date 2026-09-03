@@ -652,7 +652,7 @@ def _batch_docker_stats():
                     peak = int(ms.get("max_usage") or 0)
                     limit = int(ms.get("limit") or 0)
                     out[cid] = {"cur": cur, "peak": peak, "limit": limit}
-                    LOGGER.info(f"vps guard: {name} stats ok usage={cur} limit={limit}")
+                    LOGGER.debug(f"vps guard: {name} stats ok usage={cur} limit={limit}")
                 else:
                     LOGGER.warning(f"vps guard: {name} stats returned {type(stats).__name__}")
             except Exception as err:
@@ -1326,7 +1326,7 @@ class CpuGuard:
             from ... import bot_loop
             self.refresh()
             self._task = bot_loop.create_task(self._loop())
-            LOGGER.info(f"CPU Guard on: {self.cpus} CPUs, {len(self.services)} services")
+            LOGGER.debug(f"CPU Guard on: {self.cpus} CPUs, {len(self.services)} services")
         except Exception as err:
             LOGGER.error(f"CPU Guard start: {err}")
 
