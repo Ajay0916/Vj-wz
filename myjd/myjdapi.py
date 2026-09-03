@@ -728,7 +728,7 @@ class MyJdApi:
         if self._http_session is not None:
             return self._http_session
 
-        self._http_session = clientSession(retries=10)
+        self._http_session = clientSession(retries=2)
         self._http_session.verify = True
 
         return self._http_session
