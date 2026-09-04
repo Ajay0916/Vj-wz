@@ -173,26 +173,28 @@ def bt_selection_buttons(id_, message=None):
     bot_id = _resolve_bot_id()
     pin = derive_pin(id_, bot_id)
     buttons = ButtonMaker()
-    private = bool(
-        message is not None
-        and getattr(message, "chat", None) is not None
-        and message.chat.type == ChatType.PRIVATE
-        and str(Config.BASE_URL).startswith("https://")
-    )
-    add_open = buttons.web_app_button if private else buttons.url_button
-    if Config.WEB_PINCODE:
-        add_open(
-            "Select Files",
-            f"{Config.BASE_URL}/app/files?gid={id_}",
-            style=ButtonStyle.PRIMARY,
+    has_stream = bool(Config.BASE_URL and not getattr(Config, "DISABLE_STREAMING", False))
+    if has_stream:
+        private = bool(
+            message is not None
+            and getattr(message, "chat", None) is not None
+            and message.chat.type == ChatType.PRIVATE
+            and str(Config.BASE_URL).startswith("https://")
         )
-        buttons.data_button("Pincode", f"sel pin {gid} {pin}")
-    else:
-        add_open(
-            "Select Files",
-            f"{Config.BASE_URL}/app/files?gid={id_}&pin={pin}",
-            style=ButtonStyle.PRIMARY,
-        )
+        add_open = buttons.web_app_button if private else buttons.url_button
+        if Config.WEB_PINCODE:
+            add_open(
+                "Select Files",
+                f"{Config.BASE_URL}/app/files?gid={id_}",
+                style=ButtonStyle.PRIMARY,
+            )
+            buttons.data_button("Pincode", f"sel pin {gid} {pin}")
+        else:
+            add_open(
+                "Select Files",
+                f"{Config.BASE_URL}/app/files?gid={id_}&pin={pin}",
+                style=ButtonStyle.PRIMARY,
+            )
     buttons.data_button(
         "Done Selecting", f"sel done {gid} {id_}", style=ButtonStyle.SUCCESS
     )
