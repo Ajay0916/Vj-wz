@@ -18,7 +18,7 @@ from aiofiles import open as aiopen
 from aiofiles.os import mkdir
 from aiofiles.os import path as aiopath
 from niquests import AsyncSession
-from pyrogram.enums import ButtonStyle
+from pyrogram.enums import ButtonStyle, ChatType
 from pyrogram.handlers import MessageHandler
 
 from ... import LOGGER, bot_loop, user_data
