@@ -173,8 +173,7 @@ def bt_selection_buttons(id_, message=None):
     bot_id = _resolve_bot_id()
     pin = derive_pin(id_, bot_id)
     buttons = ButtonMaker()
-    has_stream = bool(Config.BASE_URL and not getattr(Config, "DISABLE_STREAMING", False))
-    if has_stream:
+    if Config.BASE_URL:
         private = bool(
             message is not None
             and getattr(message, "chat", None) is not None
