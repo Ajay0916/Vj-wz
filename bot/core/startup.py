@@ -180,6 +180,10 @@ async def load_settings():
         if config_dict:
             Config.load_dict(config_dict)
 
+        # Always override BASE_URL with tunnel file URL
+        from ..helper.ext_utils.tunnel_monitor import apply_tunnel_url_once
+        await apply_tunnel_url_once()
+
         if pf_dict:
             for key, value in pf_dict.items():
                 if value:
@@ -414,6 +418,4 @@ async def load_configurations():
 
     spawn_stream_server()
 
-    from ..helper.ext_utils.tunnel_monitor import apply_tunnel_url_once
-
-    await apply_tunnel_url_once()
+    pass
