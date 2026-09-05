@@ -1417,6 +1417,8 @@ def _api_extra_params(opts, method, is_all=False):
     """Query-string params for the search API from command-line args."""
     params = []
     if method == "apisearch":
+        if is_all:
+            params.append("smart=1")
         if opts.get("timeout"):
             params.append(f"timeout={opts['timeout']}")
         elif is_all:
