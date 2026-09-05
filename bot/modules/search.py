@@ -1320,6 +1320,12 @@ def _parse_search_cmd(text):
             opts["all_sites"] = True
             i -= 1
             continue
+        if part == "-as":
+            opts["site"] = "all"
+            opts["all_sites"] = True
+            opts["smart_all"] = True
+            i -= 1
+            continue
         if part in _PRESETS:
             opts.update(_PRESETS[part])
             i -= 1
@@ -1417,7 +1423,7 @@ def _api_extra_params(opts, method, is_all=False):
     """Query-string params for the search API from command-line args."""
     params = []
     if method == "apisearch":
-        if is_all:
+        if opts.get("smart_all"):
             params.append("smart=1")
         if opts.get("timeout"):
             params.append(f"timeout={opts['timeout']}")
