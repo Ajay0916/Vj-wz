@@ -697,9 +697,12 @@ async def search(
                             ),
                         )
                     else:
+                        dym = ""
+                        if isinstance(search_results, dict) and search_results.get("did_you_mean"):
+                            dym = f"\n💡 Kya aapka meant tha: <b>{escape(str(search_results['did_you_mean']))}</b>"
                         await edit_message(
                             message,
-                            f"{escape(str(api_error))}\nTorrent Site:- <i>{_site_display_name(site)}</i>",
+                            f"{escape(str(api_error))}{dym}\nTorrent Site:- <i>{_site_display_name(site)}</i>",
                             _failure_buttons(
                                 user_id, key, site, method, category, quality,
                                 language, format_, size,
@@ -717,6 +720,7 @@ async def search(
                 )
                 return
             relaxed_filters = search_results.get("relaxed_filters")
+            search_results_raw = search_results
             search_results = search_results["data"]
             if method == "apisearch":
                 search_results = _apply_client_filters(search_results, opts, key)
@@ -739,6 +743,9 @@ async def search(
                 )
             else:
                 msg += f" <b>result(s) for <i>{key}</i>\nTorrent Site:- <i>{_site_display_name(site)}</i></b>"
+            total_avail = search_results_raw.get("total_available") if isinstance(search_results_raw, dict) else None
+            if total_avail and len(search_results) < int(total_avail):
+                msg += f" <i>(of ~{total_avail} available)</i>"
             if relaxed_filters:
                 msg += " <i>(filters relaxed)</i>"
         except Exception as e:
@@ -918,6 +925,12 @@ async def get_result(search_results, key, message, method):
                         tags.append(f"Date: {escape(str(result['date']))}")
                     if result.get("uploader"):
                         tags.append(f"Uploader: {escape(str(result['uploader']))}")
+                    if result.get("health_score") is not None:
+                        score = result["health_score"]
+                        icon = "🟢" if score >= 70 else ("🟡" if score >= 40 else "🔴")
+                        tags.append(f"{icon} Health: {score}/100")
+                    if result.get("estimate"):
+                        tags.append(f"⏱ {escape(str(result['estimate']))}")
                     if tags:
                         msg += "<b>" + " | ".join(tags) + "</b><br>"
                     files = result.get("files")
@@ -1057,6 +1070,12 @@ def _rentry_blocks(search_results, key, method):
         for t in ("site", "category", "quality", "language", "format", "date", "uploader"):
             if result.get(t):
                 tags.append(str(result[t]))
+        if result.get("health_score") is not None:
+            score = result["health_score"]
+            icon = "🟢" if score >= 70 else ("🟡" if score >= 40 else "🔴")
+            tags.append(f"{icon} Health:{score}")
+        if result.get("estimate"):
+            tags.append(f"⏱ {result['estimate']}")
         line = f"{index}. **[{name}]({_safe_markdown_url(url)})**"
         if parts:
             line += " — " + " — ".join(parts)
