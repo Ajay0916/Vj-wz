@@ -74,6 +74,47 @@ def _share_link(url):
     return "http://t.me/share/url?url={}".format(quote(url))
 
 
+def _part_label(part, part_no):
+    """Build a human-readable label for a download link part.
+    Shows site + quality/size so users can distinguish variants."""
+    site = part.get("label") or part.get("site") or ""
+    name = part.get("name") or ""
+    size = part.get("size") or ""
+    quality = part.get("quality") or ""
+    
+    tag = ""
+    if quality:
+        tag = quality
+    elif name and name.lower() != site.lower():
+        # Extract quality from the full name
+        # Patterns: "720p", "1080p", "4K", "HDRip", "WEB-DL", "HEVC x265", etc.
+        q_patterns = [
+            r"\b(2160p|4k|1080p|720p|480p|360p)\b",
+            r"\b(hdrip|web-?dl|webrip|bluray|blu-?ray|dvdrip|hdtv|hdcam|cam)\b",
+            r"\b(x264|x265|hevc|xvid|av1|vp9|avc)\b",
+        ]
+        found_q = []
+        for pat in q_patterns:
+            m = re.search(pat, name, re.I)
+            if m:
+                found_q.append(m.group(1))
+        if found_q:
+            tag = " ".join(found_q[:2])
+    
+    if size and not tag:
+        tag = size
+    elif size and tag:
+        tag += " " + size
+    
+    if tag:
+        return f"{site} · {tag}"
+    if name and name.lower() != site.lower():
+        # Use truncated name
+        short_name = name[:50]
+        if len(name) > 50:
+            short_name += "..."
+        return short_name
+    return site or f"Part {part_no}"
 def _api_headers():
     """Headers for every search-API call; sends the PIN automatically
     when it is set in settings."""
@@ -950,12 +991,7 @@ async def get_result(search_results, key, message, method):
                             part_url = part.get("url") or part.get("download")
                             if not part_url:
                                 continue
-                            part_name = (
-                                part.get("label")
-                                or part.get("name")
-                                or part.get("title")
-                                or f"Download Part {part_no}"
-                            )
+                            part_name = _part_label(part, part_no)
                             part_dl = _dl_link(
                                 part_url,
                                 part_name,
@@ -1089,12 +1125,7 @@ def _rentry_blocks(search_results, key, method):
         part_urls = set()
         for part_no, part in enumerate(api_parts, 1):
             part_url = part.get("url") or part.get("download")
-            part_name = (
-                part.get("label")
-                or part.get("name")
-                or part.get("title")
-                or f"Download Part {part_no}"
-            )
+            part_name = _part_label(part, part_no)
             safe_part_name = re.sub(r"([\[\]()*_`])", r"\\\1", str(part_name))
             dl = _dl_link(
                 part_url,
