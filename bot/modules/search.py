@@ -556,6 +556,7 @@ PAGE2_SITES = {
     "btsow",
     "filemood",
     "btdig",
+    "refresh_imdb",
 }
 
 # Dedicated/special sites never flood grouped searches. They remain available
