@@ -2213,7 +2213,6 @@ async def api_buttons(user_id, method, page=1):
         buttons.data_button(text, callback, position="footer")
     buttons.data_button("Cancel", f"torser {user_id} cancel", position="footer")
     buttons.data_button("Restart t-API 🔁", f"torser {user_id} restartapi", position="footer")
-    buttons.data_button("Refresh IMDB 🔄", f"torser {user_id} refreshimdb", position="footer")
     return buttons.build_menu(2)
 
 
@@ -2441,7 +2440,7 @@ async def torrent_search_update(_, query):
     origin_text = getattr(message.reply_to_message, "text", None) or ""
     key, _ = _parse_search_cmd(origin_text)
     key = key or _recover_origin_key(message, user_id) or None
-    if len(data) < 4 and data[2] not in ("apirecent", "apisearch", "apitrend", "backcat", "fback1", "fgs", "plugin", "fretry", "fsites", "cancel", "restartapi", "restartapi_go", "restartapi_no", "refreshimdb", "refreshimdb_go", "refreshimdb_no"):
+    if len(data) < 4 and data[2] not in ("apirecent", "apisearch", "apitrend", "backcat", "fback1", "fgs", "plugin", "fretry", "fsites", "cancel", "restartapi", "restartapi_go", "restartapi_no"):
         await query.answer("This search menu is stale.", show_alert=True)
         return
     if data[2] == "apipage":
@@ -2650,39 +2649,6 @@ async def torrent_search_update(_, query):
         await edit_message(message, _searching_msg(key, site, f"\nFilters:- <i>{summary}</i>"))
         await search(key, site, message, "apisearch", "all", "all", language, format_, size)
         FILTER_STATE.pop(user_id, None)
-    elif data[2] == "refreshimdb":
-        confirm_buttons = ButtonMaker()
-        confirm_buttons.data_button("Yes!", f"torser {user_id} refreshimdb_go", style=ButtonStyle.SUCCESS)
-        confirm_buttons.data_button("No!", f"torser {user_id} refreshimdb_no", style=ButtonStyle.DANGER)
-        api_url = Config.SEARCH_API_LINK.rstrip("/")
-        await query.answer()
-        await edit_message(
-            message,
-            f"<i>Refresh IMDB database?\n<i>Downloads fresh IMDB data (~3 min)\n<code>{api_url}</code></i>",
-            buttons=confirm_buttons.build_menu(2),
-        )
-    elif data[2] == "refreshimdb_go":
-        await query.answer("Refreshing IMDB...")
-        try:
-            import asyncio as _aio
-            from niquests import AsyncSession
-            async with AsyncSession() as client:
-                headers = _api_headers()
-                resp = await client.get(
-                    f"{Config.SEARCH_API_LINK.rstrip('/')}/refresh_imdb?key=5963",
-                    headers=headers,
-                    timeout=600,
-                )
-                result = resp.json()
-                if result.get("status") == "ok":
-                    await edit_message(message, f"<i>IMDB refreshed! Size: {result.get('size_mb', '?')}MB</i>")
-                else:
-                    await edit_message(message, f"<i>Refresh failed: {result.get('message', 'unknown')}</i>")
-        except Exception as e:
-            await edit_message(message, f"<i>Refresh error: {e}</i>")
-    elif data[2] == "refreshimdb_no":
-        await query.answer("Cancelled")
-        return
     elif data[2] == "restartapi":
         confirm_buttons = ButtonMaker()
         confirm_buttons.data_button(
