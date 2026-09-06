@@ -76,18 +76,28 @@ def _share_link(url):
 
 def _part_label(part, part_no):
     """Build a human-readable label for a download link part.
-    Shows site + quality/size so users can distinguish variants."""
+    Shows site + episode + quality/size so users can distinguish variants."""
     site = part.get("label") or part.get("site") or ""
     name = part.get("name") or ""
     size = part.get("size") or ""
     quality = part.get("quality") or ""
     
-    tag = ""
+    # Extract episode tag (S01E01 → E01, Episode 03 → E03, Ep 07 → E07)
+    ep_tag = ""
+    if name:
+        _em = re.search(r"\bS\d{1,2}E(\d{1,3})\b", name, re.I)
+        if _em:
+            ep_tag = f"E{_em.group(1).zfill(2)}"
+        else:
+            _em = re.search(r"(?:Episode|Ep)[.\s_-]*(\d{1,3})\b", name, re.I)
+            if _em:
+                ep_tag = f"E{_em.group(1).zfill(2)}"
+    
+    # Extract quality from the full name
+    q_tag = ""
     if quality:
-        tag = quality
+        q_tag = quality
     elif name and name.lower() != site.lower():
-        # Extract quality from the full name
-        # Patterns: "720p", "1080p", "4K", "HDRip", "WEB-DL", "HEVC x265", etc.
         q_patterns = [
             r"\b(2160p|4k|1080p|720p|480p|360p)\b",
             r"\b(hdrip|web-?dl|webrip|bluray|blu-?ray|dvdrip|hdtv|hdcam|cam)\b",
@@ -99,17 +109,21 @@ def _part_label(part, part_no):
             if m:
                 found_q.append(m.group(1))
         if found_q:
-            tag = " ".join(found_q[:2])
+            q_tag = " ".join(found_q[:2])
     
-    if size and not tag:
-        tag = size
-    elif size and tag:
-        tag += " " + size
+    # Assemble label parts: site · episode · quality · size
+    parts_list = [site]
+    if ep_tag:
+        parts_list.append(ep_tag)
+    if q_tag:
+        parts_list.append(q_tag)
+    elif size:
+        parts_list.append(size)
     
-    if tag:
-        return f"{site} · {tag}"
+    if len(parts_list) > 1:
+        return " · ".join(parts_list)
+    
     if name and name.lower() != site.lower():
-        # Use truncated name
         short_name = name[:50]
         if len(name) > 50:
             short_name += "..."
