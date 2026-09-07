@@ -981,6 +981,18 @@ async def get_result(search_results, key, message, method):
                         tags.append(f"Date: {escape(str(result['date']))}")
                     if result.get("uploader"):
                         tags.append(f"Uploader: {escape(str(result['uploader']))}")
+                    # New t-api smart fields
+                    if result.get("quality_tier") and result["quality_tier"] != "unknown":
+                        tags.append(f"Tier: {escape(str(result['quality_tier']))}")
+                    if result.get("confidence"):
+                        _conf_emoji = {"high": "🟢", "medium": "🟡", "low": "⚪"}.get(result["confidence"], "")
+                        tags.append(f"{_conf_emoji} {result['confidence'].title()}")
+                    if result.get("course_provider"):
+                        tags.append(f"📚 {escape(str(result['course_provider']))}")
+                    if result.get("relaxed_from"):
+                        tags.append(f"⚡ Relaxed: {escape(str(result['relaxed_from']))}")
+                    if result.get("file_count"):
+                        tags.append(f"📁 {result['file_count']} files")
                     if result.get("health_score") is not None:
                         score = result["health_score"]
                         icon = "🟢" if score >= 70 else ("🟡" if score >= 40 else "🔴")
