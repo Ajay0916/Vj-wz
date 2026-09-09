@@ -68,9 +68,14 @@ def _mark_flood(seconds):
 
 
 def _flood_sleep(f_value):
-    """Wait the full Telegram-requested duration (capped at 300s max).
-    Returns the actual seconds to sleep."""
-    wait = min(int(f_value), 300)
+    """Wait the full Telegram-requested duration.
+    Short waits (< 600s): cap at 300s to avoid long freezes.
+    Long waits (>= 600s): wait full time — no retry loop that keeps getting bigger bans."""
+    val = int(f_value)
+    if val >= 600:
+        wait = val
+    else:
+        wait = min(val, 300)
     _mark_flood(wait)
     return wait
 
@@ -288,7 +293,8 @@ async def edit_message(message, text, buttons=None, block=True, photo=None):
         return await edit_message(message, text, None, block, photo)
     except FloodWait as f:
         LOGGER.warning(str(f))
-        _mark_flood(min(f.value, 300))
+        val = int(f.value)
+        _mark_flood(val if val >= 600 else min(val, 300))
         return str(f)
     except OSError:
         return
