@@ -642,8 +642,6 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
             hidden_vars.update(["IMDB_TEMPLATE", "TMDB_ACCESS_TOKEN"])
         if Config.DISABLE_MEMORY:
             hidden_vars.update(["MEM_DEEP_STATS", "MEM_BUDGET"])
-        if Config.DISABLE_PLUGINS:
-            hidden_vars.update(["PLUGIN_INDEXES"])
 
         conf_dict = {
             k: v
