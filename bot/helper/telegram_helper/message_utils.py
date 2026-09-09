@@ -29,13 +29,11 @@ except ImportError:
 
 # ---- Flood-safe edit throttling ----
 _EDIT_LAST = {}          # (chat_id, msg_id) -> (ts, content_signature)
-_EDIT_MIN_GAP = 1.5      # seconds: skip submits faster than this
-_FLOOD_UNTIL = 0.0       # global cooldown: if a FloodWait fired, skip edits until this time
+_FLOOD_UNTIL = 0.0       # global cooldown timestamp: all Telegram calls blocked until this time
 
 
 def _edit_signature(text, buttons):
     import json as _json
-
     sig = text if isinstance(text, str) else repr(text)
     if buttons is not None:
         try:
@@ -46,12 +44,11 @@ def _edit_signature(text, buttons):
 
 
 def _is_edit_spam(chat_id, msg_id, text, buttons):
-    """Skip ONLY exact duplicates. Navigation/content changes always pass —
-    a time-gap here would swallow legit button clicks (user double-clicking)."""
+    """During flood cooldown: drop ALL edits (not just duplicates).
+    Outside cooldown: drop only exact duplicate content."""
     global _FLOOD_UNTIL
     now = time()
-    if _FLOOD_UNTIL > now and _EDIT_LAST.get((chat_id, msg_id)):
-        # if we're in a flood cooldown AND it's the same content, drop it
+    if _FLOOD_UNTIL > now:
         return True
     key = (chat_id, msg_id)
     sig = _edit_signature(text, buttons)
@@ -59,24 +56,29 @@ def _is_edit_spam(chat_id, msg_id, text, buttons):
     if prev and prev[1] == sig:
         return True
     _EDIT_LAST[key] = (now, sig)
-    # keep dict bounded
     if len(_EDIT_LAST) > 400:
         for k in list(_EDIT_LAST)[:100]:
             _EDIT_LAST.pop(k, None)
     return False
 
 
-def _flood_sleep(f_value):
-    """Sleep for a FloodWait, capped at 15s so a 35-min ban can never freeze
-    the bot. Marks global cooldown too (subsequent edits get dropped)."""
-    cap = min(int(f_value), 15)
-    _mark_flood(cap)
-    return cap
-
-
 def _mark_flood(seconds):
     global _FLOOD_UNTIL
     _FLOOD_UNTIL = time() + seconds
+
+
+def _flood_sleep(f_value):
+    """Wait the full Telegram-requested duration (capped at 300s max).
+    Returns the actual seconds to sleep."""
+    wait = min(int(f_value), 300)
+    _mark_flood(wait)
+    return wait
+
+
+def _flood_gate():
+    """Check if we're in flood cooldown. Returns seconds remaining (>0) or 0."""
+    now = time()
+    return max(_FLOOD_UNTIL - now, 0.0)
 
 
 from ... import (
@@ -97,6 +99,10 @@ from .button_build import ButtonMaker
 
 
 async def send_message(message, text, buttons=None, block=True, photo=None, **kwargs):
+    gate = _flood_gate()
+    if gate > 0:
+        LOGGER.warning(f"FLOOD GATE: skipping send_message, wait {gate:.0f}s remaining")
+        return None
     try:
         if photo:
             try:
@@ -193,7 +199,9 @@ async def send_message(message, text, buttons=None, block=True, photo=None, **kw
         LOGGER.warning(str(f))
         if not block:
             return str(f)
-        await sleep(_flood_sleep(f.value))
+        wait = _flood_sleep(f.value)
+        LOGGER.warning(f"FLOOD WAIT send_message: sleeping {wait}s (Telegram requested {f.value}s)")
+        await sleep(wait)
         return await send_message(message, text, buttons)
     except ReplyMarkupInvalid as rmi:
         LOGGER.warning(str(rmi))
@@ -214,6 +222,9 @@ async def send_message(message, text, buttons=None, block=True, photo=None, **kw
 
 
 async def edit_message(message, text, buttons=None, block=True, photo=None):
+    gate = _flood_gate()
+    if gate > 0:
+        return None
     chat_id = getattr(message, "chat", None) and getattr(message.chat, "id", None)
     msg_id = getattr(message, "id", None)
     if chat_id is not None and msg_id is not None and _is_edit_spam(chat_id, msg_id, text, buttons):
@@ -277,7 +288,7 @@ async def edit_message(message, text, buttons=None, block=True, photo=None):
         return await edit_message(message, text, None, block, photo)
     except FloodWait as f:
         LOGGER.warning(str(f))
-        _mark_flood(min(f.value, 120))
+        _mark_flood(min(f.value, 300))
         return str(f)
     except OSError:
         return
@@ -287,13 +298,18 @@ async def edit_message(message, text, buttons=None, block=True, photo=None):
 
 
 async def edit_reply_markup(message, buttons):
+    gate = _flood_gate()
+    if gate > 0:
+        return None
     try:
         return await message.edit_reply_markup(reply_markup=buttons)
     except (MessageNotModified, MessageIdInvalid):
         pass
     except FloodWait as f:
         LOGGER.warning(str(f))
-        await sleep(_flood_sleep(f.value))
+        wait = _flood_sleep(f.value)
+        LOGGER.warning(f"FLOOD WAIT edit_reply_markup: sleeping {wait}s")
+        await sleep(wait)
         return await edit_reply_markup(message, buttons)
     except OSError:
         return
@@ -303,6 +319,9 @@ async def edit_reply_markup(message, buttons):
 
 
 async def send_file(message, file, caption="", buttons=None):
+    gate = _flood_gate()
+    if gate > 0:
+        return None
     try:
         return await message.reply_document(
             document=file,
@@ -313,7 +332,9 @@ async def send_file(message, file, caption="", buttons=None):
         )
     except FloodWait as f:
         LOGGER.warning(str(f))
-        await sleep(_flood_sleep(f.value))
+        wait = _flood_sleep(f.value)
+        LOGGER.warning(f"FLOOD WAIT send_file: sleeping {wait}s")
+        await sleep(wait)
         return await send_file(message, file, caption)
     except ConnectionError:
         return
@@ -323,6 +344,9 @@ async def send_file(message, file, caption="", buttons=None):
 
 
 async def send_rss(text, chat_id, thread_id):
+    gate = _flood_gate()
+    if gate > 0:
+        return None
     try:
         return await TgClient.bot.send_message(
             chat_id=chat_id,
@@ -333,7 +357,9 @@ async def send_rss(text, chat_id, thread_id):
         )
     except (FloodWait, FloodPremiumWait) as f:
         LOGGER.warning(str(f))
-        await sleep(_flood_sleep(f.value))
+        wait = _flood_sleep(f.value)
+        LOGGER.warning(f"FLOOD WAIT send_rss: sleeping {wait}s")
+        await sleep(wait)
         return await send_rss(text, chat_id, thread_id)
     except ConnectionError:
         return
