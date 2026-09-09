@@ -158,8 +158,6 @@ NEW_ONOFF_VARS = [
     "DISABLE_HELPER",
     "DISABLE_HYPER",
     "DISABLE_THEMES",
-    "DISABLE_LIST",
-    "DISABLE_CLONE",
 ]
 
 
@@ -346,15 +344,13 @@ DEFAULT_DESP = {
     "DISABLE_LIMITS": "Disable /limits command. Default: False.",
     "DISABLE_QUEUE": "Disable /queue command. Default: False.",
     "DISABLE_RCLONE": "Disable rclone commands. Default: False.",
-    "DISABLE_GOOGLE": "Disable Google Drive commands (Clone, List, Count, GDClean). Default: False.",
+    "DISABLE_GOOGLE": "Disable Google Drive ecosystem: Clone, List, Count, GDClean. Default: False.",
     "DISABLE_API": "Disable API-related commands. Default: False.",
     "DISABLE_SESSION": "Disable session/restart commands. Default: False.",
     "DISABLE_MEMORY": "Disable /memory VPS stats command. Default: False.",
     "DISABLE_HELPER": "Disable helper bot features. Default: False.",
     "DISABLE_HYPER": "Disable hyper streaming mode. Default: False.",
     "DISABLE_THEMES": "Disable theme system entirely. Default: False.",
-    "DISABLE_LIST": "Disable List command. Default: False.",
-    "DISABLE_CLONE": "Disable Clone command. Default: False.",
 }
 
 PROTECTED_VARS = {
