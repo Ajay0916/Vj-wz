@@ -679,7 +679,7 @@ def _seedr_creds(user_id):
 
 
 async def seedr_guard(message, user_id):
-    if Config.DISABLE_SEEDR:
+    if Config.DISABLE_SEEDR or Config.DISABLE_SEED:
         await send_message(message, "Seedr is currently disabled by the Bot Owner.")
         return False
     email, password = _seedr_creds(user_id)

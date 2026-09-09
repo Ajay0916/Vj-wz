@@ -192,7 +192,7 @@ DEFAULT_DESP = {
     "DISABLE_MIRROR": "Disable all mirror (upload to cloud) tasks. Default: False.",
     "DISABLE_BULK": "Disable bulk (zip/unzip) operations. Default: False.",
     "DISABLE_MULTI": "Disable multi-part splits. Default: False.",
-    "DISABLE_SEED": "Disable seeding after torrent download. Default: False.",
+    "DISABLE_SEED": "Disable seeding, Seedr downloads, and AllDebrid seed timeout. Default: False.",
     "DISABLE_FF_MODE": "Disable FFmpeg processing mode. Default: False.",
     "DISABLE_MEGA": "Disable Mega Processor for bot. Default: False.",
     "DISABLE_PLUGINS": "Disable the plugin system. Unloads every plugin and stops loading them at boot. Default: False.",

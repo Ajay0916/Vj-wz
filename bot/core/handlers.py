@@ -339,13 +339,14 @@ async def add_handlers():
             & CustomFilters.authorized,
         )
     )
-    TgClient.bot.add_handler(
-        MessageHandler(
-            seedr_link,
-            filters=command(BotCommands.SeedrLinkCommand, case_sensitive=True)
-            & CustomFilters.authorized,
+    if not Config.DISABLE_SEEDR and not Config.DISABLE_SEED:
+        TgClient.bot.add_handler(
+            MessageHandler(
+                seedr_link,
+                filters=command(BotCommands.SeedrLinkCommand, case_sensitive=True)
+                & CustomFilters.authorized,
+            )
         )
-    )
     if not Config.DISABLE_UPHOSTER:
         TgClient.bot.add_handler(
             MessageHandler(
@@ -584,7 +585,7 @@ async def add_handlers():
                 6,
             )
 
-        if not Config.DISABLE_SEEDR:
+        if not Config.DISABLE_SEEDR and not Config.DISABLE_SEED:
             BOT_COMMANDS = insert_at(
                 BOT_COMMANDS,
                 "SeedrLink",
