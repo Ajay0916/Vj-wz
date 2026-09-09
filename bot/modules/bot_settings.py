@@ -627,6 +627,13 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
                  "USE_SERVICE_ACCOUNTS", "DRIVE_CATEGORY_MODE", "DRIVE_CATEGORY_SA",
                  "IS_TEAM_DRIVE", "SHOW_CLOUD_LINK", "STOP_DUPLICATE"]
             )
+        if Config.DISABLE_SEED:
+            hidden_vars.update([
+                "ALLDEBRID_NO_SEED_TIMEOUT",
+                "SEEDR_EMAIL", "SEEDR_PASSWORD", "SEEDR_DELETE_FOLDER", "SEEDR_LIMIT",
+            ])
+        if Config.DISABLE_SEEDR:
+            hidden_vars.update(["SEEDR_EMAIL", "SEEDR_PASSWORD", "SEEDR_DELETE_FOLDER", "SEEDR_LIMIT"])
         if Config.DISABLE_IMDB:
             hidden_vars.update(["IMDB_TEMPLATE"])
 
