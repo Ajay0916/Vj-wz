@@ -270,7 +270,7 @@ async def add_handlers():
             & CustomFilters.authorized,
         )
     )
-    if not Config.DISABLE_LIST:
+    if not Config.DISABLE_LIST and not Config.DISABLE_GOOGLE:
         TgClient.bot.add_handler(
             MessageHandler(
                 gdrive_search,
@@ -278,7 +278,7 @@ async def add_handlers():
                 & CustomFilters.authorized,
             )
         )
-    if not Config.DISABLE_LIST:
+    if not Config.DISABLE_LIST and not Config.DISABLE_GOOGLE:
         TgClient.bot.add_handler(
             CallbackQueryHandler(select_type, filters=regex("^list_types"))
         )
