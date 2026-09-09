@@ -8,7 +8,7 @@ from secrets import token_hex
 from urllib.parse import quote
 from pyrogram.enums import ButtonStyle
 
-from .. import LOGGER, bot_loop
+from .. import LOGGER, bot_loop, sudo_users
 from ..core.config_manager import Config
 from ..core.torrent_manager import TorrentManager
 from ..helper.ext_utils.bot_utils import new_task
@@ -2453,7 +2453,7 @@ async def torrent_search_update(_, query):
     except (IndexError, ValueError):
         await query.answer("Invalid action.", show_alert=True)
         return
-    if user_id != owner_id:
+    if user_id != owner_id and user_id not in sudo_users and user_id != Config.OWNER_ID:
         await query.answer("Not Yours!", show_alert=True)
         return
     origin_text = getattr(message.reply_to_message, "text", None) or ""
