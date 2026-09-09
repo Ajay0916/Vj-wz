@@ -595,7 +595,7 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
             hidden_vars.update(
                 [
                     "AS_DOCUMENT", "EQUAL_SPLITS",
-                    "LEECH_CAPTION", "LEECH_DUMP_CHAT", "LINKS_LOG_ID",
+                    "LEECH_CAPTION", "LEECH_DUMP_CHATS", "LINKS_LOG_ID",
                     "LEECH_FONT", "LEECH_LIMIT", "LEECH_PREFIX",
                     "LEECH_SPLIT_SIZE", "LEECH_SUFFIX",
                     "MEDIA_GROUP", "MEDIA_STORE", "EXCLUDED_EXTENSIONS",
@@ -605,6 +605,8 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
             hidden_vars.update(["STREAM_TOKENS", "STREAM_PIPELINE", "STREAM_CHUNK", "STREAM_PER_CLIENT", "STREAM_GATE"])
         if Config.DISABLE_IMAGES:
             hidden_vars.update(["IMG_SEARCH", "IMG_PAGE", "IMG_SOURCES", "USE_IMAGES", "IMAGES"])
+        if Config.DISABLE_PLUGINS:
+            hidden_vars.update(["PLUGIN_INDEXES"])
         if Config.DISABLE_API:
             hidden_vars.update(["STREAMWISH_API", "PROTECTED_API", "DEBRID_LINK_API", "INSTADL_API", "FILELION_API"])
         if Config.DISABLE_HELPER:
@@ -634,8 +636,10 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
             ])
         if Config.DISABLE_SEEDR:
             hidden_vars.update(["SEEDR_EMAIL", "SEEDR_PASSWORD", "SEEDR_DELETE_FOLDER", "SEEDR_LIMIT"])
+        if Config.DISABLE_MIRROR:
+            hidden_vars.update(["MIRROR_LOG_ID"])
         if Config.DISABLE_IMDB:
-            hidden_vars.update(["IMDB_TEMPLATE"])
+            hidden_vars.update(["IMDB_TEMPLATE", "TMDB_ACCESS_TOKEN"])
 
         conf_dict = {
             k: v
