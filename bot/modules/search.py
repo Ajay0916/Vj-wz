@@ -210,6 +210,9 @@ async def _refresh_sites():
             response = await client.get(
                 f"{Config.SEARCH_API_LINK}/api/v1/sites", headers=_api_headers()
             )
+            if response.status_code != 200:
+                LOGGER.error(f"API /sites returned status {response.status_code}")
+                return False
             data = response.json()
         sites = data.get("sites")
         if isinstance(sites, list):
@@ -218,11 +221,14 @@ async def _refresh_sites():
                 for item in sites
                 if item.get("site") and item.get("name")
             }
-        else:
+        elif isinstance(data.get("supported_sites"), list):
             SITES = {
                 str(site): str(site).capitalize()
                 for site in data["supported_sites"]
-        }
+            }
+        else:
+            LOGGER.error(f"API /sites unexpected response keys: {list(data.keys())}")
+            return False
         SITE_STATUS = {}
         try:
             async with AsyncSession() as client:
