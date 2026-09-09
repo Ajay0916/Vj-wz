@@ -570,7 +570,7 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
         if Config.DISABLE_TORRENTS:
             hidden_vars.update(["TORRENT_LIMIT", "TORRENT_TIMEOUT"])
         if Config.DISABLE_FF_MODE:
-            hidden_vars.update(["ARCHIVE_LIMIT", "EXTRACT_LIMIT", "FFMPEG_CMDS"])
+            hidden_vars.update(["ARCHIVE_LIMIT", "EXTRACT_LIMIT", "FFMPEG_CMDS", "THROTTLE_SERVICES", "FFMPEG_CORES"])
         if Config.DISABLE_QUEUE:
             hidden_vars.update(["QUEUE_ALL", "QUEUE_DOWNLOAD", "QUEUE_UPLOAD"])
         if Config.DISABLE_LIMITS:
@@ -640,6 +640,10 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
             hidden_vars.update(["MIRROR_LOG_ID"])
         if Config.DISABLE_IMDB:
             hidden_vars.update(["IMDB_TEMPLATE", "TMDB_ACCESS_TOKEN"])
+        if Config.DISABLE_MEMORY:
+            hidden_vars.update(["MEM_DEEP_STATS", "MEM_BUDGET"])
+        if Config.DISABLE_PLUGINS:
+            hidden_vars.update(["PLUGIN_INDEXES"])
 
         conf_dict = {
             k: v
