@@ -481,8 +481,9 @@ DISABLE_COMMANDS = {
     "DISABLE_CLONE": {"Clone"},
     "DISABLE_MEDIAINFO": {"MediaInfo"},
     "DISABLE_SESSION": {"RestartSessions", "GenPyroSess"},
-    "DISABLE_GOOGLE": {"Clone", "GDClean", "Count"},
+    "DISABLE_GOOGLE": {"Clone", "GDClean", "Count", "List"},
     "DISABLE_STREAM": {"Stream"},
+    "DISABLE_SEED": {"SeedrLink"},
     "DISABLE_MEMORY": {"Memory"},
 }
 
