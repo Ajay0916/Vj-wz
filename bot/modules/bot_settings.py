@@ -158,6 +158,8 @@ NEW_ONOFF_VARS = [
     "DISABLE_HELPER",
     "DISABLE_HYPER",
     "DISABLE_THEMES",
+    "DISABLE_LIST",
+    "DISABLE_CLONE",
 ]
 
 
@@ -336,6 +338,23 @@ DEFAULT_DESP = {
     "PLUGIN_INDEXES": "Extra plugin index URLs on top of the official one. Each must be a JSON file holding a plugins list.",
     "ENABLE_TELEMETRY": "Send crash reports to telemetry.wzmlx.com to help fix bugs. Default: True.",
     "YT_PRIVACY_STATUS": "YouTube upload privacy: public, unlisted, or private.",
+    "DISABLE_IMAGES": "Disable image search and picture commands. Default: False.",
+    "DISABLE_UPHOSTER": "Disable upload hoster (premium link generator) command. Default: False.",
+    "DISABLE_SHELL": "Disable shell/exec commands. Default: False.",
+    "DISABLE_IMDB": "Disable IMDB search command. Default: False.",
+    "DISABLE_MEDIAINFO": "Disable mediainfo command. Default: False.",
+    "DISABLE_LIMITS": "Disable /limits command. Default: False.",
+    "DISABLE_QUEUE": "Disable /queue command. Default: False.",
+    "DISABLE_RCLONE": "Disable rclone commands. Default: False.",
+    "DISABLE_GOOGLE": "Disable Google Drive commands (Clone, List, Count, GDClean). Default: False.",
+    "DISABLE_API": "Disable API-related commands. Default: False.",
+    "DISABLE_SESSION": "Disable session/restart commands. Default: False.",
+    "DISABLE_MEMORY": "Disable /memory VPS stats command. Default: False.",
+    "DISABLE_HELPER": "Disable helper bot features. Default: False.",
+    "DISABLE_HYPER": "Disable hyper streaming mode. Default: False.",
+    "DISABLE_THEMES": "Disable theme system entirely. Default: False.",
+    "DISABLE_LIST": "Disable List command. Default: False.",
+    "DISABLE_CLONE": "Disable Clone command. Default: False.",
 }
 
 PROTECTED_VARS = {
