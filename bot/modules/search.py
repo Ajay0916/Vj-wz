@@ -689,6 +689,10 @@ async def search(
         api += _api_extra_params(
             opts, method,
             is_all=(method == "apisearch" and (site == "all" or bool(opts.get("all_sites")))),
+            is_group=(
+                method == "apisearch"
+                and (site in GROUP_NAMES or "," in site)
+            ),
         )
         try:
             page_spec = str(opts.get("page") or "").strip()
@@ -1484,11 +1488,17 @@ def _size_bounds(value):
     return lo, ""
 
 
-def _api_extra_params(opts, method, is_all=False):
+def _api_extra_params(opts, method, is_all=False, is_group=False):
     """Query-string params for the search API from command-line args."""
     params = []
     if method == "apisearch":
-        if opts.get("smart_all") or opts.get("smart_single"):
+        # smart=1 is single-site relevance ordering (--smart) or the explicit
+        # All+smart flag (-as). Never send it for group/combo requests
+        # (Books/Courses/All buttons) - t-api would override the caller's
+        # explicit sites= list with smart-routed sites.
+        if opts.get("smart_all") and is_all:
+            params.append("smart=1")
+        elif opts.get("smart_single") and not is_all and not is_group:
             params.append("smart=1")
         if opts.get("timeout"):
             params.append(f"timeout={opts['timeout']}")
