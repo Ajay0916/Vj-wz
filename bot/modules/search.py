@@ -1295,6 +1295,7 @@ _WORD_FLAGS = {
     "-min": "min_quality",
 }
 _FLAG_ONLY = {
+    "--smart": "smart_single",
     "-f": "fresh",
     "-du": "dedup",
     "-r": "restart_api",
@@ -1487,7 +1488,7 @@ def _api_extra_params(opts, method, is_all=False):
     """Query-string params for the search API from command-line args."""
     params = []
     if method == "apisearch":
-        if opts.get("smart_all"):
+        if opts.get("smart_all") or opts.get("smart_single"):
             params.append("smart=1")
         if opts.get("timeout"):
             params.append(f"timeout={opts['timeout']}")
@@ -1935,6 +1936,7 @@ SEARCH_HELP_TEXT = (
     "&nbsp;&nbsp;&nbsp;&nbsp;Multiple: <code>1337x,tgx,yts</code>\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Hide sites: <code>-hs 1337x,tgx</code> (ulta <code>-g</code>)\n"
     "• <code>-a</code> → general + courses + books ek sath\n"
+    "• <code>--smart</code> → relevance-first ordering: exact matches pehle, seeders tiebreak (\"python basics pdf\" → PDF wale upar)\n"
     "• <code>-q &lt;quality&gt;</code> → <code>480</code>, <code>720</code>, <code>1080</code>, <code>4k</code>\n"
     "&nbsp;&nbsp;&nbsp;&nbsp;Multi: <code>-q 1080p,4k</code>\n"
     "• <code>-min &lt;q&gt;</code> → min quality ladder: <code>-min 720</code> = 720p se upar sab\n"
